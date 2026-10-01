@@ -115,7 +115,17 @@
     "taskCost": "任务成本",
     "resourceCost": "资源成本",
     "totalCost": "总成本",
-    "disabledReason": { "effort": "投入与剩余将在 v0.5 提供", "cost": "成本将在 v0.5 提供" },
+    "effortMode": "工作量模式",
+    "effortModeDuration": "固定工期",
+    "effortModeEffort": "固定工作量",
+    "effortInput": "投入",
+    "assignments": {
+      "none": "无",
+      "units": "单元",
+      "addResource": "添加资源",
+      "selectResource": "选择资源…",
+      "addTask": "添加任务"
+    },
     "summaryHint": "这是摘要任务，其日期由子任务汇总而来，不可直接编辑。",
     "scheduling": "排期方式",
     "manualHint": "此任务已手动安排，且无法自动移动。",
@@ -214,7 +224,12 @@
     "task.setAllowSplitting": "允许拆分",
     "project.setDirection": "设置排期方向",
     "project.setStartDate": "设置项目开始日期",
-    "project.setEndDate": "设置项目结束日期"
+    "project.setEndDate": "设置项目结束日期",
+    "assignment.create": "分配资源",
+    "assignment.delete": "取消分配",
+    "assignment.setUnits": "设置单元",
+    "task.setEffortMode": "设置工作量模式",
+    "task.setEffort": "设置投入"
   },
   "conflicts": {
     "constraintViolatedByDependency": "任务被固定为「{{constraint}} {{date}}」，但依赖要求它不早于 {{earliest}}",

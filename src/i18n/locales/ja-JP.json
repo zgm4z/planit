@@ -112,7 +112,17 @@
     "taskCost": "タスクコスト",
     "resourceCost": "リソースコスト",
     "totalCost": "総コスト",
-    "disabledReason": { "effort": "工数と残りは v0.5 で提供されます", "cost": "コストは v0.5 で提供されます" },
+    "effortMode": "工数モード",
+    "effortModeDuration": "期間固定",
+    "effortModeEffort": "工数固定",
+    "effortInput": "工数",
+    "assignments": {
+      "none": "なし",
+      "units": "単位",
+      "addResource": "リソースを追加",
+      "selectResource": "リソースを選択…",
+      "addTask": "タスクを追加"
+    },
     "summaryHint": "これはサマリータスクです。日付は子タスクから集計されるため、直接編集できません。",
     "scheduling": "スケジューリング",
     "manualHint": "このタスクは手動で設定されており、自動では移動できません。",
@@ -211,7 +221,12 @@
     "task.setAllowSplitting": "分割を許可",
     "project.setDirection": "スケジュール方向を設定",
     "project.setStartDate": "プロジェクト開始日を設定",
-    "project.setEndDate": "プロジェクト終了日を設定"
+    "project.setEndDate": "プロジェクト終了日を設定",
+    "assignment.create": "リソースを割り当て",
+    "assignment.delete": "割り当てを解除",
+    "assignment.setUnits": "単位を設定",
+    "task.setEffortMode": "工数モードを設定",
+    "task.setEffort": "工数を設定"
   },
   "conflicts": {
     "constraintViolatedByDependency": "タスクは「{{constraint}} {{date}}」に固定されていますが、依存関係は {{earliest}} 以降を要求しています",

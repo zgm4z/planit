@@ -5,7 +5,7 @@
  * 数组顺序即渲染顺序（Accordion 项的顺序、以及「哪些组默认展开」都读它）。
  *
  * 「分批原则」（ROADMAP「通用约定」）：每个分组三选一 —— 可用 / 显示但禁用 + 注明版本 /
- * 不出现。后四组依赖未实现的功能，属第二类：**渲染出来但整组禁用**，并给出
+ * 不出现。后三组依赖未实现的功能，属第二类：**渲染出来但整组禁用**，并给出
  * `reasonKey`，让用户看出「这里以后会有东西」（spec §3.3 / §3.5 / §3.6 / §3.7）。
  */
 export type InspectorGroupKey =
@@ -37,12 +37,7 @@ export const INSPECTOR_GROUPS: readonly InspectorGroup[] = [
     reasonKey: 'inspector.placeholder.baselineHint',
   },
   { key: 'relations', labelKey: 'inspector.groups.relations' },
-  {
-    key: 'assignments',
-    labelKey: 'inspector.groups.assignments',
-    placeholder: true,
-    reasonKey: 'inspector.placeholder.assignmentsHint',
-  },
+  { key: 'assignments', labelKey: 'inspector.groups.assignments' },
   {
     key: 'allocation',
     labelKey: 'inspector.groups.allocation',
@@ -58,11 +53,16 @@ export const INSPECTOR_GROUPS: readonly InspectorGroup[] = [
 ]
 
 /**
- * 默认展开的分组 = 本版真正能改的三组（spec §5）。
+ * 默认展开的分组 = 本版真正能改的四组（spec §5）。
  * **展开状态不持久化** —— 它是面板的临时状态，与 `viewStore.collapsedIds`
  * （那是项目数据的视图）不同。
  */
-export const DEFAULT_OPEN_GROUPS: InspectorGroupKey[] = ['info', 'schedule', 'relations']
+export const DEFAULT_OPEN_GROUPS: InspectorGroupKey[] = [
+  'info',
+  'schedule',
+  'relations',
+  'assignments',
+]
 
 const GROUP_KEYS: ReadonlySet<string> = new Set(INSPECTOR_GROUPS.map((group) => group.key))
 

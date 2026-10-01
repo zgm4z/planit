@@ -24,6 +24,7 @@ import type {
   ConstraintType,
   Dependency,
   DependencyType,
+  EffortMode,
   SchedulingOrder,
   Task,
   TaskId,
@@ -33,6 +34,7 @@ import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore } from '../store/viewStore'
 import { DEFAULT_OPEN_GROUPS, INSPECTOR_GROUPS, type InspectorGroupKey } from './inspectorGroups'
 import { resolveScheduleDates } from './outlineColumns'
+import { AssignmentSection } from './AssignmentSection'
 import { ProjectInspector } from './ProjectInspector'
 
 const CONSTRAINT_TYPES: ConstraintType[] = [
@@ -143,21 +145,8 @@ function TaskPanel({ taskId }: { taskId: TaskId }) {
           </PlaceholderGroup>
         )
       case 'assignments':
-        return (
-          <PlaceholderGroup
-            testId="placeholder-assignments"
-            reasonKey="inspector.placeholder.assignmentsHint"
-          >
-            <Select
-              label={t('inspector.placeholder.resource')}
-              disabled
-              value={null}
-              data={[]}
-              placeholder="—"
-            />
-            <NumberInput label={t('inspector.placeholder.units')} disabled value={0} />
-          </PlaceholderGroup>
-        )
+        // 任务侧入口：与 Task 7 的资源面板共用同一个 AssignmentSection（spec §4.2）
+        return <AssignmentSection scope={{ kind: 'task', id: taskId }} />
       case 'allocation':
         return (
           <PlaceholderGroup
@@ -255,6 +244,13 @@ function InfoGroup({
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
+  // 投入 / 剩余 / 三种成本 = **引擎派生的只读量**（spec §4.3）：直接读 solve() 的输出，
+  // 不在 UI 里重算 —— 重算就会与「排期用的那份」漂移成两个真相。
+  const result = useScheduleStore((state) => state.result)
+  const effort = result.efforts[taskId] ?? 0
+  const remaining = effort * (1 - task.progress / 100)
+  const costs = result.costs[taskId] ?? { task: 0, resource: 0, total: 0 }
+
   const isGroup = task.kind === 'group'
 
   return (
@@ -342,25 +338,89 @@ function InfoGroup({
             }
           />
 
-          <DisabledField label={t('inspector.effort')} reason={t('inspector.disabledReason.effort')} />
-          <DisabledField label={t('inspector.remaining')} reason={t('inspector.disabledReason.effort')} />
-          <DisabledField label={t('inspector.taskCost')} reason={t('inspector.disabledReason.cost')} />
-          <DisabledField label={t('inspector.resourceCost')} reason={t('inspector.disabledReason.cost')} />
-          <DisabledField label={t('inspector.totalCost')} reason={t('inspector.disabledReason.cost')} />
+          {/* 工作量模式：固定工期 ↔ 固定工作量。切换走 task.setEffortMode（点击驱动、不合并） */}
+          <Box>
+            <Text fz="xs" fw={500} mb={4}>
+              {t('inspector.effortMode')}
+            </Text>
+            <SegmentedControl
+              size="xs"
+              fullWidth
+              value={task.effortMode}
+              data-testid="effort-mode"
+              onChange={(value) =>
+                dispatch({
+                  type: 'task.setEffortMode',
+                  label: 'commands.task.setEffortMode',
+                  payload: { taskId, effortMode: value as EffortMode },
+                })
+              }
+              data={[
+                {
+                  value: 'fixedDuration',
+                  label: (
+                    <span data-testid="effort-mode-duration">
+                      {t('inspector.effortModeDuration')}
+                    </span>
+                  ),
+                },
+                {
+                  value: 'fixedEffort',
+                  label: (
+                    <span data-testid="effort-mode-effort">{t('inspector.effortModeEffort')}</span>
+                  ),
+                },
+              ]}
+            />
+          </Box>
+
+          {/* 固定工作量时才有「投入」输入 —— 它是反解的输入，改它才会改工期。
+              此时**不再另渲染派生只读的「投入」**：同一个量出现两个同名控件，
+              既是重复真相，也会让「按标签取值」的交互/测试歧义。 */}
+          {task.effortMode === 'fixedEffort' && (
+            <NumberInput
+              label={t('inspector.effortInput')}
+              min={0}
+              value={task.effort ?? 0}
+              onBlur={breakCoalescing}
+              onChange={(value) =>
+                dispatch({
+                  type: 'task.setEffort',
+                  label: 'commands.task.setEffort',
+                  payload: { taskId, effort: Number(value) || 0 },
+                  coalesceKey: `task.setEffort:${taskId}`,
+                })
+              }
+            />
+          )}
+
+          {/* 以下五项是**引擎派生的只读量**：读 result.efforts / result.costs，不重算。
+              「投入」只在固定工期下显示派生值（固定工作量下它就是上面那个输入框）。 */}
+          {task.effortMode === 'fixedDuration' && (
+            <NumberInput label={t('inspector.effort')} value={Math.round(effort * 100) / 100} disabled />
+          )}
+          <NumberInput
+            label={t('inspector.remaining')}
+            value={Math.round(remaining * 100) / 100}
+            disabled
+          />
+          <NumberInput
+            label={t('inspector.taskCost')}
+            value={Math.round(costs.task * 100) / 100}
+            disabled
+          />
+          <NumberInput
+            label={t('inspector.resourceCost')}
+            value={Math.round(costs.resource * 100) / 100}
+            disabled
+          />
+          <NumberInput
+            label={t('inspector.totalCost')}
+            value={Math.round(costs.total * 100) / 100}
+            disabled
+          />
         </>
       )}
-    </Stack>
-  )
-}
-
-/** 依赖未实现功能的字段：禁用态 + 注明版本（分批原则，绝不假装能用） */
-function DisabledField({ label, reason }: { label: string; reason: string }) {
-  return (
-    <Stack gap={2}>
-      <NumberInput label={label} disabled value={0} />
-      <Text fz="xs" c="dimmed">
-        {reason}
-      </Text>
     </Stack>
   )
 }

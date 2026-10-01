@@ -6,8 +6,10 @@ import { MantineProvider } from '@mantine/core'
 
 import { initCommands, __resetRegistryForTests } from '../commands/registry'
 import {
+  createAssignment,
   createDependency,
   createProject,
+  createResource,
   createTask,
   __resetIdCounterForTests,
 } from '../domain/model/factories'
@@ -155,7 +157,7 @@ describe('Inspector 任务面板的 7 个分组', () => {
     expect(expanded('日程安排')).toBe('true')
     expect(expanded('相关性')).toBe('true')
     expect(expanded('基线')).toBe('false')
-    expect(expanded('分配的资源')).toBe('false')
+    expect(expanded('分配的资源')).toBe('true')
     expect(expanded('资源分配')).toBe('false')
     expect(expanded('预计的工作量')).toBe('false')
   })
@@ -276,15 +278,31 @@ describe('任务信息组', () => {
     expect(screen.getByText(/分组的类型由子任务决定/)).toBeInTheDocument()
   })
 
-  it('投入 / 剩余 / 三种成本是禁用态且注明版本（不是隐藏）', () => {
+  it('投入 / 剩余 / 三种成本显示引擎派生的真实值（不是占位）', () => {
+    const project = useProjectStore.getState().project!
+    const resource = createResource({ name: '张三' })
+    const assignment = createAssignment({ taskId, resourceId: resource.id, units: 1 })
+    useProjectStore.setState({
+      project: {
+        ...project,
+        resources: { [resource.id]: resource },
+        tasks: { ...project.tasks, [taskId]: { ...project.tasks[taskId], effortMode: 'fixedDuration' } },
+        assignments: { [assignment.id]: assignment },
+      },
+    })
     renderInspector()
 
-    expect(screen.getByLabelText('投入')).toBeDisabled()
-    expect(screen.getByLabelText('剩余')).toBeDisabled()
+    // duration 3 天 × Σunits(1) = 3 人日（fixedDuration 正算）；progress=0 → 剩余 = 投入
+    expect(screen.getByLabelText('投入')).toHaveValue('3')
+    expect(screen.getByLabelText('剩余')).toHaveValue('3')
     expect(screen.getByLabelText('任务成本')).toBeDisabled()
     expect(screen.getByLabelText('资源成本')).toBeDisabled()
     expect(screen.getByLabelText('总成本')).toBeDisabled()
-    expect(screen.getAllByText(/v0\.5 提供/).length).toBeGreaterThanOrEqual(2)
+    // 旧的「v0.5 提供」占位文案必须消失 —— 它们现在有真实值了，再标版本就是说谎。
+    // 注：只针对投入/成本这两条，不能笼统查 /v0\.5 提供/ —— 「资源分配」组仍是占位组，
+    // 它的 hint 里同样有「v0.5 提供」字样（那是另一件事，不在本任务范围）。
+    expect(screen.queryByText(/投入与剩余将在 v0\.5 提供/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/成本将在 v0\.5 提供/)).not.toBeInTheDocument()
   })
 
   // 以下两条是 v0.4 Task 2 重写测试文件时误删的既有用例（覆盖倒退），
@@ -675,5 +693,24 @@ describe('相关性组（必要条件 / 从属两段）', () => {
     renderInspector()
     expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '添加从属' })).not.toBeInTheDocument()
+  })
+})
+
+// v0.5 Task 6：投入/成本解禁为派生只读量，并新增「工作量模式 + 投入」编辑入口（spec §5）。
+describe('工作量模式与投入', () => {
+  it('切到「固定工作量」后出现投入输入，改投入会改工期（反解）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await user.click(screen.getByTestId('effort-mode-effort'))
+    const task = useProjectStore.getState().project!.tasks[taskId]
+    expect(task.effortMode).toBe('fixedEffort')
+    // 切模式时以「工期 × max(Σunits,1)」初始化 effort（无资源 → 3 × 1 = 3）
+    expect(task.effort).toBe(3)
+
+    const input = screen.getByLabelText('投入')
+    await user.clear(input)
+    await user.type(input, '9')
+    expect(useProjectStore.getState().project!.tasks[taskId].effort).toBe(9)
   })
 })

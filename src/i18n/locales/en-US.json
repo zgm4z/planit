@@ -112,7 +112,17 @@
     "taskCost": "Task cost",
     "resourceCost": "Resource cost",
     "totalCost": "Total cost",
-    "disabledReason": { "effort": "Effort & remaining will be available in v0.5", "cost": "Cost will be available in v0.5" },
+    "effortMode": "Effort mode",
+    "effortModeDuration": "Fixed duration",
+    "effortModeEffort": "Fixed effort",
+    "effortInput": "Effort",
+    "assignments": {
+      "none": "None",
+      "units": "Units",
+      "addResource": "Add resource",
+      "selectResource": "Choose a resource…",
+      "addTask": "Add task"
+    },
     "summaryHint": "This is a summary task. Its dates roll up from its children and cannot be edited directly.",
     "scheduling": "Scheduling",
     "manualHint": "This task is manually scheduled and cannot be moved automatically.",
@@ -211,7 +221,12 @@
     "task.setAllowSplitting": "Allow splitting",
     "project.setDirection": "Set scheduling direction",
     "project.setStartDate": "Set project start date",
-    "project.setEndDate": "Set project finish date"
+    "project.setEndDate": "Set project finish date",
+    "assignment.create": "Assign resource",
+    "assignment.delete": "Remove assignment",
+    "assignment.setUnits": "Set units",
+    "task.setEffortMode": "Set effort mode",
+    "task.setEffort": "Set effort"
   },
   "conflicts": {
     "constraintViolatedByDependency": "Task is pinned to \"{{constraint}} {{date}}\", but a dependency requires it no earlier than {{earliest}}",

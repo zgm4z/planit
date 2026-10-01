@@ -54,11 +54,11 @@ describe('INSPECTOR_GROUPS', () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
-  it('默认展开 = 任务信息 / 日程安排 / 相关性（spec §5），且不持久化', () => {
-    expect(DEFAULT_OPEN_GROUPS).toEqual(['info', 'schedule', 'relations'])
+  it('默认展开 = 任务信息 / 日程安排 / 相关性 / 分配的资源（spec §5），且不持久化', () => {
+    expect(DEFAULT_OPEN_GROUPS).toEqual(['info', 'schedule', 'relations', 'assignments'])
   })
 
-  it('不变式：默认展开的 ⟺ 非占位组（本版真正能改的三组对四个占位组）', () => {
+  it('不变式：默认展开的 ⟺ 非占位组（本版真正能改的四组对三个占位组）', () => {
     for (const group of INSPECTOR_GROUPS) {
       expect(DEFAULT_OPEN_GROUPS.includes(group.key), group.key).toBe(!group.placeholder)
     }
