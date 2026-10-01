@@ -251,3 +251,83 @@ describe('project.rename', () => {
     expect(r.name).toBe('新计划')
   })
 })
+
+describe('task.kind 不变式', () => {
+  beforeEach(setup)
+
+  it('不变式 1：里程碑恒为零工期且无子任务', () => {
+    const p1 = run(project, 'task.create', { name: 'M' })
+    const id = p1.rootIds[0]
+    const p2 = run(p1, 'task.toggleMilestone', { taskId: id })
+    const m = p2.tasks[id]
+    expect(m.kind).toBe('milestone')
+    expect(m.duration).toBe(0)
+    expect(m.childIds).toEqual([])
+  })
+
+  it('不变式 2：group ⟺ childIds.length > 0（双向）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a] = p.rootIds
+    expect(p.tasks[a].kind).toBe('task')
+
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // B 缩进到 A 下
+    expect(p.tasks[a].childIds.length).toBe(1)
+    expect(p.tasks[a].kind).toBe('group')
+
+    p = run(p, 'task.outdent', { taskId: p.tasks[a].childIds[0] })
+    expect(p.tasks[a].childIds).toEqual([])
+    expect(p.tasks[a].kind).toBe('task')
+  })
+
+  it('不变式 3：有子任务的任务不能是里程碑（indent 到里程碑之下被拒绝）', () => {
+    let p = run(project, 'task.create', { name: 'M' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [m] = p.rootIds
+    p = run(p, 'task.toggleMilestone', { taskId: m })
+
+    const before = p
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+
+    expect(p).toEqual(before) // 命令被拒绝，未产生任何变更
+    expect(p.tasks[m].kind).toBe('milestone')
+    expect(p.tasks[m].childIds).toEqual([])
+  })
+
+  it('不变式 4a：加第一个子任务时父任务自动 task → group', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a] = p.rootIds
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    expect(p.tasks[a].kind).toBe('group')
+  })
+
+  it('不变式 4b：删掉最后一个子任务时 group → task', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a] = p.rootIds
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const child = p.tasks[a].childIds[0]
+
+    p = run(p, 'task.delete', { taskId: child })
+
+    expect(p.tasks[a].kind).toBe('task')
+    expect(p.tasks[a].childIds).toEqual([])
+  })
+
+  it('不变式 4c：删掉子树的最后一个子任务时同样 group → task', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.create', { name: 'C' })
+    const [a] = p.rootIds
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // B 进 A
+    p = run(p, 'task.indent', { taskId: p.rootIds[2] }) // C 也进 A
+    expect(p.tasks[a].kind).toBe('group')
+
+    for (const childId of [...p.tasks[a].childIds]) {
+      p = run(p, 'task.delete', { taskId: childId })
+    }
+
+    expect(p.tasks[a].kind).toBe('task')
+  })
+})

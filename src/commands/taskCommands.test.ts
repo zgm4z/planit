@@ -165,7 +165,7 @@ describe('task.toggleMilestone', () => {
     const p2 = run(p1, 'task.setDuration', { taskId: id, duration: 5 })
     const p3 = run(p2, 'task.toggleMilestone', { taskId: id })
 
-    expect(p3.tasks[id].isMilestone).toBe(true)
+    expect(p3.tasks[id].kind).toBe('milestone')
     expect(p3.tasks[id].duration).toBe(0)
   })
 
@@ -175,7 +175,7 @@ describe('task.toggleMilestone', () => {
     const p2 = run(p1, 'task.toggleMilestone', { taskId: id })
     const p3 = run(p2, 'task.toggleMilestone', { taskId: id })
 
-    expect(p3.tasks[id].isMilestone).toBe(false)
+    expect(p3.tasks[id].kind).toBe('task')
     expect(p3.tasks[id].duration).toBe(1)
   })
 })

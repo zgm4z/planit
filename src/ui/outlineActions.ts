@@ -35,7 +35,7 @@ export function canIndent(project: Project, taskId: TaskId | null): boolean {
   if (index <= 0) return false
 
   const newParent = project.tasks[list[index - 1]]
-  return newParent !== undefined && !newParent.isMilestone
+  return newParent !== undefined && newParent.kind !== 'milestone'
 }
 
 /**

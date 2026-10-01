@@ -8,6 +8,8 @@ function addTask(project: Project, task: ReturnType<typeof createTask>, parentId
   project.tasks[task.id] = { ...task, parentId }
   if (parentId) {
     project.tasks[parentId].childIds.push(task.id)
+    // 与命令层一致：有子任务就是 group
+    project.tasks[parentId].kind = 'group'
   } else {
     project.rootIds.push(task.id)
   }

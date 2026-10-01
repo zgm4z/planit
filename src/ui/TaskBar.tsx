@@ -52,7 +52,7 @@ export function TaskBar({
     ? taskFinish(displayStart, displayDuration, calendar)
     : schedule.earlyFinish
 
-  if (task.isMilestone) {
+  if (task.kind === 'milestone') {
     // 几何全部来自 milestoneRect()（外接盒），DependencyLayer 用的是同一个函数
     const rect = milestoneRect(scale, displayStart)
 

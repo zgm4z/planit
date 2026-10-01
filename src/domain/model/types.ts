@@ -39,13 +39,16 @@ export type Scheduling =
 
 export type EffortMode = 'fixedDuration' | 'fixedEffort'
 
+export type TaskKind = 'task' | 'milestone' | 'group'
+
 export interface Task {
   id: TaskId
   name: string
   parentId: TaskId | null
   /** 数组顺序即树序 */
   childIds: TaskId[]
-  isMilestone: boolean
+  /** 显式类型。`group` 与「有子任务」永远同步，由命令层维护（见 reconcileKind） */
+  kind: TaskKind
   /** 工作日数；里程碑恒为 0 */
   duration: number
   scheduling: Scheduling

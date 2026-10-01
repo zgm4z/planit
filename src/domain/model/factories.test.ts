@@ -43,15 +43,15 @@ describe('createTask', () => {
     expect(t.duration).toBe(1)
     expect(t.scheduling).toEqual({ mode: 'auto' })
     expect(t.progress).toBe(0)
-    expect(t.isMilestone).toBe(false)
+    expect(t.kind).toBe('task')
     expect(t.childIds).toEqual([])
     expect(t.parentId).toBeNull()
     expect(t.effortMode).toBe('fixedDuration')
   })
 
   it('里程碑强制工期为 0', () => {
-    const t = createTask({ name: '发布', isMilestone: true, duration: 5 })
-    expect(t.isMilestone).toBe(true)
+    const t = createTask({ name: '发布', kind: 'milestone', duration: 5 })
+    expect(t.kind).toBe('milestone')
     expect(t.duration).toBe(0)
   })
 })

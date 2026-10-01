@@ -7,6 +7,7 @@ import type {
   Project,
   Task,
   TaskId,
+  TaskKind,
 } from './types'
 import { formatDate } from '../dateUtils'
 
@@ -105,22 +106,25 @@ export interface CreateTaskInput {
   name: string
   parentId?: TaskId | null
   duration?: number
-  isMilestone?: boolean
+  kind?: TaskKind
 }
 
 /**
- * 注意：当 `isMilestone` 为真时，会忽略传入的 `duration` 并强制为 0
+ * 注意：`kind` 为 `'milestone'` 时，会忽略传入的 `duration` 并强制为 0
  * （里程碑是零工期的时间点），`duration` 参数在此情况下不生效。
+ *
+ * 这里的 `kind` 只决定**初始**类型：调用方若随后往里塞子任务，
+ * 必须自行调 `reconcileKind` 把它改成 `group`。工厂不知道结构会怎么变。
  */
 export function createTask(input: CreateTaskInput): Task {
-  const isMilestone = input.isMilestone ?? false
+  const kind = input.kind ?? 'task'
   return {
     id: nextId('task'),
     name: input.name,
     parentId: input.parentId ?? null,
     childIds: [],
-    isMilestone,
-    duration: isMilestone ? 0 : (input.duration ?? 1),
+    kind,
+    duration: kind === 'milestone' ? 0 : (input.duration ?? 1),
     scheduling: { mode: 'auto' },
     progress: 0,
     effortMode: 'fixedDuration',

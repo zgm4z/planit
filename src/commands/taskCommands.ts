@@ -1,6 +1,7 @@
 import type { Draft } from 'immer'
 import type { DateStr, Project, Scheduling, TaskId } from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
+import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
 
 export interface TaskCreatePayload { name: string; parentId?: TaskId | null }
@@ -42,6 +43,7 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     if (parent) {
       task.parentId = parent.id
       parent.childIds.push(task.id)
+      reconcileKind(draft, parent.id)
     } else {
       draft.rootIds.push(task.id)
     }
@@ -64,7 +66,9 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     if (subtree.length === 0) return // 任务不存在，no-op
 
     // 先摘掉根节点（更新父节点的 childIds / rootIds），再逐个删
+    const parentId = draft.tasks[payload.taskId]?.parentId ?? null
     detachTask(draft, payload.taskId)
+    if (parentId) reconcileKind(draft, parentId)
 
     // 清理整棵子树的依赖 —— 只清理根节点会留下指向已删除任务的孤儿依赖，
     // 这些孤儿会被持久化、污染统计，且因不在 patch 里而无法被撤销恢复
@@ -84,7 +88,7 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.childIds.length > 0) return // 摘要任务由汇总决定
-    if (task.isMilestone) return // 里程碑恒为 0
+    if (task.kind === 'milestone') return // 里程碑恒为 0
     task.duration = Math.max(0, Math.floor(payload.duration))
   },
 
@@ -94,13 +98,16 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     task.progress = clamp(Math.round(payload.progress), 0, 100)
   },
 
+  // 名称保留 toggleMilestone：它切换的是 `kind` 在 task / milestone 之间，
+  // 命令 id 已出现在既有 UI 与测试里，改名是纯粹的噪音。
   'task.toggleMilestone': (draft, payload: TaskToggleMilestonePayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务不能是里程碑
+    if (task.kind === 'group') return // 摘要任务不能是里程碑
 
-    task.isMilestone = !task.isMilestone
-    task.duration = task.isMilestone ? 0 : 1
+    const toMilestone = task.kind !== 'milestone'
+    task.kind = toMilestone ? 'milestone' : 'task'
+    task.duration = toMilestone ? 0 : 1
   },
 
   'task.setScheduling': (draft, payload: TaskSetSchedulingPayload) => {
@@ -125,7 +132,7 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.childIds.length > 0) return // 摘要任务日期只读
-    if (task.isMilestone) return // 里程碑恒为 0 工期
+    if (task.kind === 'milestone') return // 里程碑恒为 0 工期
 
     task.duration = Math.max(1, Math.floor(payload.duration))
     task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }

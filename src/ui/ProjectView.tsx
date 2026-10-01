@@ -115,7 +115,7 @@ export function ProjectView() {
 
       const rowTop = index * ROW_HEIGHT
 
-      if (task.isMilestone) {
+      if (task.kind === 'milestone') {
         const rect = milestoneRect(scale, schedule.earlyStart)
         map.set(row.taskId, { ...rect, y: rect.y + rowTop })
       } else {

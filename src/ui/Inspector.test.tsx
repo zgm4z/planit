@@ -116,7 +116,7 @@ describe('Inspector', () => {
     await user.click(screen.getByLabelText('里程碑'))
 
     const task = currentTask()
-    expect(task.isMilestone).toBe(true)
+    expect(task.kind).toBe('milestone')
     expect(task.duration).toBe(0)
   })
 

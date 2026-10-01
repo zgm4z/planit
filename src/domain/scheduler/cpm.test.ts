@@ -169,7 +169,7 @@ describe('runCpm — 边界情况', () => {
   })
 
   it('工期为 0 的里程碑起止同日', () => {
-    const m: Task = { ...mk('M', 0), isMilestone: true }
+    const m: Task = { ...mk('M', 0), kind: 'milestone' }
     const r = runCpm({
       tasks: [mk('A', 2), m],
       dependencies: [createDependency('A', 'M')],

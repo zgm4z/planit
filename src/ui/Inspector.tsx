@@ -157,7 +157,7 @@ export function Inspector() {
 
             <Checkbox
               label={t('inspector.milestone')}
-              checked={task.isMilestone}
+              checked={task.kind === 'milestone'}
               onChange={() =>
                 dispatch({
                   type: 'task.toggleMilestone',
