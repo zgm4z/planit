@@ -69,14 +69,19 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
       start = snapToWorkday(start, calendar)
       earlyStart.set(id, start)
 
-      // 资源可用期是任务的**上下界**，两趟都要消费 —— 只接一趟会让另一趟的
-      // 排期越界。正推这里补的是**上界**：任务结束不得晚于 availableUntil。
-      // 少了它，正推的 earlyFinish 会越过 availableUntil，而逆推只把它体现成
-      // 负浮时、并不会把「用户看到的排期」收回来。
-      let finish = taskFinish(start, task.duration, calendar)
-      const latest = resourceBounds?.[id]?.latestFinish
-      if (latest && latest < finish) finish = latest
-      earlyFinish.set(id, snapToWorkday(finish, calendar))
+      // 可用期是任务级的**上下界**：availableFrom = 下界（最早能开始），
+      // availableUntil = 上界（最晚能结束）。二者**有意只各进一趟** ——
+      // 下界只进正推（见上方 earliestStart），上界只进逆推（见 backwardPass 的
+      // latestFinish）。这与既有的约束机制 constraintLowerBound /
+      // constraintUpperBound 完全同构：下界刻画最早起点、上界刻画最晚终点，
+      // 各归其位。切勿为了「两趟都不越界」把两条边界都塞进两趟。
+      //
+      // 刻意**不**在正推里夹上界：earlyFinish 是任务的真实完成日，甘特条宽度、
+      // 依赖连线端点、TaskBar 几何全基于它，夹到 availableUntil 会把一条 N 天的
+      // 任务谎报成更短。可用期不可行（availableUntil 早于自然完成日）时，逆推
+      // 会把上界体现成负浮时，由 detectConflicts 如实报冲突 —— 只如实报，不夹
+      // 边界调和。
+      earlyFinish.set(id, taskFinish(start, task.duration, calendar))
     }
 
     return { earlyStart, earlyFinish }
@@ -109,14 +114,13 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
       finish = snapToWorkday(finish, calendar)
       lateFinish.set(id, finish)
 
-      // 逆推这里补的是**下界**：任务开始不得早于 availableFrom。
-      // 少了它，backward + alap 下 scheduledStart 取的是 lateStart，可以早于
-      // 资源到位日 —— 用户看到的排期直接违反可用期（正推那趟只改 earlyStart，
-      // 拦不住 alap 的取晚端）。
-      let start = taskStart(finish, task.duration, calendar)
-      const earliest = resourceBounds?.[id]?.earliestStart
-      if (earliest && earliest > start) start = earliest
-      lateStart.set(id, snapToWorkday(start, calendar))
+      // 刻意**不**在逆推里夹下界 availableFrom（它与上界一样只各进一趟，见
+      // forwardPass 顶部的说明）：lateStart 由 lateFinish 忠实倒推，晚窗口
+      // [lateStart, lateFinish] 才始终有序。夹下界会让 lateStart 越过 lateFinish
+      // —— 晚窗口反转，任何按 lateStart→lateFinish 求宽度的消费方得到负跨度。
+      // 不可行（availableFrom 晚于 endDate 倒推出的开始日）时同样只以负浮时
+      // 如实报冲突，不在这里夹。
+      lateStart.set(id, taskStart(finish, task.duration, calendar))
     }
 
     return { lateStart, lateFinish }

@@ -112,8 +112,28 @@ describe('黄金判据 3：工期取整（ceil）', () => {
   })
 })
 
+// ── 黄金判据 4：资源可用期 ───────────────────────────────────────────
+//
+// 为什么可用期是「任务级上下界」、且**有意只各进一趟**（有后果的设计决定）：
+//
+//   availableFrom   = 任务开始的下界（最早能开始）→ 只进**正推**
+//   availableUntil  = 任务结束的上界（最晚能结束）→ 只进**逆推**
+//
+// 这与既有的约束机制同构：constraintLowerBound 只进正推、constraintUpperBound
+// 只进逆推。下界刻画最早起点、上界刻画最晚终点，各归其位。
+//
+// 刻意**不**把两条边界都塞进两趟 —— 那样会：
+//   ① 谎报工期：正推里夹 availableUntil 会把 earlyFinish 从真实完成日提前，
+//      而甘特条宽度 / 依赖连线端点 / TaskBar 几何全基于 [earlyStart, earlyFinish]，
+//      一条 5 天的任务会显示成 3 天。
+//   ② 反转晚窗口：逆推里夹 availableFrom 会让 lateStart 越过 lateFinish，
+//      晚窗口 [lateStart, lateFinish] 失序，按它求宽度者得到负跨度。
+//
+// 可用期不可行时**不做调和**：让浮时变负，由 detectConflicts 产出 ConflictInfo
+// （UI 三层可见），如实记录排期矛盾 —— 这正是本项目一贯立场。本 describe 里的
+// 第二条是「不反转晚窗口」的防回退护栏，第三条钉住「不谎报工期」。
 describe('黄金判据 4：资源可用期间之外不被分配', () => {
-  it('availableFrom 把任务开始推到资源入职日', () => {
+  it('可行：availableFrom 把任务开始推到资源入职日（scheduledStart 自然 ≥ availableFrom）', () => {
     const { project, tasks } = projectWithChain([2])
     const target = tasks[0]
 
@@ -124,11 +144,15 @@ describe('黄金判据 4：资源可用期间之外不被分配', () => {
 
     const { schedules } = solve(project)
     // 控制组：无可用期时任务从 03-02 开始。有 availableFrom 后必须推到 03-10。
+    // 该场景**可行**（只引下界、不引上界），故排期不违反可用期、也不产生冲突 ——
+    // 用来证明「可行时不存在静默违反」。
     expect(schedules[target.id].scheduledStart).toBe('2026-03-10')
     expect(schedules[target.id].scheduledFinish).toBe('2026-03-11')
+    expect(schedules[target.id].scheduledStart >= '2026-03-10').toBe(true)
+    expect(schedules[target.id].totalSlack).toBeGreaterThanOrEqual(0)
   })
 
-  it('availableUntil 压住正推的 earlyFinish（结束日不得越过资源可用期）', () => {
+  it('不可行：availableUntil 早于自然完成日 → earlyFinish 不被夹（仍是真实完成日），浮时变负如实报冲突', () => {
     const { project, tasks } = projectWithChain([5])
     const target = tasks[0]
 
@@ -138,17 +162,20 @@ describe('黄金判据 4：资源可用期间之外不被分配', () => {
     project.assignments[assignment.id] = assignment
 
     const { schedules } = solve(project)
-    // 无可用期时 03-02 起 5 天会到 03-06；资源 03-04 就离职，正推的结束日
-    // 必须被上界压到 03-04 —— 而不是留到 03-06、只在逆推里变成一个负浮时。
-    expect(schedules[target.id].earlyFinish).toBe('2026-03-04')
-    expect(schedules[target.id].scheduledFinish).toBe('2026-03-04')
-    // 5 天的活被塞进 03-02..03-04 只有 3 天，装不下 → 浮时变负，如实报冲突
+    // 手算：03-02(一) 起 5 个工作日 = 03-02/03/04/05/06 → 真实完成日 03-06。
+    // 不夹边界是刻意的：夹到 availableUntil(03-04) 会让这条 5 天的任务只剩
+    // 03-02..03-04 共 3 天，甘特条 / 依赖端点 / TaskBar 几何全被谎报。
+    expect(schedules[target.id].earlyFinish).toBe('2026-03-06')
+    expect(schedules[target.id].scheduledFinish).toBe('2026-03-06')
+    // 上界只在逆推里生效：lateFinish 被拉到 03-04，倒推 lateStart = 02-26，
+    // 于是 totalSlack = workdaysBetween(03-02, 02-26) = -2 —— 冲突如实上报。
+    expect(schedules[target.id].lateFinish).toBe('2026-03-04')
     expect(schedules[target.id].totalSlack).toBe(-2)
   })
 
-  it('backward + alap：availableFrom 把显示的开始日推后（不得早于资源到位日）', () => {
-    // 逆推锚点（截止日）比资源到位日早 —— 逆推本会把开始日推到期前，
-    // 早于资源可用期。alap 显示的是 lateStart，可见排期会直接违反可用期。
+  it('不可行：availableFrom 晚于 endDate 倒推出的开始日 → 不出现日期反转（lateStart ≤ lateFinish）', () => {
+    // 护栏用例：若有人把下界 availableFrom 夹进逆推（backwardPass），lateStart
+    // 会被抬到 03-10、越过 lateFinish 03-05，本用例立即变红。
     const project = createProject('可用期-逆推', START)
     project.schedulingDirection = 'backward'
     project.endDate = '2026-03-05'
@@ -162,8 +189,14 @@ describe('黄金判据 4：资源可用期间之外不被分配', () => {
     project.assignments[assignment.id] = assignment
 
     const { schedules } = solve(project)
-    // 不用 availableFrom 时开始日会被逆推拉到 03-03（截止 03-05 往前 3 天）
-    expect(schedules[target.id].scheduledStart).toBe('2026-03-10')
+    const s = schedules[target.id]
+    // 手算：终点 03-05 倒推 3 个工作日 → lateFinish 03-05、lateStart 03-03（有序）。
+    // availableFrom 03-10 只在正推生效 → early 链是 03-10..03-12，不会被拉进晚窗口，
+    // 故晚窗口不被反转。场景不可行，冲突以负浮时如实上报（而非被静默吞掉）。
+    expect(s.lateFinish).toBe('2026-03-05')
+    expect(s.lateStart).toBe('2026-03-03')
+    expect(s.lateStart <= s.lateFinish).toBe(true)
+    expect(s.totalSlack).toBe(-5)
   })
 })
 
