@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { TaskId } from '../domain/model/types'
+import type { ResourceId, TaskId } from '../domain/model/types'
 import {
   DEFAULT_VISIBLE_COLUMNS,
   OUTLINE_COLUMNS,
@@ -12,6 +12,13 @@ export type ZoomLevel = 'day' | 'week' | 'month'
 
 /** 两个并列的视图。不是一种布局的两种宽度 —— 见 spec §1 */
 export type ActiveView = 'gantt' | 'outline'
+
+/**
+ * Inspector 右栏的激活 Tab。**提升到 store 是有理由的**：菜单栏的「资源 > 新建资源」
+ * 必须能把它切到 `resource` —— 否则菜单点了像是没反应（违反本项目的核心原则：
+ * 「点了没反应比明确禁用更糟」）。放在组件 useState 里菜单栏够不着。
+ */
+export type InspectorTab = 'task' | 'project' | 'resource'
 
 /**
  * 列配置的存储键。**不写进 Project**：列显示是「怎么看」，不是「是什么」，
@@ -29,6 +36,17 @@ interface ViewState {
   activeView: ActiveView
   /** 可见列的**集合**（顺序由 OUTLINE_COLUMNS 的注册顺序决定，不在这里） */
   visibleColumns: OutlineColumnKey[]
+  /**
+   * Inspector 右栏当前激活的 Tab。默认 `task`（与搬移前的组件 useState 初值一致）。
+   * **不持久化** —— 与 activeView 同族：每次打开默认「任务」更符合直觉。
+   */
+  activeInspectorTab: InspectorTab
+  /**
+   * 资源面板选中的资源。**不持久化**：资源是否存在于当前项目由 store 之外决定，
+   * 载入存档时只校验「形状合法」而不认 id，落盘反而会留下指向不存在资源的悬空引用。
+   * 容错（悬空 id 回落到第一个资源）由消费方 ResourceInspector 承担 —— 与搬移前一致。
+   */
+  selectedResourceId: ResourceId | null
 
   setZoom: (zoom: ZoomLevel) => void
   selectTask: (taskId: TaskId | null) => void
@@ -41,6 +59,10 @@ interface ViewState {
   setActiveView: (view: ActiveView) => void
   setVisibleColumns: (keys: readonly unknown[]) => void
   toggleColumn: (key: OutlineColumnKey) => void
+  setActiveInspectorTab: (tab: InspectorTab) => void
+  /** 选中一个资源（null = 清空，由消费方回落到第一个资源）。**刻意不 breakCoalescing** ——
+   *  见实现处的说明：打断合并留在交互现场（Select 的 onChange），本动作是纯 setter。 */
+  selectResource: (resourceId: ResourceId | null) => void
 }
 
 const ZOOM_DAY_WIDTH: Record<ZoomLevel, number> = {
@@ -99,10 +121,20 @@ export const useViewStore = create<ViewState>((set, get) => ({
   dayWidth: ZOOM_DAY_WIDTH.day,
   activeView: 'gantt',
   visibleColumns: loadVisibleColumns(),
+  activeInspectorTab: 'task',
+  selectedResourceId: null,
 
   setZoom: (zoom) => set({ zoom, dayWidth: ZOOM_DAY_WIDTH[zoom] }),
 
   setActiveView: (activeView) => set({ activeView }), // 刻意不落盘
+
+  setActiveInspectorTab: (activeInspectorTab) => set({ activeInspectorTab }), // 刻意不落盘
+
+  // 纯 setter（与搬移前的 `setSelectedId` 等价）：换资源时的 breakCoalescing 留在
+  // ResourceInspector 的 Select.onChange 现场 —— 那是「用户手动换资源」这一交互边界，
+  // 而菜单栏「新建资源」这条路径**不**打断合并（与搬移前 handleCreate 的行为一致）。
+  // 若把打断合并塞进这里，就会给菜单路径凭空加一次语义变更。
+  selectResource: (selectedResourceId) => set({ selectedResourceId }),
 
   setVisibleColumns: (keys) => {
     const visibleColumns = normalizeVisibleColumns(keys)
@@ -168,5 +200,7 @@ export function __resetViewStoreForTests(): void {
     dayWidth: ZOOM_DAY_WIDTH.day,
     activeView: 'gantt',
     visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],
+    activeInspectorTab: 'task',
+    selectedResourceId: null,
   })
 }

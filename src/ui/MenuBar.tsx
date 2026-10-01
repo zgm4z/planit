@@ -8,6 +8,7 @@ import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useViewStore, type ActiveView, type ZoomLevel } from '../store/viewStore'
 import { canIndent, canOutdent } from './outlineActions'
+import { createResourceAndGetId } from './resourceActions'
 import styles from './styles/Chrome.module.scss'
 
 /**
@@ -570,20 +571,25 @@ function ProjectItems() {
 function ResourceItems() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
-  const dispatch = useProjectStore((state) => state.dispatch)
+  const setActiveInspectorTab = useViewStore((state) => state.setActiveInspectorTab)
+  const selectResource = useViewStore((state) => state.selectResource)
 
   if (!project) return null
+
+  const resourceCount = Object.keys(project.resources).length
 
   return (
     <Menu.Item
       data-testid="menu-new-resource"
-      onClick={() =>
-        dispatch({
-          type: 'resource.create',
-          label: 'commands.resource.create',
-          payload: { name: `${t('resource.name')} ${Object.keys(project.resources).length + 1}` },
-        })
-      }
+      onClick={() => {
+        // 拿到新 id 的手法复用共用函数（资源面板的新建按钮也走它）—— 这条规则只一处实现
+        const newId = createResourceAndGetId(`${t('resource.name')} ${resourceCount + 1}`)
+        if (!newId) return
+        // **点了必须看得见反应**（核心原则：点了没反应比明确禁用更糟）：
+        // 切到「资源」Tab 并选中刚建的资源，否则用户点完菜单界面纹丝不动。
+        setActiveInspectorTab('resource')
+        selectResource(newId)
+      }}
     >
       {t('commands.resource.create')}
     </Menu.Item>
