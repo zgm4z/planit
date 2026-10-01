@@ -141,12 +141,6 @@
     },
     "lag": "延迟",
     "deletedTask": "(已删除)",
-    "milestone": "里程碑",
-    "constraintDate": "约束日期",
-    "earliest": "最早：{{date}}",
-    "dependencies": "依赖关系",
-    "addPredecessor": "添加前置任务",
-    "selectPredecessor": "选择前置任务…",
     "project": {
       "name": "名称",
       "direction": "排期方向",

@@ -138,12 +138,6 @@
     },
     "lag": "ラグ",
     "deletedTask": "（削除済み）",
-    "milestone": "マイルストーン",
-    "constraintDate": "制約日",
-    "earliest": "最早：{{date}}",
-    "dependencies": "依存関係",
-    "addPredecessor": "先行タスクを追加",
-    "selectPredecessor": "タスクを選択…",
     "project": {
       "name": "名前",
       "direction": "スケジュール方向",

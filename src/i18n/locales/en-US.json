@@ -138,12 +138,6 @@
     },
     "lag": "Lag",
     "deletedTask": "(deleted)",
-    "milestone": "Milestone",
-    "constraintDate": "Constraint date",
-    "earliest": "Earliest: {{date}}",
-    "dependencies": "Dependencies",
-    "addPredecessor": "Add predecessor",
-    "selectPredecessor": "Choose a task…",
     "project": {
       "name": "Name",
       "direction": "Scheduling direction",
