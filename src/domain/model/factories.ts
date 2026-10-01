@@ -14,7 +14,7 @@ import { formatDate } from '../dateUtils'
 export const DEFAULT_CALENDAR_ID: CalendarId = 'default'
 
 /** 与设计文档一致的 schema 版本，持久化时用于校验 */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 let counter = 0
 
