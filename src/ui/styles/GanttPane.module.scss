@@ -1,35 +1,68 @@
 // 甘特图区域（刻度、网格、任务条）的样式。
 // 变量与 mixin 由 vite.config.ts 的 additionalData 自动注入，无需 @use。
 
-// 日刻度：等宽数字（§1.3），弱化到 faint，作为月份锚点之间的「底噪」。
-.rulerTick {
+// 标尺的两行容器（§4.2 落地）。总高 = --planit-ruler-height（32px）：
+// 上行月份带 14px + 下行日号 18px。ruler 自身有 1px 下边框，属于那 32px，
+// 因此这里 overflow:hidden —— 被裁掉的 1px 落在日号行底部（数字行内垂直居中，
+// 感知不到），换来的是「月份带 / 日号各归其行、互不遮盖」。
+.rulerInner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+// ── 上行：月份带 ──
+// 整条 --bg-subtle 底，让月份成为一个横贯的「带」；每片横跨该月全部列。
+.rulerMonths {
+  position: relative;
+  flex: none;
+  height: var(--planit-ruler-month-height);
+  background: var(--planit-bg-subtle);
+}
+
+// 单片月份带。左缘一条强描边标出「月从这里开始」—— 它落在列边界上，
+// 与下行同日号的日刻度对齐，两行合成一条更清晰的月分隔线。
+.rulerMonthBand {
   @include tabular-nums;
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--planit-border);
-  padding-left: 4px;
-  font-size: var(--planit-fs-micro);
-  color: var(--planit-text-faint);
   display: flex;
   align-items: center;
-  pointer-events: none;
+  padding-left: 6px;
+  border-left: 1px solid var(--planit-border-strong);
+  overflow: hidden;
+  font-size: var(--planit-fs-micro);
+  font-weight: 500;
+  text-transform: uppercase; // §1.2：大写的拉丁列头才加字距；月名同属这一族
+  letter-spacing: 0.06em;
+  color: var(--planit-text-muted);
   white-space: nowrap;
+  pointer-events: none;
 }
 
-// 月份锚点（§1.3 §4）：字重 600 + --text-strong + 强分隔线。
-// 这是标尺上唯一需要注意力的东西 —— 「这是几月」一眼可读，日刻度退到背景。
-//
-// `YYYY-MM` 比一天的格子宽，会与紧随其后的日号叠字。给一块不透明底板 + 抬高
-// 层级，让锚点**压住**那一格日号（被盖掉的只是月首次日的日号，是标准做法）；
-// 少了底板，两个数字会糊在一起，比丢一个日号更糟。
-.rulerTickMonth {
-  z-index: 2;
-  background: var(--planit-bg-surface);
-  padding-right: 6px;
-  border-left: 1px solid var(--planit-border-strong);
-  font-weight: 600;
-  color: var(--planit-text-strong);
+// ── 下行：日号 ──
+// 等宽数字（§1.3），弱化到 faint，作为月份带下方的「底噪」。
+.rulerDays {
+  position: relative;
+  flex: none;
+  height: var(--planit-ruler-day-height);
+}
+
+.rulerDayTick {
+  @include tabular-nums;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  border-left: 1px solid var(--planit-border);
+  font-size: var(--planit-fs-xs);
+  color: var(--planit-text-faint);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 // 今天线：中性色 1px 虚线（§3.2）。红色留给关键路径 —— 今天线若也用红，
@@ -76,10 +109,24 @@
   }
 }
 
-// 关键路径：独立身份 = 换色（红）+ 高 2px（高度由 TaskBar 内联给）。
-// 高度差让关键链在密集视图里即使颜色分辨不出也能被扫到（§3.2）。
+// 关键路径（§4.2 第 6 条）：**不整条铺满高饱和红**。
+// 三条信号叠在一起：
+//   1) 中等红底（--critical-mid）—— 满屏关键任务时读作「一个区块」而非「一片警报」；
+//   2) 左侧 2px 深红实边（--critical-dark）—— 零星关键任务时靠它一眼可寻；
+//   3) 高 2px（高度由 TaskBar 内联给，§3.2）—— 色觉障碍下也能扫到。
+//
+// 深红左缘用 background 渐变实现，而非 border/::before：
+//   · 不改盒模型 —— barRect 的宽度与依赖端点几何不受影响；
+//   · 不与 hover/active 的 box-shadow 抢属性；
+//   · background-color 仍持有 mid 红（便于样式断言读到有意义的值），
+//     background-image 只是叠在最左 2px 的深红覆盖层。
 .barCritical {
-  background: var(--planit-critical);
+  background-color: var(--planit-critical-mid);
+  background-image: linear-gradient(
+    to right,
+    var(--planit-critical-dark) 0 2px,
+    transparent 2px 100%
+  );
 }
 
 // 只加描边，不覆盖 background —— 关键色与冲突标记可以并存

@@ -28,13 +28,21 @@
   // ── 文字（四级，拉开对比；正文对背景 ≥ 7:1，元数据 ≥ 4.5:1）──
   --planit-text-strong: #12151c; /* 标题 */
   --planit-text: #2b303b; /* 正文 */
-  --planit-text-muted: #6b7280; /* 次要 */
-  --planit-text-faint: #a1a7b3; /* 元数据、空值、今天线 */
+  // 实测值（scripts/contrast.mjs，非手算）：
+  --planit-text-muted: #646c7a; /* 次要 · 对白 5.29:1 / 对 bg-app 4.98:1 · 达标 */
+  // ⚠️ 元数据、空值 · 实测对白 3.76:1 / 对 bg-app 3.54:1 —— **未达 §4.2 第 5 条的 4.5:1**。
+  // 规范 §4.1 称其 ≈4.6:1 是误算；若要让元数据达标，需再暗一档（如 #6a7280 → 4.85/4.54）。
+  // 本轮按规范原文同步，差异见报告。
+  --planit-text-faint: #7c8494;
 
   // ── 角色色 ──
   --planit-work: #6366f1; /* 工作 · 靛蓝（降饱和，不与关键红抢注意力） */
   --planit-work-soft: #eef0fe; /* 选中底 */
-  --planit-critical: #e5484d; /* 信号 · 关键路径 / 冲突 */
+  --planit-critical: #e5484d; /* 信号 · 关键路径 / 冲突（用于描边、里程碑、连线等小面积处） */
+  // 关键任务**条**的填充（§4.2 第 6 条）：成片时不整条铺满高饱和红，
+  // 改为「中等红底 + 左侧 2px 深红实边」，满屏时读作一个区块而非一片警报。
+  --planit-critical-mid: #d96165; /* 中等红 · 关键条底 */
+  --planit-critical-dark: #8f1b1f; /* 深红 · 关键条左侧 2px 实边 */
   --planit-warning: #d97706; /* 信号 · 资源超载 */
   --planit-positive: #16a34a; /* 信号 · 已完成 */
   --planit-neutral: #8b93a3; /* 非活跃 */
@@ -69,6 +77,10 @@
   // useSharedVirtualizer.ROW_HEIGHT 决定（虚拟化器用它算位置、行用它作内联 height），
   // CSS 不持有对应变量，因此没有「两处要同步」的问题。
   --planit-ruler-height: 32px;
+  // 标尺两行（§4.2 落地）：上行月份带 14px + 下行日号 18px = 32px。
+  // 月份带只占上行、横跨整月，**绝不覆盖任何日列** —— 现在的日号不会被压住。
+  --planit-ruler-month-height: 14px;
+  --planit-ruler-day-height: 18px;
   --planit-outline-width: 320px;
   --planit-inspector-width: 300px;
 }
