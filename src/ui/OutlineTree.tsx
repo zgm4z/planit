@@ -4,6 +4,7 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import type { ComputedSchedule, Project, Task, TaskId } from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
 import {
+  cellFlex,
   getOutlineCellValue,
   type CellValue,
   type OutlineColumn,
@@ -23,11 +24,6 @@ interface OutlineTreeProps {
   selectedTaskId: TaskId | null
   onSelect: (taskId: TaskId) => void
   onToggleCollapse: (taskId: TaskId) => void
-}
-
-/** 转成 CSS 的 flex 值：flex 列吃剩余宽度，其余固定宽（都不收缩） */
-function cellFlex(column: OutlineColumn): string {
-  return column.flex ? `1 1 ${column.width}px` : `0 0 ${column.width}px`
 }
 
 /**

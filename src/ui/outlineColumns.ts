@@ -122,6 +122,19 @@ export const GANTT_OUTLINE_COLUMNS: OutlineColumn[] = OUTLINE_COLUMNS.filter(
   (column) => column.key === 'kind' || column.key === 'title',
 )
 
+/**
+ * 列宽转成 CSS 的 `flex` 值：`title` 列吃剩余宽度（`1 1 Wpx`），其余固定宽且不收缩
+ * （`0 0 Wpx`）。
+ *
+ * **这是「表头必须与单元格逐列对齐」这条不变量的唯一实现**：表头（OutlineTable）
+ * 与正文单元格（OutlineTree）都读它。曾经两处各存一份完全相同的实现——将来改规则
+ * （比如引入 flex-shrink）会静默错位，而且没有任何测试看得见。放这里是因为本模块
+ * 已经是列定义（宽度 / flex 标志）的权威位置，且刻意不依赖 i18n / React。
+ */
+export function cellFlex(column: OutlineColumn): string {
+  return column.flex ? `1 1 ${column.width}px` : `0 0 ${column.width}px`
+}
+
 /** localStorage 里只能存 key，这里是 key 的运行时白名单（载入时的校验靠它） */
 const COLUMN_KEYS: ReadonlySet<string> = new Set(OUTLINE_COLUMNS.map((column) => column.key))
 

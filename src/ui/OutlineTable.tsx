@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { ComputedSchedule, Project, TaskId } from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
-import type { OutlineColumn } from './outlineColumns'
+import { cellFlex, type OutlineColumn } from './outlineColumns'
 import { OutlineTree } from './OutlineTree'
 import styles from './styles/ProjectView.module.scss'
 
@@ -16,11 +16,6 @@ interface OutlineTableProps {
   selectedTaskId: TaskId | null
   onSelect: (taskId: TaskId) => void
   onToggleCollapse: (taskId: TaskId) => void
-}
-
-/** 转成 CSS 的 flex 值（与 OutlineTree 同一规则 —— 表头与单元格必须逐列对齐） */
-function cellFlex(column: OutlineColumn): string {
-  return column.flex ? `1 1 ${column.width}px` : `0 0 ${column.width}px`
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   DEFAULT_VISIBLE_COLUMNS,
   GANTT_OUTLINE_COLUMNS,
   OUTLINE_COLUMNS,
+  cellFlex,
   getOutlineCellValue,
   isEnabledOutlineColumnKey,
   isOutlineColumnKey,
@@ -136,6 +137,14 @@ describe('OUTLINE_COLUMNS 注册表', () => {
 
   it('甘特视图左列固定渲染 kind + title 两列', () => {
     expect(GANTT_OUTLINE_COLUMNS.map((c) => c.key)).toEqual(['kind', 'title'])
+  })
+})
+
+describe('cellFlex — 表头与单元格共用的列宽口径', () => {
+  it('flex 列吃剩余宽度（1 1 Wpx），其余固定宽且不收缩（0 0 Wpx）', () => {
+    // title 是唯一的 flex 列；其余（如 start）固定宽、不收缩
+    expect(cellFlex(OUTLINE_COLUMNS.find((c) => c.key === 'title')!)).toBe('1 1 240px')
+    expect(cellFlex(OUTLINE_COLUMNS.find((c) => c.key === 'start')!)).toBe('0 0 100px')
   })
 })
 
