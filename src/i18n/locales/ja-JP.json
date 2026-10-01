@@ -1,0 +1,98 @@
+{
+  "app": { "name": "Planit", "tagline": "依存関係駆動のガントチャート型プロジェクト管理" },
+  "projectList": {
+    "new": "新規プラン",
+    "empty": "プランがまだありません。上のボタンから始めてください",
+    "updatedAt": "更新：{{time}}",
+    "untitled": "無題のプラン"
+  },
+  "toolbar": {
+    "newTask": "タスクを追加",
+    "indent": "インデント",
+    "indentHint": "前のタスクの子タスクにする",
+    "outdent": "アウトデント",
+    "outdentHint": "1 階層上に移動",
+    "undo": "元に戻す",
+    "redo": "やり直す",
+    "zoom": { "day": "日", "week": "週", "month": "月" },
+    "calendar": "稼働カレンダー",
+    "language": "言語"
+  },
+  "outline": { "columnTitle": "タスク" },
+  "inspector": {
+    "title": "タスクの詳細",
+    "name": "名前",
+    "duration": "期間",
+    "progress": "進捗（%）",
+    "milestone": "マイルストーン",
+    "scheduling": "スケジューリング",
+    "constraintDate": "制約日",
+    "summaryHint": "これはサマリータスクです。日付は子タスクから集計されるため、直接編集できません。",
+    "earliest": "最早",
+    "slack": "余裕",
+    "slackUnit": "稼働日",
+    "critical": "クリティカルパス上",
+    "dependencies": "依存関係",
+    "addPredecessor": "先行タスクを追加",
+    "selectPredecessor": "タスクを選択…",
+    "lag": "ラグ",
+    "incoming": "先行",
+    "outgoing": "後続",
+    "deletedTask": "（削除済み）"
+  },
+  "scheduling": {
+    "auto": "自動",
+    "startOn": "開始日を固定",
+    "finishOn": "終了日を固定",
+    "startNoEarlierThan": "開始は指定日以降",
+    "startNoLaterThan": "開始は指定日以前",
+    "finishNoEarlierThan": "終了は指定日以降",
+    "finishNoLaterThan": "終了は指定日以前"
+  },
+  "statusBar": {
+    "empty": "スケジュール未計算 — まずタスクを作成してください",
+    "span": "期間：{{start}} → {{finish}}",
+    "totalWorkdays": "稼働日数 {{count}} 日",
+    "criticalCount": "クリティカルタスク {{count}} 件",
+    "conflictCount": "競合 {{count}} 件"
+  },
+  "calendar": {
+    "title": "稼働日",
+    "exceptions": "例外日",
+    "addHoliday": "休日にする",
+    "holiday": "休日",
+    "custom": "カスタム",
+    "weekdays": { "mon": "月", "tue": "火", "wed": "水", "thu": "木", "fri": "金", "sat": "土", "sun": "日" }
+  },
+  "commands": {
+    "task.create": "タスクを作成",
+    "task.rename": "タスク名を変更",
+    "task.delete": "タスクを削除",
+    "task.reorder": "順序を変更",
+    "task.indent": "インデント",
+    "task.outdent": "アウトデント",
+    "task.setDuration": "期間を変更",
+    "task.setProgress": "進捗を設定",
+    "task.toggleMilestone": "マイルストーン切替",
+    "task.setScheduling": "制約を設定",
+    "task.moveTo": "タスクを移動",
+    "dependency.create": "依存関係を作成",
+    "dependency.delete": "依存関係を削除",
+    "dependency.setType": "依存タイプを変更",
+    "dependency.setLag": "ラグを変更",
+    "calendar.setWorkingDays": "稼働日を変更",
+    "calendar.addException": "例外日を追加",
+    "calendar.removeException": "例外日を削除",
+    "project.rename": "プロジェクト名を変更"
+  },
+  "conflicts": {
+    "constraintViolatedByDependency": "タスクは「{{constraint}} {{date}}」に固定されていますが、依存関係は {{earliest}} 以降を要求しています",
+    "impossibleConstraint": "スケジュール不可：このタスクの余裕が負です（{{slack}} 稼働日）"
+  },
+  "errors": {
+    "cycle": "循環依存を検出しました：{{path}}",
+    "dependencyNotRegistered": "未登録のコマンド種別：{{type}}",
+    "summaryCannotHaveDependency": "サマリータスクには依存関係を作成できません。具体的な子タスクに接続してください",
+    "storageUnavailable": "変更を保存できません：{{message}}"
+  }
+}

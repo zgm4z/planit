@@ -5,3 +5,5 @@ dist/
 .superpowers/
 .idea/
 *.tsbuildinfo
+# Playwright MCP 的验收产物（快照 / 控制台日志 / 截图）
+.playwright-mcp/

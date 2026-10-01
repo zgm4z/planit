@@ -1,0 +1,98 @@
+{
+  "app": { "name": "Planit", "tagline": "Dependency-driven Gantt project management" },
+  "projectList": {
+    "new": "New plan",
+    "empty": "No plans yet — click the button above to start",
+    "updatedAt": "Updated {{time}}",
+    "untitled": "Untitled plan"
+  },
+  "toolbar": {
+    "newTask": "New task",
+    "indent": "Indent",
+    "indentHint": "Make this a child of the previous task",
+    "outdent": "Outdent",
+    "outdentHint": "Move up one level",
+    "undo": "Undo",
+    "redo": "Redo",
+    "zoom": { "day": "Day", "week": "Week", "month": "Month" },
+    "calendar": "Working calendar",
+    "language": "Language"
+  },
+  "outline": { "columnTitle": "Task" },
+  "inspector": {
+    "title": "Task details",
+    "name": "Name",
+    "duration": "Duration",
+    "progress": "Progress (%)",
+    "milestone": "Milestone",
+    "scheduling": "Scheduling",
+    "constraintDate": "Constraint date",
+    "summaryHint": "This is a summary task. Its dates roll up from its children and cannot be edited directly.",
+    "earliest": "Earliest",
+    "slack": "Slack",
+    "slackUnit": "workdays",
+    "critical": "on critical path",
+    "dependencies": "Dependencies",
+    "addPredecessor": "Add predecessor",
+    "selectPredecessor": "Choose a task…",
+    "lag": "Lag",
+    "incoming": "Predecessor",
+    "outgoing": "Successor",
+    "deletedTask": "(deleted)"
+  },
+  "scheduling": {
+    "auto": "Automatic",
+    "startOn": "Start on",
+    "finishOn": "Finish on",
+    "startNoEarlierThan": "Start no earlier than",
+    "startNoLaterThan": "Start no later than",
+    "finishNoEarlierThan": "Finish no earlier than",
+    "finishNoLaterThan": "Finish no later than"
+  },
+  "statusBar": {
+    "empty": "No schedule yet — create a task first",
+    "span": "Span: {{start}} → {{finish}}",
+    "totalWorkdays": "{{count}} workdays total",
+    "criticalCount": "{{count}} critical tasks",
+    "conflictCount": "{{count}} conflicts"
+  },
+  "calendar": {
+    "title": "Working days",
+    "exceptions": "Exceptions",
+    "addHoliday": "Mark as holiday",
+    "holiday": "Holiday",
+    "custom": "Custom",
+    "weekdays": { "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri", "sat": "Sat", "sun": "Sun" }
+  },
+  "commands": {
+    "task.create": "Create task",
+    "task.rename": "Rename task",
+    "task.delete": "Delete task",
+    "task.reorder": "Reorder task",
+    "task.indent": "Indent task",
+    "task.outdent": "Outdent task",
+    "task.setDuration": "Change duration",
+    "task.setProgress": "Set progress",
+    "task.toggleMilestone": "Toggle milestone",
+    "task.setScheduling": "Set scheduling constraint",
+    "task.moveTo": "Move task",
+    "dependency.create": "Create dependency",
+    "dependency.delete": "Delete dependency",
+    "dependency.setType": "Change dependency type",
+    "dependency.setLag": "Change lag",
+    "calendar.setWorkingDays": "Change working days",
+    "calendar.addException": "Add exception",
+    "calendar.removeException": "Remove exception",
+    "project.rename": "Rename project"
+  },
+  "conflicts": {
+    "constraintViolatedByDependency": "Task is pinned to \"{{constraint}} {{date}}\", but a dependency requires it no earlier than {{earliest}}",
+    "impossibleConstraint": "Infeasible schedule: this task has negative slack ({{slack}} workdays)"
+  },
+  "errors": {
+    "cycle": "Circular dependency detected: {{path}}",
+    "dependencyNotRegistered": "Unregistered command type: {{type}}",
+    "summaryCannotHaveDependency": "Summary tasks cannot have dependencies — connect to a concrete child task instead",
+    "storageUnavailable": "Changes cannot be saved: {{message}}"
+  }
+}

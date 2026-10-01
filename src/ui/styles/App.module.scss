@@ -1,0 +1,11 @@
+// 应用外壳的全局表面。用 CSS 变量而非硬编码，主题切换只改令牌。
+.shell {
+  min-height: 100vh;
+  padding: var(--mantine-spacing-md, 12px);
+  background: var(--planit-bg-app);
+  color: var(--planit-text);
+}
+
+.header {
+  @include truncate;
+}

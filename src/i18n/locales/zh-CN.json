@@ -1,0 +1,103 @@
+{
+  "app": {
+    "name": "Planit",
+    "tagline": "依赖驱动的甘特图项目管理"
+  },
+  "projectList": {
+    "new": "新建计划",
+    "empty": "还没有任何计划，点上面的按钮开始",
+    "updatedAt": "更新于 {{time}}",
+    "untitled": "未命名计划"
+  },
+  "toolbar": {
+    "newTask": "新建任务",
+    "indent": "缩进",
+    "indentHint": "缩进为前一个任务的子任务",
+    "outdent": "反缩进",
+    "outdentHint": "反缩进为上一层级的任务",
+    "undo": "撤销",
+    "redo": "重做",
+    "zoom": { "day": "日", "week": "周", "month": "月" },
+    "calendar": "工作日历",
+    "language": "语言"
+  },
+  "outline": {
+    "columnTitle": "任务"
+  },
+  "inspector": {
+    "title": "任务详情",
+    "name": "名称",
+    "duration": "工期",
+    "progress": "进度（%）",
+    "milestone": "里程碑",
+    "scheduling": "排期方式",
+    "constraintDate": "约束日期",
+    "summaryHint": "这是摘要任务，其日期由子任务汇总而来，不可直接编辑。",
+    "earliest": "最早",
+    "slack": "浮时",
+    "slackUnit": "个工作日",
+    "critical": "位于关键路径",
+    "dependencies": "依赖关系",
+    "addPredecessor": "添加前置任务",
+    "selectPredecessor": "选择前置任务…",
+    "lag": "延迟",
+    "incoming": "前置",
+    "outgoing": "后续",
+    "deletedTask": "(已删除)"
+  },
+  "scheduling": {
+    "auto": "自动排期",
+    "startOn": "固定开始日期",
+    "finishOn": "固定结束日期",
+    "startNoEarlierThan": "开始不早于",
+    "startNoLaterThan": "开始不晚于",
+    "finishNoEarlierThan": "结束不早于",
+    "finishNoLaterThan": "结束不晚于"
+  },
+  "statusBar": {
+    "empty": "暂无排期 —— 先创建一个任务",
+    "span": "项目周期：{{start}} → {{finish}}",
+    "totalWorkdays": "共 {{count}} 个工作日",
+    "criticalCount": "关键任务 {{count}} 个",
+    "conflictCount": "排期冲突 {{count}} 处"
+  },
+  "calendar": {
+    "title": "工作日",
+    "exceptions": "例外日期",
+    "addHoliday": "设为假日",
+    "holiday": "假日",
+    "custom": "自定义",
+    "weekdays": { "mon": "一", "tue": "二", "wed": "三", "thu": "四", "fri": "五", "sat": "六", "sun": "日" }
+  },
+  "commands": {
+    "task.create": "新建任务",
+    "task.rename": "重命名任务",
+    "task.delete": "删除任务",
+    "task.reorder": "调整顺序",
+    "task.indent": "缩进任务",
+    "task.outdent": "反缩进任务",
+    "task.setDuration": "修改工期",
+    "task.setProgress": "设置进度",
+    "task.toggleMilestone": "切换里程碑",
+    "task.setScheduling": "设置排期约束",
+    "task.moveTo": "移动任务",
+    "dependency.create": "建立依赖",
+    "dependency.delete": "删除依赖",
+    "dependency.setType": "修改依赖类型",
+    "dependency.setLag": "修改延迟",
+    "calendar.setWorkingDays": "修改工作日",
+    "calendar.addException": "添加节假日",
+    "calendar.removeException": "移除例外日期",
+    "project.rename": "重命名项目"
+  },
+  "conflicts": {
+    "constraintViolatedByDependency": "任务被固定为「{{constraint}} {{date}}」，但依赖要求它不早于 {{earliest}}",
+    "impossibleConstraint": "排期不可行：该任务浮时为负（{{slack}} 个工作日）"
+  },
+  "errors": {
+    "cycle": "检测到循环依赖：{{path}}",
+    "dependencyNotRegistered": "未注册的命令类型：{{type}}",
+    "summaryCannotHaveDependency": "摘要任务不能建立依赖，请连接到具体的子任务上",
+    "storageUnavailable": "本次修改无法保存：{{message}}"
+  }
+}

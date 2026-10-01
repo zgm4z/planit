@@ -1,0 +1,4 @@
+allowBuilds:
+  # @parcel/watcher 是 sass 的可选 watch 依赖，Vite 有自己的文件监听，
+  # 不需要它的原生构建产物 —— 明确忽略以免 pnpm 的依赖检查报错。
+  '@parcel/watcher': false
