@@ -56,8 +56,8 @@ beforeEach(async () => {
   bId = b.id
 
   useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
-  // 手动算一次，模拟 App 的 initializeSchedules；此后 dispatch 会经由
-  // scheduleStore 模块级的 subscribe 自动重算。
+  // 上面的 setState 已会通知 scheduleStore 的 subscribe 自动重算；这里再显式
+  // 算一次只是让本文件的断言不依赖订阅时序（幂等，结果相同）。后续 dispatch 同理。
   useScheduleStore.setState({ result: solve(project), error: null })
 })
 
