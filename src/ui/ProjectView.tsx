@@ -1,12 +1,14 @@
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 
 import { flattenVisibleRows } from './flattenRows'
+import { DependencyLayer } from './DependencyLayer'
 import { GanttRows } from './GanttRows'
 import { OutlineTree } from './OutlineTree'
 import { TimeRuler } from './TimeRuler'
-import { createScale } from './timeline'
+import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
 import { Toolbar } from './Toolbar'
+import { useDependencyLink } from './useDependencyLink'
 import { useSharedVirtualizer, ROW_HEIGHT } from './useSharedVirtualizer'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
@@ -20,6 +22,7 @@ export function ProjectView() {
   const { t } = useTranslation()
 
   const project = useProjectStore((state) => state.project)
+  const dispatch = useProjectStore((state) => state.dispatch)
   const collapsedIds = useViewStore((state) => state.collapsedIds)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
   const selectTask = useViewStore((state) => state.selectTask)
@@ -76,6 +79,51 @@ export function ProjectView() {
     const days = scale.daysFromStart(formatDate(new Date()))
     return days >= 0 && days < totalDays ? days * dayWidth : null
   }, [scale, totalDays, dayWidth])
+
+  // 任务条/里程碑的绝对矩形（相对甘特图内容原点）。连线端点必须与 TaskBar
+  // 用**同一个**几何函数算出来，否则会插到任务条外面：
+  // 普通任务走 barRect，里程碑走 milestoneRect（菱形外接盒，不是 barRect）。
+  const rectByTaskId = useMemo(() => {
+    const map = new Map<string, Rect>()
+    if (!project) return map
+
+    rows.forEach((row, index) => {
+      const task = project.tasks[row.taskId]
+      const schedule = schedulesResult.schedules[row.taskId]
+      // 摘要任务不画条，也就没有连线端点
+      if (!task || !schedule || task.childIds.length > 0) return
+
+      const rowTop = index * ROW_HEIGHT
+
+      if (task.isMilestone) {
+        const rect = milestoneRect(scale, schedule.earlyStart)
+        map.set(row.taskId, { ...rect, y: rect.y + rowTop })
+      } else {
+        const bar = barRect(scale, schedule.earlyStart, schedule.earlyFinish)
+        map.set(row.taskId, {
+          x: bar.x,
+          y: rowTop + (ROW_HEIGHT - BAR_HEIGHT) / 2,
+          width: bar.width,
+          height: BAR_HEIGHT,
+        })
+      }
+    })
+
+    return map
+  }, [rows, project, schedulesResult.schedules, scale])
+
+  const handleLink = useCallback(
+    (fromTaskId: string, toTaskId: string) => {
+      dispatch({
+        type: 'dependency.create',
+        label: 'commands.dependency.create',
+        payload: { fromTaskId, toTaskId, type: 'FS', lag: 0 },
+      })
+    },
+    [dispatch],
+  )
+
+  const link = useDependencyLink(handleLink)
 
   if (!project) return null
 
@@ -146,7 +194,14 @@ export function ProjectView() {
                 scale={scale}
                 dragOverride={null}
                 onBarPointerDown={() => {}}
-                onStartLink={() => {}}
+                onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
+              />
+
+              <DependencyLayer
+                dependencies={Object.values(project.dependencies)}
+                rectByTaskId={rectByTaskId}
+                totalHeight={rows.length * ROW_HEIGHT}
+                totalWidth={ganttWidth}
               />
             </div>
           </div>
@@ -154,6 +209,30 @@ export function ProjectView() {
 
         {/* Inspector 在 Task 19 接入 */}
       </div>
+
+      {/* 拖拽中的幽灵线：固定定位，坐标为视口坐标。
+          必须显式给 width/height：`<svg>` 是替换元素，光靠 inset:0 不会撑满，
+          会退回 300×150 的固有尺寸 —— 而 SVG 根元素默认 overflow:hidden，
+          起点在视口右侧的连线会被整个裁掉（元素仍在 DOM 里，几何断言也照样通过）。 */}
+      {link.draft && (
+        <svg
+          width="100%"
+          height="100%"
+          style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 50 }}
+          aria-hidden
+          data-testid="link-draft"
+        >
+          <line
+            x1={link.draft.fromX}
+            y1={link.draft.fromY}
+            x2={link.draft.toX}
+            y2={link.draft.toY}
+            stroke="var(--planit-accent)"
+            strokeWidth={1.6}
+            strokeDasharray="4 3"
+          />
+        </svg>
+      )}
     </div>
   )
 }
