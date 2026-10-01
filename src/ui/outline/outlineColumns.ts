@@ -14,6 +14,7 @@ import {
   isEnabledOutlineColumnKey,
   type OutlineColumnKey,
 } from '../../store/columnKeys'
+import { resolveScheduleDates } from '../shared/scheduleDates'
 
 /**
  * 列的**渲染描述**。**不进 localStorage** —— 那里只存 `OutlineColumnKey`。
@@ -100,15 +101,6 @@ export const OUTLINE_COLUMNS: readonly OutlineColumn[] = OUTLINE_COLUMN_KEYS.map
   enabled: isEnabledOutlineColumnKey(key),
 }))
 
-/**
- * 响应式断点（spec §7，与 Mantine 的 `$breakpoint-md: 900px` 对齐）。
- *
- * `NARROW`：< 1100 —— 右栏改抽屉、左列 280、隐藏「备注 / ID / 优先级」、工具栏溢出。
- * `COMPACT`：< 900 —— 只剩「标题 / 开始 / 结束 / 工期」，左列 240。
- */
-export const NARROW_LAYOUT_WIDTH = 1100
-export const COMPACT_LAYOUT_WIDTH = 900
-
 /** < 1100 时按 §7 **强制隐藏**的低价值列（它们让位给标题列，不是等比压缩） */
 const NARROW_HIDDEN_COLUMNS: readonly OutlineColumnKey[] = ['note', 'id', 'priority']
 
@@ -155,22 +147,6 @@ export const GANTT_OUTLINE_COLUMNS: OutlineColumn[] = OUTLINE_COLUMNS.filter(
  */
 export function cellFlex(column: OutlineColumn): string {
   return column.flex ? `1 1 ${column.width}px` : `0 0 ${column.width}px`
-}
-
-/**
- * 「用户看到的日期」的**唯一取值口径**：列表单元格与甘特条经这里取同一对字段。
- *
- * 为什么是单参、为什么不做方向分支：v0.2 已把「方向 × 顺序」解析烤进了引擎输出 ——
- * `scheduledStart` / `scheduledFinish` **就是**最终排期（见 ComputedSchedule 的注释）。
- * spec §4.2 的三参签名会让本函数再实现一遍方向判断，那正是 v0.2 偏差 3（`deriveKind`）
- * 刚消灭掉的「同一条规则两份实现」。保留这个名字，是为了让「列表与甘特条同口径」
- * 这条不变量有一个可指认的位置（甘特条侧读的是同一对字段，不需要改）。
- */
-export function resolveScheduleDates(schedule: ComputedSchedule): {
-  start: DateStr
-  finish: DateStr
-} {
-  return { start: schedule.scheduledStart, finish: schedule.scheduledFinish }
 }
 
 /**

@@ -38,7 +38,7 @@ import styles from '../styles/Chrome.module.scss'
  */
 export function Toolbar() {
   const { t } = useTranslation()
-  // §7 的断点来自唯一一份定义（outlineColumns 的 1100 / 900，由 useLayoutMode 消费）——
+  // §7 的断点来自唯一一份定义（shared/breakpoints 的 1100 / 900，由 useLayoutMode 消费）——
   // 不在工具栏里再写一个 1100，否则 JS 的媒体查询会与 CSS / 列注册表产生 off-by-one 分歧。
   const { isNarrow: narrow } = useLayoutMode()
 

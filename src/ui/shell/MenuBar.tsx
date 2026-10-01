@@ -8,8 +8,8 @@ import { findActiveBaseline } from '../../domain/model/baseline'
 import type { SchedulingDirection } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useViewStore, type ActiveView, type ZoomLevel } from '../../store/viewStore'
-import { canIndent, canOutdent } from '../outline/outlineActions'
-import { createResourceAndGetId } from '../inspector/resourceActions'
+import { canIndent, canOutdent } from '../shared/outlineActions'
+import { createResourceAndGetId } from '../shared/resourceActions'
 import styles from '../styles/Chrome.module.scss'
 
 /**

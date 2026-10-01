@@ -10,7 +10,7 @@ import type {
   TaskCosts,
   TaskId,
 } from '../../domain/model/types'
-import type { FlatRow } from './flattenRows'
+import type { FlatRow } from '../shared/flattenRows'
 import { cellFlex, OUTLINE_COLUMNS, type OutlineColumn } from './outlineColumns'
 import { useViewStore } from '../../store/viewStore'
 import { OutlineTree } from './OutlineTree'

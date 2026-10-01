@@ -16,8 +16,8 @@ import {
   cellFlex,
   getOutlineCellValue,
   responsiveHiddenColumns,
-  resolveScheduleDates,
 } from './outlineColumns'
+import { resolveScheduleDates } from '../shared/scheduleDates'
 
 /**
  * **本版可用**的 24 个 key。

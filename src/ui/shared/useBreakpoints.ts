@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { COMPACT_LAYOUT_WIDTH, NARROW_LAYOUT_WIDTH } from '../outline/outlineColumns'
+import { COMPACT_LAYOUT_WIDTH, NARROW_LAYOUT_WIDTH } from './breakpoints'
 
 /**
  * 用 `matchMedia` 订阅一个媒体查询（spec §7 的响应式）。
@@ -43,7 +43,7 @@ export interface LayoutMode {
  * 当前布局档位（spec §7）。`isCompact` 蕴含 `isNarrow`（两个查询是嵌套的）。
  *
  * ─────────────────────────────────────────────────────────────────────────
- * **1100 / 900 这两个断点，全项目只有一份定义**：`outlineColumns.ts` 的
+ * **1100 / 900 这两个断点，全项目只有一份定义**：同目录 `breakpoints.ts` 的
  * `NARROW_LAYOUT_WIDTH`（1100）/ `COMPACT_LAYOUT_WIDTH`（900）。
  * 本文件的 `useLayoutMode()` 是它们的**唯一消费点**（把它们翻成媒体查询）。
  *
