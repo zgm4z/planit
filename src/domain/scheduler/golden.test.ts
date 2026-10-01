@@ -128,7 +128,7 @@ describe('黄金判据 4：资源可用期间之外不被分配', () => {
     expect(schedules[target.id].scheduledFinish).toBe('2026-03-11')
   })
 
-  it('availableUntil 早于任务装得下的结束日 → 浮时变负（如实报冲突）', () => {
+  it('availableUntil 压住正推的 earlyFinish（结束日不得越过资源可用期）', () => {
     const { project, tasks } = projectWithChain([5])
     const target = tasks[0]
 
@@ -138,9 +138,32 @@ describe('黄金判据 4：资源可用期间之外不被分配', () => {
     project.assignments[assignment.id] = assignment
 
     const { schedules } = solve(project)
-    // 03-02 起 5 天要到 03-06，但资源 03-04 就离职 —— 上界把 lateFinish 拉到 03-04
-    expect(schedules[target.id].earlyFinish).toBe('2026-03-06')
-    expect(schedules[target.id].totalSlack).toBeLessThan(0)
+    // 无可用期时 03-02 起 5 天会到 03-06；资源 03-04 就离职，正推的结束日
+    // 必须被上界压到 03-04 —— 而不是留到 03-06、只在逆推里变成一个负浮时。
+    expect(schedules[target.id].earlyFinish).toBe('2026-03-04')
+    expect(schedules[target.id].scheduledFinish).toBe('2026-03-04')
+    // 5 天的活被塞进 03-02..03-04 只有 3 天，装不下 → 浮时变负，如实报冲突
+    expect(schedules[target.id].totalSlack).toBe(-2)
+  })
+
+  it('backward + alap：availableFrom 把显示的开始日推后（不得早于资源到位日）', () => {
+    // 逆推锚点（截止日）比资源到位日早 —— 逆推本会把开始日推到期前，
+    // 早于资源可用期。alap 显示的是 lateStart，可见排期会直接违反可用期。
+    const project = createProject('可用期-逆推', START)
+    project.schedulingDirection = 'backward'
+    project.endDate = '2026-03-05'
+    const target = createTask({ name: 'T', duration: 3 })
+    project.tasks[target.id] = { ...target, schedulingOrder: 'alap' }
+    project.rootIds.push(target.id)
+
+    const temp = staff('临时工', { availableFrom: '2026-03-10' })
+    project.resources[temp.id] = temp
+    const assignment = createAssignment({ taskId: target.id, resourceId: temp.id, units: 1 })
+    project.assignments[assignment.id] = assignment
+
+    const { schedules } = solve(project)
+    // 不用 availableFrom 时开始日会被逆推拉到 03-03（截止 03-05 往前 3 天）
+    expect(schedules[target.id].scheduledStart).toBe('2026-03-10')
   })
 })
 

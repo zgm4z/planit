@@ -68,7 +68,15 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 
       start = snapToWorkday(start, calendar)
       earlyStart.set(id, start)
-      earlyFinish.set(id, taskFinish(start, task.duration, calendar))
+
+      // 资源可用期是任务的**上下界**，两趟都要消费 —— 只接一趟会让另一趟的
+      // 排期越界。正推这里补的是**上界**：任务结束不得晚于 availableUntil。
+      // 少了它，正推的 earlyFinish 会越过 availableUntil，而逆推只把它体现成
+      // 负浮时、并不会把「用户看到的排期」收回来。
+      let finish = taskFinish(start, task.duration, calendar)
+      const latest = resourceBounds?.[id]?.latestFinish
+      if (latest && latest < finish) finish = latest
+      earlyFinish.set(id, snapToWorkday(finish, calendar))
     }
 
     return { earlyStart, earlyFinish }
@@ -100,7 +108,15 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 
       finish = snapToWorkday(finish, calendar)
       lateFinish.set(id, finish)
-      lateStart.set(id, taskStart(finish, task.duration, calendar))
+
+      // 逆推这里补的是**下界**：任务开始不得早于 availableFrom。
+      // 少了它，backward + alap 下 scheduledStart 取的是 lateStart，可以早于
+      // 资源到位日 —— 用户看到的排期直接违反可用期（正推那趟只改 earlyStart，
+      // 拦不住 alap 的取晚端）。
+      let start = taskStart(finish, task.duration, calendar)
+      const earliest = resourceBounds?.[id]?.earliestStart
+      if (earliest && earliest > start) start = earliest
+      lateStart.set(id, snapToWorkday(start, calendar))
     }
 
     return { lateStart, lateFinish }
