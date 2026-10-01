@@ -359,13 +359,24 @@ describe('runCpm — 排期方向', () => {
     expect(span(forward)).toBe(9)
   })
 
-  it('backward 未设 endDate 时退回用正推算出的完成日：排期与 forward 完全一致', () => {
+  it('backward 未设 endDate 时退回用正推算出的完成日', () => {
     const forward = golden('forward')
     const backward = golden('backward')
+
+    // 排期侧：全 asap ⇒ scheduled* 恒等于 early*，与方向无关
     for (const id of ['A', 'B', 'C', 'D']) {
       expect(backward[id].scheduledStart).toBe(forward[id].scheduledStart)
       expect(backward[id].scheduledFinish).toBe(forward[id].scheduledFinish)
     }
+
+    // late 侧才是这条用例的判别点：兜底锚取「正推算出的完成日」，
+    // 于是最晚完成日与最早完成日重合、关键任务浮时为 0。
+    // 若兜底锚错写成 projectStart，D.totalSlack 会变成很大的负数，
+    // 下面两条立刻变红 —— 只断言 scheduled* 是抓不住的。
+    expect(backward.D.lateFinish).toBe('2026-03-12')
+    expect(backward.D.totalSlack).toBe(0)
+    expect(backward.B.totalSlack).toBe(3) // 与 forward 下的浮时一致
+    expect(backward.A.totalSlack).toBe(0)
   })
 
   it('forward 下 projectEnd 早于算出的完成日 → 浮时变负（期限违约）', () => {
