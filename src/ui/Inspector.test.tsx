@@ -12,6 +12,7 @@ import {
   __resetIdCounterForTests,
 } from '../domain/model/factories'
 import { useProjectStore } from '../store/projectStore'
+import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore } from '../store/viewStore'
 import { Inspector } from './Inspector'
 import i18n from '../i18n'
@@ -26,6 +27,11 @@ function renderInspector() {
       <Inspector />
     </MantineProvider>,
   )
+}
+
+/** 当前选中任务在 store 里的样子 —— 断言落在 store 上而不是外观上 */
+function currentTask() {
+  return useProjectStore.getState().project!.tasks[taskId]
 }
 
 /**
@@ -265,5 +271,188 @@ describe('任务信息组', () => {
     expect(screen.getByLabelText('资源成本')).toBeDisabled()
     expect(screen.getByLabelText('总成本')).toBeDisabled()
     expect(screen.getAllByText(/v0\.5 提供/).length).toBeGreaterThanOrEqual(2)
+  })
+
+  // 以下两条是 v0.4 Task 2 重写测试文件时误删的既有用例（覆盖倒退），
+  // 现恢复。断言强度不改，只在控件形态变化处改写交互（见各条注释）。
+  it('修改进度会写回 store', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    const input = screen.getByLabelText('进度（%）')
+    await user.clear(input)
+    await user.type(input, '40')
+
+    expect(currentTask().progress).toBe(40)
+  })
+
+  it('切换里程碑会把工期归零', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    // Task 3 把「里程碑」复选框换成了「类型」Select 的选项之一，
+    // 交互因此从「点 label」改为「选选项」；断言本身不变。
+    await chooseOption(user, '类型', '里程碑')
+
+    const task = currentTask()
+    expect(task.kind).toBe('milestone')
+    expect(task.duration).toBe(0)
+  })
+})
+
+describe('日程安排组（Task 2 误删的既有用例）', () => {
+  it('排期方式切到固定开始日期会写入约束', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await chooseOption(user, '排期方式', '固定开始日期')
+
+    const scheduling = currentTask().scheduling
+    expect(scheduling.mode).toBe('constraint')
+    if (scheduling.mode !== 'constraint') throw new Error('unreachable')
+    expect(scheduling.type).toBe('startOn')
+    // 这条断言测的是「UI 把用户看到的开始日写进约束日期」——属于派生取值，
+    // 应与 Inspector 取同一个字段（scheduledStart），而不是引擎原始输出 earlyStart。
+    expect(scheduling.date).toBe(
+      useScheduleStore.getState().result.schedules[taskId].scheduledStart,
+    )
+  })
+
+  it('排期方式切到固定结束日期会写入 finishOn', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await chooseOption(user, '排期方式', '固定结束日期')
+
+    expect(currentTask().scheduling).toEqual({
+      mode: 'constraint',
+      type: 'finishOn',
+      date: '2026-03-02',
+    })
+  })
+
+  it('排期方式切回自动会清掉约束', async () => {
+    const user = userEvent.setup()
+    useProjectStore.setState({
+      project: {
+        ...useProjectStore.getState().project!,
+        tasks: {
+          ...useProjectStore.getState().project!.tasks,
+          [taskId]: {
+            ...currentTask(),
+            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+          },
+        },
+      },
+    })
+
+    renderInspector()
+    await chooseOption(user, '排期方式', '自动排期')
+
+    expect(currentTask().scheduling).toEqual({ mode: 'auto' })
+  })
+
+  it('已存在的约束会被排期下拉正确读出', () => {
+    useProjectStore.setState({
+      project: {
+        ...useProjectStore.getState().project!,
+        tasks: {
+          ...useProjectStore.getState().project!.tasks,
+          [taskId]: {
+            ...currentTask(),
+            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+          },
+        },
+      },
+    })
+
+    renderInspector()
+
+    expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('固定结束日期')
+    // 约束日期字段的 label 是「排期方式 · <类型>」（Task 2 起的结构）
+    expect(screen.getByLabelText('排期方式 · 固定结束日期')).toHaveValue('2026-03-05')
+  })
+})
+
+describe('相关性组（Task 2 误删的既有用例）', () => {
+  it('摘要任务不渲染「添加前置任务」', () => {
+    useViewStore.setState({ selectedTaskId: parentId })
+    renderInspector()
+
+    expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
+  })
+
+  it('通过下拉建立前置依赖，并显示在依赖列表里', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await chooseOption(user, '添加必要条件', '写代码')
+
+    const deps = Object.values(useProjectStore.getState().project!.dependencies)
+    expect(deps).toHaveLength(1)
+    expect(deps[0]).toMatchObject({ fromTaskId: siblingId, toTaskId: taskId, type: 'FS', lag: 0 })
+    // 前置依赖在列表里以「←」标记
+    expect(screen.getByText(/←\s*写代码/)).toBeInTheDocument()
+  })
+
+  it('改依赖类型与 lag 会更新 store，删除后消失', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await chooseOption(user, '添加必要条件', '写代码')
+    expect(screen.getByText(/←\s*写代码/)).toBeInTheDocument()
+
+    await chooseOption(user, '相关性 写代码', 'SS')
+
+    const lagInput = screen.getByLabelText('延迟 写代码')
+    await user.clear(lagInput)
+    await user.type(lagInput, '2')
+
+    const dep = Object.values(useProjectStore.getState().project!.dependencies)[0]
+    expect(dep.type).toBe('SS')
+    expect(dep.lag).toBe(2)
+
+    await user.click(screen.getByLabelText('删除依赖 写代码'))
+
+    expect(Object.values(useProjectStore.getState().project!.dependencies)).toHaveLength(0)
+    expect(screen.queryByText(/←\s*写代码/)).not.toBeInTheDocument()
+  })
+
+  it('依赖列表面向后续任务时用「→」标记', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(taskId, siblingId, 'FS', 0)
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+
+    renderInspector()
+
+    expect(screen.getByText(/→\s*写代码/)).toBeInTheDocument()
+  })
+
+  it('已经连过的前置不再出现在候选里', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(siblingId, taskId, 'FS', 0) // 写代码 → 写文档
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+
+    renderInspector()
+
+    // 唯一的叶子候选（写代码）已经连过 → 下拉整体消失
+    expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
+  })
+
+  it('只有反向依赖时候选仍然保留（那是一条合法的新边）', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(taskId, siblingId, 'FS', 0) // 写文档 → 写代码
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+
+    renderInspector()
+
+    expect(screen.getByRole('combobox', { name: '添加必要条件' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '写代码', hidden: true })).toBeInTheDocument()
   })
 })
