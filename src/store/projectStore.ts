@@ -68,7 +68,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     try {
       set({
-        project: applyPatches(project, entry.inversePatches),
+        // updatedAt 与 dispatch 一致地刷新：撤销同样是一次真实的修改，
+        // 不刷新会让「最近修改時間」倒退，列表排序失真
+        project: {
+          ...applyPatches(project, entry.inversePatches),
+          updatedAt: new Date().toISOString(),
+        },
         undoStack: undoStack.slice(0, -1),
         redoStack: [...redoStack, entry],
       })
@@ -87,7 +92,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({
         // 应用正向 patch 重放，而不是重跑 handler ——
         // task.create 会生成新的自增 id，重跑会得到与首次不同的任务
-        project: applyPatches(project, entry.patches),
+        project: {
+          ...applyPatches(project, entry.patches),
+          updatedAt: new Date().toISOString(),
+        },
         undoStack: [...undoStack, entry],
         redoStack: redoStack.slice(0, -1),
       })
