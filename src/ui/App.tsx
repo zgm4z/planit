@@ -10,7 +10,6 @@ import { ProjectView } from './ProjectView'
 import { initCommands } from '../commands/registry'
 import { startAutoSave } from '../persist/autoSave'
 import { useProjectStore } from '../store/projectStore'
-import { initializeSchedules } from '../store/scheduleStore'
 import { useTranslation } from 'react-i18next'
 
 // 模块加载时注册一次命令。放在组件外，避免 StrictMode 下重复注册
@@ -29,10 +28,9 @@ export default function App() {
     document.documentElement.lang = i18n.resolvedLanguage ?? 'zh-CN'
   }, [i18n.resolvedLanguage])
 
-  // project 变化后重算排期（undo/redo 也会走到这里）
-  useEffect(() => {
-    initializeSchedules()
-  }, [project])
+  // 排期的重算**不在这里** —— scheduleStore 订阅了 projectStore，
+  // project 每次变更（含 loadProject / undo / redo）都会在那里重算一次。
+  // 在这里再触发一次会让 solve() 白跑一遍。
 
   // 启动自动存盘。返回的清理函数会在卸载时把挂起的快照冲掉
   useEffect(() => startAutoSave((message) => setStorageWarning(message)), [])

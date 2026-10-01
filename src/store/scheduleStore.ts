@@ -33,12 +33,11 @@ function recompute(): void {
   }
 }
 
-// 只要 project 引用发生变化就重算一次（redo/undo 同样会触发）
+// 唯一的重算触发源。不要在上层再加 useEffect 之类的二次触发 ——
+// project 每次变更都是新引用，重复触发会让 solve() 白跑一遍。
+//
+// `loadProject` 同样是真实的 store 变更，因此「首次载入」也走这里 ——
+// 无需（也不该有）单独的初始化入口。
 useProjectStore.subscribe((state, prevState) => {
   if (state.project !== prevState.project) recompute()
 })
-
-/** 首次载入项目后手动触发一次，因为 subscribe 不会为初始值回调 */
-export function initializeSchedules(): void {
-  recompute()
-}
