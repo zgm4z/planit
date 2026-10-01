@@ -1,9 +1,7 @@
 {
   "name": "planit",
   "version": "1.0.0",
-  "description": "",
   "private": true,
-  "main": "index.js",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,9 +11,6 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.13",
     "date-fns": "^4.4.0",
