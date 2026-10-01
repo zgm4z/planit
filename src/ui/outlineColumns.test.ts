@@ -82,6 +82,19 @@ describe('OUTLINE_COLUMNS 注册表', () => {
     expect(DEFAULT_VISIBLE_COLUMNS).toContain('title')
   })
 
+  it('默认可见列的每个 key 都是可用列，且顺序与注册表一致', () => {
+    // 注释声称「已按注册表顺序排列」。这里两件事一起钉：
+    // 1) 塞进默认列的 key 必须是本版**可用**列 —— 否则首次打开就会冒出一个
+    //    菜单里点不动、又删不掉的恒空列（见 isEnabledOutlineColumnKey 的注释）。
+    for (const key of DEFAULT_VISIBLE_COLUMNS) {
+      expect(isEnabledOutlineColumnKey(key), `${key} 不是本版可用列`).toBe(true)
+    }
+    // 2) 顺序必须与 OUTLINE_COLUMNS 注册表逐一对应（用注册表过滤反推顺序来断言）。
+    expect(DEFAULT_VISIBLE_COLUMNS).toEqual(
+      OUTLINE_COLUMNS.filter((c) => DEFAULT_VISIBLE_COLUMNS.includes(c.key)).map((c) => c.key),
+    )
+  })
+
   it('每个 key 唯一', () => {
     const keys = OUTLINE_COLUMNS.map((c) => c.key)
     expect(new Set(keys).size).toBe(keys.length)
@@ -162,15 +175,30 @@ describe('resolveScheduleDates — 单一日期口径', () => {
 
 describe('getOutlineCellValue', () => {
   const task: Task = { ...createTask({ name: '写文档', duration: 3 }), note: '备注', priority: 4, progress: 40 }
-  const ctx = { task, schedule: schedule({ totalSlack: 2, freeSlack: 1 }), project: undefined as never }
+  // 这份 schedule 刻意让 scheduled* ≠ early*（2026-03-10/12 vs 2026-03-02/04）：
+  // spec §4.2 说列取值口径是本版最容易错的地方 —— 列表读**最终排期** scheduled*，
+  // 甘特条读同一对字段；切成 backward 后 scheduled* 会与 early* 分道扬镳。
+  // 若 fixture 让两者相等，把实现误写成读 earlyStart 也照样全绿，断言就失去判别力。
+  const ctx = {
+    task,
+    schedule: schedule({
+      earlyStart: '2026-03-02',
+      earlyFinish: '2026-03-04',
+      scheduledStart: '2026-03-10',
+      scheduledFinish: '2026-03-12',
+      totalSlack: 2,
+      freeSlack: 1,
+    }),
+  }
 
   it('各可用列取值正确', () => {
     expect(getOutlineCellValue('kind', ctx)).toEqual({ type: 'text', text: '▪' })
     expect(getOutlineCellValue('title', ctx)).toEqual({ type: 'text', text: '写文档' })
     expect(getOutlineCellValue('note', ctx)).toEqual({ type: 'text', text: '备注' })
     expect(getOutlineCellValue('id', ctx)).toEqual({ type: 'text', text: task.id })
-    expect(getOutlineCellValue('start', ctx)).toEqual({ type: 'text', text: '2026-03-02' })
-    expect(getOutlineCellValue('finish', ctx)).toEqual({ type: 'text', text: '2026-03-04' })
+    // 断言的是 scheduled*（最终排期），不是 early* —— 见 ctx 上的注释
+    expect(getOutlineCellValue('start', ctx)).toEqual({ type: 'text', text: '2026-03-10' })
+    expect(getOutlineCellValue('finish', ctx)).toEqual({ type: 'text', text: '2026-03-12' })
     expect(getOutlineCellValue('duration', ctx)).toEqual({ type: 'days', count: 3 })
     expect(getOutlineCellValue('priority', ctx)).toEqual({ type: 'text', text: '4' })
     expect(getOutlineCellValue('progress', ctx)).toEqual({ type: 'percent', value: 40 })
@@ -187,7 +215,7 @@ describe('getOutlineCellValue', () => {
   })
 
   it('没有排期时日期/浮时列是空，而不是崩或 "undefined"', () => {
-    const bare = { task, schedule: undefined, project: undefined as never }
+    const bare = { task, schedule: undefined }
     expect(getOutlineCellValue('start', bare)).toEqual({ type: 'empty' })
     expect(getOutlineCellValue('finish', bare)).toEqual({ type: 'empty' })
     expect(getOutlineCellValue('totalSlack', bare)).toEqual({ type: 'empty' })

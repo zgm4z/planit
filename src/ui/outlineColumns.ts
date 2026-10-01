@@ -178,7 +178,12 @@ export interface ColumnCellContext {
   task: Task
   /** 未选中 / 未算出排期时为 undefined —— 此时日期与浮时列渲染空白 */
   schedule: ComputedSchedule | undefined
-  project: Project
+  /**
+   * 调用点（OutlineTree）会传它，但**本版没有任何 `case` 读它** —— 因此设为可选，
+   * 免得每个调用点与测试都得糊一个没人消费的必填字段。等真有列需要项目级信息
+   * （如跨项目依赖）时再让它派上用场。
+   */
+  project?: Project
 }
 
 const EMPTY: CellValue = { type: 'empty' }
