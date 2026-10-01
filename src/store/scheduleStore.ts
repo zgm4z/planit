@@ -16,6 +16,8 @@ const EMPTY: ScheduleResult = {
   costs: {},
   resourceTotals: {},
   leveling: { delays: {}, unresolved: [] },
+  earnedValues: {},
+  baselineDiffs: {},
 }
 
 export const useScheduleStore = create<ScheduleState>(() => ({

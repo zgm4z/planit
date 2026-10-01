@@ -39,7 +39,7 @@
       "titleLocked": "标题列始终显示，不可取消"
     },
     "disabledReason": {
-      "baseline": "需要基线功能（v1.0）"
+      "actualCost": "需要实际成本录入（尚未排期）"
     },
     "columns": {
       "kind": "类型",
@@ -89,9 +89,22 @@
       "allocation": "资源分配",
       "expectedEffort": "预计的工作量"
     },
+    "baseline": {
+      "active": "对比基线",
+      "none": "不对比",
+      "save": "保存当前排期为基线",
+      "name": "基线 {{n}}",
+      "delete": "删除此基线",
+      "start": "基线开始",
+      "finish": "基线结束",
+      "startVariance": "开始差异",
+      "finishVariance": "结束差异",
+      "noBaseline": "未设置基线",
+      "noEntry": "该任务不在基线中",
+      "deletedCount": "基线条目中 {{count}} 个任务已删除",
+      "deletedEntry": "{{name}}（已删除）"
+    },
     "placeholder": {
-      "baseline": "未设置基线",
-      "baselineHint": "基线对比将在 v1.0 提供。",
       "allocationHint": "分配变更时的自动调整尚未排期。",
       "expectedEffortHint": "付出可被计算为最小值、最大值和期望值的加权平均值。这些值也被用作 Monte Carlo 模拟中可能的可变性。预计工作量尚未排期。",
       "allocationOnChange": "当资源分配更改时",
@@ -164,7 +177,9 @@
       "taskCount": "任务数：{{count}}",
       "format": "格式",
       "currency": "货币",
-      "currencyHint": "项目级货币与格式将在 v1.0 提供",
+      "currencyHint": "项目级货币与格式尚未排期。",
+      "statusDate": "基准日",
+      "statusDateHint": "挣值（计划值 / 进度差异）以基准日为界计算",
       "unitConversion": "投入单位转换",
       "hoursPerDay": "1 工作日 = {{hours}} 小时"
     }
@@ -247,6 +262,10 @@
     "project.setDirection": "设置排期方向",
     "project.setStartDate": "设置项目开始日期",
     "project.setEndDate": "设置项目结束日期",
+    "project.setBaseline": "保存基线",
+    "project.setActiveBaseline": "切换基线",
+    "project.deleteBaseline": "删除基线",
+    "project.setStatusDate": "设置基准日",
     "assignment.create": "分配资源",
     "assignment.delete": "取消分配",
     "assignment.setUnits": "设置单元",

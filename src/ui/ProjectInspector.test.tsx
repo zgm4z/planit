@@ -99,7 +99,7 @@ describe('ProjectInspector', () => {
     expect(screen.getByText(/任务数：2/)).toBeInTheDocument()
   })
 
-  it('投入单位换算可编辑并写回 hoursPerDay；货币仍禁用但 hint 指向 v1.0', () => {
+  it('投入单位换算可编辑并写回 hoursPerDay；货币仍禁用但 hint 指向「尚未排期」', () => {
     renderProjectInspector()
 
     const conversion = screen.getByLabelText('投入单位转换')
@@ -110,6 +110,27 @@ describe('ProjectInspector', () => {
     expect(useProjectStore.getState().project!.calendars.default.hoursPerDay).toBe(6)
 
     expect(screen.getByRole('combobox', { name: '货币' })).toBeDisabled()
-    expect(screen.getByText(/v1\.0 提供/)).toBeInTheDocument()
+    // v1.0 是路线图最后一版，货币与格式再也指不出一个真实版本 → 写「尚未排期」（偏差 6）
+    expect(screen.getByText(/尚未排期/)).toBeInTheDocument()
+    expect(screen.queryByText(/v1\.0/)).not.toBeInTheDocument()
+  })
+
+  it('基准日输入框写入 project.statusDate；清空即删除该字段（不是空串）', () => {
+    renderProjectInspector()
+
+    // 缺省未设 → 值显示为空串
+    expect(screen.getByLabelText('基准日')).toHaveValue('')
+
+    fireEvent.change(screen.getByLabelText('基准日'), { target: { value: '2026-03-04' } })
+    expect(useProjectStore.getState().project!.statusDate).toBe('2026-03-04')
+
+    // 清空 = 未设基准日（PV / SV 不可算）—— 必须是 undefined，不能留 ''
+    fireEvent.change(screen.getByLabelText('基准日'), { target: { value: '' } })
+    expect(useProjectStore.getState().project!.statusDate).toBeUndefined()
+  })
+
+  it('基准日 hint 说明 EVM 以之为界（不出现裸 key）', () => {
+    renderProjectInspector()
+    expect(screen.getByText(/基准日为界/)).toBeInTheDocument()
   })
 })

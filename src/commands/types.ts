@@ -54,6 +54,11 @@ export type CommandType =
   | 'task.setEffort'
   // 日历（v0.5）
   | 'calendar.setHoursPerDay'
+  // 基线 / 挣值（v1.0）
+  | 'project.setBaseline'
+  | 'project.setActiveBaseline'
+  | 'project.deleteBaseline'
+  | 'project.setStatusDate'
 
 /**
  * 一次数据变更的完整描述。`payload` 必须是可序列化的普通数据

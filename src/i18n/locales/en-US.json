@@ -36,7 +36,7 @@
       "titleLocked": "Title is always shown and cannot be hidden"
     },
     "disabledReason": {
-      "baseline": "Requires baselines & earned value (v1.0)"
+      "actualCost": "Requires actual-cost entry (not scheduled yet)"
     },
     "columns": {
       "kind": "Type",
@@ -86,9 +86,22 @@
       "allocation": "Resource allocation",
       "expectedEffort": "Expected effort"
     },
+    "baseline": {
+      "active": "Baseline to compare",
+      "none": "None",
+      "save": "Save current schedule as baseline",
+      "name": "Baseline {{n}}",
+      "delete": "Delete this baseline",
+      "start": "Baseline start",
+      "finish": "Baseline finish",
+      "startVariance": "Start variance",
+      "finishVariance": "Finish variance",
+      "noBaseline": "No baseline set",
+      "noEntry": "This task is not in the baseline",
+      "deletedCount": "{{count}} baseline entries refer to deleted tasks",
+      "deletedEntry": "{{name}} (deleted)"
+    },
     "placeholder": {
-      "baseline": "No baseline set",
-      "baselineHint": "Baseline comparison will be available in v1.0.",
       "allocationHint": "Automatic adjustments when an allocation changes are not scheduled yet.",
       "expectedEffortHint": "Effort can be computed as a weighted average of minimum, maximum and expected values, which also feed the variability used in Monte Carlo simulation. Expected effort is not scheduled yet.",
       "allocationOnChange": "When an allocation changes",
@@ -161,7 +174,9 @@
       "taskCount": "{{count}} tasks",
       "format": "Format",
       "currency": "Currency",
-      "currencyHint": "Project-level currency and formats will be available in v1.0",
+      "currencyHint": "Project-level currency and formats are not scheduled yet.",
+      "statusDate": "Status date",
+      "statusDateHint": "Earned value (PV / SV) is measured as of the status date",
       "unitConversion": "Unit conversion",
       "hoursPerDay": "1 workday = {{hours}} hours"
     }
@@ -244,6 +259,10 @@
     "project.setDirection": "Set scheduling direction",
     "project.setStartDate": "Set project start date",
     "project.setEndDate": "Set project finish date",
+    "project.setBaseline": "Save baseline",
+    "project.setActiveBaseline": "Switch baseline",
+    "project.deleteBaseline": "Delete baseline",
+    "project.setStatusDate": "Set status date",
     "assignment.create": "Assign resource",
     "assignment.delete": "Remove assignment",
     "assignment.setUnits": "Set units",

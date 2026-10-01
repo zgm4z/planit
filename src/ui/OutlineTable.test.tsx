@@ -40,6 +40,8 @@ function renderTable(keys = DEFAULT_VISIBLE_COLUMNS) {
         schedules={{}}
         efforts={{}}
         costs={{}}
+        earnedValues={{}}
+        baselineDiffs={{}}
         columns={columnsFrom(keys)}
         selectedTaskId={null}
         onSelect={() => {}}
@@ -132,7 +134,7 @@ async function openMenu() {
 }
 
 describe('OutlineTable 的列菜单', () => {
-  it('右键表头打开菜单，列出全部 27 列（16 可用 + 11 禁用）', async () => {
+  it('右键表头打开菜单，列出全部 27 列（24 可用 + 3 禁用）', async () => {
     renderTable()
     expect(screen.queryByTestId('column-menu')).not.toBeInTheDocument()
 
@@ -148,11 +150,12 @@ describe('OutlineTable 的列菜单', () => {
     renderTable()
     await openMenu()
 
-    // bcws 是 v1.0 的基线与挣值列 —— v0.5 起仍禁用（effort 已解禁，不能再当例子）
-    expect(screen.getByTestId('column-menu-item-bcws')).toBeDisabled()
+    // acwp 依赖实际成本录入（v1.0 未交付）—— 仍禁用。
+    // （bcws 等基线/挣值列 v1.0 起已解禁，不能再当例子。）
+    expect(screen.getByTestId('column-menu-item-acwp')).toBeDisabled()
     // 禁用的 <button> 不派发鼠标事件，Tooltip 必须挂在这个 span 上 ——
     // 它的存在就是「tooltip 有机会显示」的证据（文案本身由 e2e 断言）
-    const host = screen.getByTestId('column-menu-disabledwrap-bcws')
+    const host = screen.getByTestId('column-menu-disabledwrap-acwp')
     expect(host.tagName).toBe('SPAN')
   })
 

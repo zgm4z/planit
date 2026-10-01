@@ -17,7 +17,10 @@ type V1Task = Omit<
   'kind' | 'schedulingOrder' | 'note' | 'allowSplitting' | 'priority' | 'delay'
 > & { isMilestone: boolean }
 
-type V1Project = Omit<Project, 'schedulingDirection' | 'tasks' | 'resources'> & {
+type V1Project = Omit<
+  Project,
+  'schedulingDirection' | 'tasks' | 'resources' | 'baselines' | 'activeBaselineId' | 'statusDate'
+> & {
   schemaVersion: number
   tasks: Record<string, V1Task>
   resources: Record<string, V2Resource>
@@ -52,7 +55,7 @@ export function migrateTaskV1ToV2(task: V1Task): Task {
   }
 }
 
-type V2Project = Omit<Project, 'resources'> & {
+type V2Project = Omit<Project, 'resources' | 'baselines' | 'activeBaselineId' | 'statusDate'> & {
   schemaVersion: number
   resources: Record<string, V2Resource>
 }
@@ -95,8 +98,22 @@ export function migrateResourceV2ToV3(resource: V2Resource, hoursPerDay: number)
   return { ...rest, kind: kind === 'cost' ? 'material' : kind, cost: nextCost }
 }
 
-/** v2 项目整体迁到 **v3**（= 当前版本）。纯函数。 */
-export function migrateV2ToV3(project: V2Project): Project {
+/**
+ * v2 项目整体迁到 **v3**（不是「当前版本」）。纯函数。
+ *
+ * ⚠️ 这里同样刻意写死 `schemaVersion: 3` 而**不是** `SCHEMA_VERSION`（见
+ * `migrateV1ToV2` 的说明）：逐跳链式下，v2 的产出会再喂给 `migrateV3ToV4`。
+ * 若写成 `SCHEMA_VERSION`（=4），这一步就会产出「v3 形状 + v4 版本号」——
+ * 它谎称自己已是 v4，而形状还差 v4 的两个字段。当前 while 循环按**计数器**
+ * 推进（不看产出的 `schemaVersion`），所以碰巧仍会补跑 v3→v4 而不暴露；
+ * 但这让契约名不副实：任何按「产出值」判断还要不要再迁的调用方都会跳过
+ * v3→v4 —— 正是 schema.ts 注释里警告的畸形结果。（v1→v2 早已改成写死
+ * 字面量，这一步是补上的历史欠账。）
+ *
+ * 返回类型是 `V3Project` 而**不是** `Project` —— 与 `migrateV1ToV2 → V2Project`
+ * 对称。逐跳链下它只承诺产出 v3 形状，v4 的两个新字段由下一步负责。
+ */
+export function migrateV2ToV3(project: V2Project): V3Project {
   const hoursPerDay = project.calendars[project.calendarId]?.hoursPerDay ?? 8
 
   const resources: Record<string, Resource> = {}
@@ -105,5 +122,21 @@ export function migrateV2ToV3(project: V2Project): Project {
   }
 
   const { schemaVersion: _drop, resources: _resources, ...rest } = project
-  return { ...rest, schemaVersion: SCHEMA_VERSION, resources }
+  return { ...rest, schemaVersion: 3, resources }
+}
+
+/** v3 存档的形状：**没有** baselines / activeBaselineId / statusDate */
+type V3Project = Omit<Project, 'baselines' | 'activeBaselineId' | 'statusDate'> & {
+  schemaVersion: number
+}
+
+/**
+ * v3 项目整体迁到 **v4**（= 当前版本）。纯函数，入参不被改动。
+ *
+ * 只补两个空容器：`baselines: []` + `activeBaselineId: null`。
+ * `statusDate` 刻意**不设** —— 未设置即「PV / SV 暂不可算」，UI 会提示用户设基准日。
+ */
+export function migrateV3ToV4(project: V3Project): Project {
+  const { schemaVersion: _drop, ...rest } = project
+  return { ...rest, schemaVersion: SCHEMA_VERSION, baselines: [], activeBaselineId: null }
 }

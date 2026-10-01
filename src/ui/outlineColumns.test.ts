@@ -17,26 +17,25 @@ import {
 } from './outlineColumns'
 
 /**
- * **本版可用**的 16 个 key。
+ * **本版可用**的 24 个 key。
  *
- * v0.5 起 `assignees` / `effort` / 三种成本列从「显示但禁用」转入可用：它们有了
- * 真实数据来源（项目的 assignments、引擎的 efforts / costs），再禁用就是说谎
- * （见计划开头的偏差 5）。
+ * v0.5 起 `assignees` / `effort` / 三种成本列从「显示但禁用」转入可用；v1.0 起
+ * 基线 4 列 + 可算的挣值 4 列同样转入可用 —— 它们都有了真实数据来源，再禁用就是
+ * 说谎（分批原则：可用 = **有真实数据来源**）。
  */
 const ENABLED_KEYS: OutlineColumnKey[] = [
   'kind', 'title', 'note', 'id',
   'start', 'finish', 'duration',
   'priority', 'progress',
   'totalSlack', 'freeSlack',
-  // v0.5：以下 5 列有了真实数据来源（引擎的 efforts / costs 与项目的 assignments）
   'assignees', 'effort', 'taskCost', 'resourceCost', 'totalCost',
+  // v1.0：基线 4 列 + 可算的挣值 4 列
+  'baselineStart', 'baselineFinish', 'startVariance', 'finishVariance',
+  'bcws', 'bcwp', 'sv', 'bac',
 ]
 
-/** **显示但禁用**的 11 个 key（只剩 v1.0 的基线与挣值） */
-const DISABLED_KEYS: OutlineColumnKey[] = [
-  'baselineStart', 'baselineFinish', 'startVariance', 'finishVariance',
-  'bcws', 'bcwp', 'acwp', 'cv', 'sv', 'eac', 'bac',
-]
+/** **显示但禁用**的 3 个 key（依赖实际成本录入 —— 尚未排期） */
+const DISABLED_KEYS: OutlineColumnKey[] = ['acwp', 'cv', 'eac']
 
 /** 沿点号取嵌套 key，取不到返回 undefined —— 不依赖 i18n 实例 */
 function lookup(dict: unknown, path: string): unknown {
@@ -45,6 +44,21 @@ function lookup(dict: unknown, path: string): unknown {
     dict,
   )
 }
+
+/** 收集一棵字典树的全部「叶子字符串」路径 —— 与 inspectorGroups.test.ts 同款，用来比对三语键集合 */
+function leafKeys(node: unknown, prefix = ''): string[] {
+  if (typeof node === 'string') return [prefix]
+  if (node && typeof node === 'object') {
+    return Object.entries(node as Record<string, unknown>).flatMap(([key, value]) =>
+      leafKeys(value, prefix ? `${prefix}.${key}` : key),
+    )
+  }
+  return []
+}
+
+const zhOutlineKeys = leafKeys(zhCN.outline, 'outline').sort()
+const enOutlineKeys = leafKeys(enUS.outline, 'outline').sort()
+const jaOutlineKeys = leafKeys(jaJP.outline, 'outline').sort()
 
 function schedule(over: Partial<ComputedSchedule> = {}): ComputedSchedule {
   return {
@@ -67,7 +81,7 @@ describe('OUTLINE_COLUMNS 注册表', () => {
     expect(OUTLINE_COLUMNS).toHaveLength(27)
   })
 
-  it('可用 16 列、禁用 11 列', () => {
+  it('可用 24 列、禁用 3 列', () => {
     expect(OUTLINE_COLUMNS.filter((c) => c.enabled).map((c) => c.key)).toEqual(ENABLED_KEYS)
     expect(OUTLINE_COLUMNS.filter((c) => !c.enabled).map((c) => c.key)).toEqual(DISABLED_KEYS)
   })
@@ -78,6 +92,23 @@ describe('OUTLINE_COLUMNS 注册表', () => {
     expect(assignees.disabledReasonKey).toBeUndefined()
     for (const key of ['effort', 'taskCost', 'resourceCost', 'totalCost'] as const) {
       expect(OUTLINE_COLUMNS.find((c) => c.key === key)!.enabled).toBe(true)
+    }
+  })
+
+  it('v1.0：基线 4 列与可算的挣值 4 列解禁；依赖实际成本的 3 列仍禁用且注明', () => {
+    for (const key of [
+      'baselineStart', 'baselineFinish', 'startVariance', 'finishVariance',
+      'bcws', 'bcwp', 'sv', 'bac',
+    ] as const) {
+      const column = OUTLINE_COLUMNS.find((c) => c.key === key)!
+      expect(column.enabled, key).toBe(true)
+      expect(column.disabledReasonKey, key).toBeUndefined()
+    }
+    for (const key of ['acwp', 'cv', 'eac'] as const) {
+      const column = OUTLINE_COLUMNS.find((c) => c.key === key)!
+      expect(column.enabled, key).toBe(false)
+      expect(column.disabledReasonKey, key).toBe('outline.disabledReason.actualCost')
+      // 文案不指版本号 —— v1.0 是最后一版，「尚未排期」写在三语文案里（见 i18n 守卫）
     }
   })
 
@@ -146,6 +177,21 @@ describe('OUTLINE_COLUMNS 注册表', () => {
   })
 })
 
+describe('outline 的三语文案', () => {
+  it('zh / en / ja 的 outline 叶子键集合完全相等 —— 双向差集，抓到「某语言多出一个键」的漂移', () => {
+    // 上面那些逐键存在性检查（`labelKey` / `disabledReasonKey` 在三语里都有）只查
+    // 「某个 key 在不在」，抓不到「某语言**多**出一个键」这种漂移 —— 本次正是
+    // 「删 baseline、加 actualCost」的集合变更，漏删一侧时逐键检查全绿。
+    // 因此这里断言整块键集合相等（双向）：多一个或少一个都会红。
+    expect(enOutlineKeys).toEqual(zhOutlineKeys)
+    expect(jaOutlineKeys).toEqual(zhOutlineKeys)
+  })
+
+  it('outline 叶子键数量足够多（三语文案确实落盘了，不是空对象对空对象）', () => {
+    expect(zhOutlineKeys.length).toBeGreaterThan(20)
+  })
+})
+
 describe('cellFlex — 表头与单元格共用的列宽口径', () => {
   it('flex 列吃剩余宽度（1 1 Wpx），其余固定宽且不收缩（0 0 Wpx）', () => {
     // title 是唯一的 flex 列；其余（如 start）固定宽、不收缩
@@ -169,8 +215,10 @@ describe('isOutlineColumnKey / isEnabledOutlineColumnKey', () => {
     // v0.5 起 assignees / effort 有了真实数据来源，载入配置时按可用接受
     expect(isEnabledOutlineColumnKey('assignees')).toBe(true)
     expect(isEnabledOutlineColumnKey('effort')).toBe(true)
-    // bcws 仍是 v1.0 的列 —— 「认识」但本版禁用，载入时必须丢掉
-    expect(isEnabledOutlineColumnKey('bcws')).toBe(false)
+    // v1.0 起 bcws 有真实数据来源（引擎的 costs），载入配置时按可用接受
+    expect(isEnabledOutlineColumnKey('bcws')).toBe(true)
+    // acwp 需要实际成本录入 —— 「认识」但本版禁用，载入时必须丢掉
+    expect(isEnabledOutlineColumnKey('acwp')).toBe(false)
     // 不认识的同样拒绝
     expect(isEnabledOutlineColumnKey('ghost-column')).toBe(false)
   })
@@ -298,5 +346,82 @@ describe('getOutlineCellValue', () => {
     expect(getOutlineCellValue('taskCost', withCosts)).toEqual({ type: 'cost', amount: 500 })
     expect(getOutlineCellValue('resourceCost', withCosts)).toEqual({ type: 'empty' })
     expect(getOutlineCellValue('totalCost', withCosts)).toEqual({ type: 'cost', amount: 500 })
+  })
+
+  it('v1.0 基线列读引擎的 baselineDiffs；无差异数据时为 empty', () => {
+    const withDiff = {
+      ...ctx,
+      baselineDiffs: {
+        [task.id]: {
+          baselineStart: '2026-03-02',
+          baselineFinish: '2026-03-04',
+          startVariance: 0,
+          finishVariance: 2,
+        },
+      },
+    }
+    expect(getOutlineCellValue('baselineStart', withDiff)).toEqual({ type: 'text', text: '2026-03-02' })
+    expect(getOutlineCellValue('baselineFinish', withDiff)).toEqual({ type: 'text', text: '2026-03-04' })
+    // 差异是**工作日**（unit = days），不是金额 —— 与 sv 不同量纲
+    expect(getOutlineCellValue('startVariance', withDiff)).toEqual({ type: 'days', count: 0 })
+    expect(getOutlineCellValue('finishVariance', withDiff)).toEqual({ type: 'days', count: 2 })
+    // 无差异数据 → 空。注意 startVariance 用 `=== undefined` 判定而非真值 —— 0 是
+    // 真实数据（不早不晚），上面那条 0 必须渲染成「0 天」而不是空。
+    expect(getOutlineCellValue('baselineStart', ctx)).toEqual({ type: 'empty' })
+    expect(getOutlineCellValue('finishVariance', ctx)).toEqual({ type: 'empty' })
+    expect(getOutlineCellValue('startVariance', ctx)).toEqual({ type: 'empty' })
+  })
+
+  it('v1.0 挣值列读引擎的 earnedValues（金额）；仅 null 视为空', () => {
+    const withEv = {
+      ...ctx,
+      earnedValues: { [task.id]: { bac: 1000, ev: 400, pv: 750, sv: -350 } },
+    }
+    expect(getOutlineCellValue('bac', withEv)).toEqual({ type: 'cost', amount: 1000 })
+    expect(getOutlineCellValue('bcwp', withEv)).toEqual({ type: 'cost', amount: 400 })
+    expect(getOutlineCellValue('bcws', withEv)).toEqual({ type: 'cost', amount: 750 })
+    expect(getOutlineCellValue('sv', withEv)).toEqual({ type: 'cost', amount: -350 })
+
+    // 0 是**真实数据**（有成本但进度为 0），照常显示 —— 与成本列的「0 视同空」相反
+    const zero = { ...ctx, earnedValues: { [task.id]: { bac: 0, ev: 0, pv: 0, sv: 0 } } }
+    expect(getOutlineCellValue('bcwp', zero)).toEqual({ type: 'cost', amount: 0 })
+    expect(getOutlineCellValue('bcws', zero)).toEqual({ type: 'cost', amount: 0 })
+
+    // null = 算不出来（缺基准日 / 基线）→ 空。若实现把 null 当 0，这里会红
+    const none = { ...ctx, earnedValues: { [task.id]: { bac: 1000, ev: 400, pv: null, sv: null } } }
+    expect(getOutlineCellValue('bcws', none)).toEqual({ type: 'empty' })
+    expect(getOutlineCellValue('sv', none)).toEqual({ type: 'empty' })
+    expect(getOutlineCellValue('bcwp', none)).toEqual({ type: 'cost', amount: 400 })
+
+    // 无 earnedValues 数据源 → 全部为空
+    for (const key of ['bcws', 'bcwp', 'sv', 'bac'] as const) {
+      expect(getOutlineCellValue(key, ctx)).toEqual({ type: 'empty' })
+    }
+  })
+
+  it('整表不变式：遍历 ENABLED_KEYS，每个可用 key 在一个「数据齐全」的 ctx 下都取到非空值', () => {
+    // 兑现 getOutlineCellValue 上方注释的承诺（「每个可用 key 都有取值口径」能**整表**
+    // 断言）。上面各用例都是子集；这条用一个把五种数据源全填满的 ctx 遍历全部可用 key，
+    // 漏写/写错某个 case 的 key 会在这里红，而不是靠在别处碰巧枚举到。
+    const resource = { ...createResource({ name: '张三' }), id: 'r1' }
+    const assignment = { ...createAssignment({ taskId: task.id, resourceId: 'r1' }), id: 'a1' }
+    const rich = {
+      ...ctx,
+      project: { ...createProject('x'), resources: { r1: resource }, assignments: { a1: assignment } },
+      efforts: { [task.id]: 5 },
+      costs: { [task.id]: { task: 500, resource: 200, total: 700 } },
+      earnedValues: { [task.id]: { bac: 1000, ev: 400, pv: 750, sv: -350 } },
+      baselineDiffs: {
+        [task.id]: {
+          baselineStart: '2026-03-02',
+          baselineFinish: '2026-03-04',
+          startVariance: 0,
+          finishVariance: 2,
+        },
+      },
+    }
+    for (const key of ENABLED_KEYS) {
+      expect(getOutlineCellValue(key, rich).type, `${key} 没有取值口径`).not.toBe('empty')
+    }
   })
 })

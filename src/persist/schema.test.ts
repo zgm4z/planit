@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createProject, createTask, SCHEMA_VERSION } from '../domain/model/factories'
 import { parsePersistedProject } from './schema'
+import { migrateV2ToV3 } from './migrate'
 
 /** 手工构造一份 v1 存档：kind 时代之前的形状（isMilestone + 无新字段） */
 function v1Save() {
@@ -234,9 +235,9 @@ describe('parsePersistedProject — v2 → v3 迁移', () => {
     expect(project.resources.r1.availableUntil).toBeUndefined()
   })
 
-  it('迁移后 project.schemaVersion 更新为 3', () => {
+  it('v2 存档迁移后到达当前版本（v4）', () => {
     expect(parsePersistedProject(v2Save()).schemaVersion).toBe(SCHEMA_VERSION)
-    expect(SCHEMA_VERSION).toBe(3)
+    expect(SCHEMA_VERSION).toBe(4)
   })
 
   it('v1 存档经 v2 → v3 两步迁移也能到当前版本（逐跳链式）', () => {
@@ -285,5 +286,82 @@ describe('parsePersistedProject — 未知版本仍然抛错', () => {
   it('信封与内层版本号不一致时抛错', () => {
     const project = createProject('x', '2026-03-02')
     expect(() => parsePersistedProject({ schemaVersion: 1, project })).toThrow(/版本不匹配/)
+  })
+})
+
+/** 手工构造一份 v3 存档：有资源新形状，但**没有** baselines / activeBaselineId / statusDate */
+function v3Save() {
+  const now = '2026-03-01T00:00:00.000Z'
+  return {
+    schemaVersion: 3,
+    updatedAt: now,
+    project: {
+      id: 'proj_v3',
+      name: 'v3 项目',
+      schemaVersion: 3,
+      startDate: '2026-03-02',
+      schedulingDirection: 'forward',
+      calendarId: 'default',
+      calendars: {
+        default: {
+          id: 'default',
+          name: '标准日历',
+          workingDays: [true, true, true, true, true, false, false],
+          hoursPerDay: 8,
+          exceptions: {},
+        },
+      },
+      tasks: {},
+      rootIds: [],
+      dependencies: {},
+      resources: {},
+      assignments: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  }
+}
+
+describe('parsePersistedProject — v3 → v4 迁移', () => {
+  it('补上空的 baselines 与 activeBaselineId: null', () => {
+    const project = parsePersistedProject(v3Save())
+    expect(project.baselines).toEqual([])
+    expect(project.activeBaselineId).toBeNull()
+  })
+
+  it('statusDate 缺省时不写入（保持 undefined，不塞 ""）', () => {
+    expect(parsePersistedProject(v3Save()).statusDate).toBeUndefined()
+  })
+
+  it('迁移后 project.schemaVersion 更新为 4', () => {
+    expect(parsePersistedProject(v3Save()).schemaVersion).toBe(SCHEMA_VERSION)
+    expect(SCHEMA_VERSION).toBe(4)
+  })
+
+  it('v1 / v2 存档经逐跳链也能到 v4（三跳）', () => {
+    expect(parsePersistedProject(v1Save()).schemaVersion).toBe(SCHEMA_VERSION)
+    expect(parsePersistedProject(v1Save()).baselines).toEqual([])
+    expect(parsePersistedProject(v2Save()).schemaVersion).toBe(SCHEMA_VERSION)
+    expect(parsePersistedProject(v2Save()).baselines).toEqual([])
+    // v2 的资源仍要经第二步被折算（逐跳链没有把中间步吞掉）
+    expect(parsePersistedProject(v2Save()).resources.r2.cost).toEqual({ hourly: 100, currency: 'CNY' })
+  })
+
+  it('migrateV2ToV3 产出的是 v3，而不是当前版本（逐跳的关键）', () => {
+    // 若这里写成 SCHEMA_VERSION（=4），v2 存档会被戳成「v3 形状 + v4 版本号」。
+    // 但 while 循环按**计数器**推进（不看产出的 schemaVersion），所以它碰巧仍会
+    // 补跑 v3→v4、**不暴露**这个畸形 —— 也就是说 v1 / v2 的**全链路断言抓不住这一步的
+    // 回归**（实测：把这里的 3 改回 SCHEMA_VERSION，链路断言全绿）。
+    // **本直断言是这一处唯一的守卫，别删。**
+    expect(migrateV2ToV3(v2Save().project as never).schemaVersion).toBe(3)
+  })
+
+  it('迁移是纯函数：同一份输入跑两次结果逐字段相同且不改动入参', () => {
+    const raw = v3Save()
+    const snapshot = JSON.stringify(raw)
+    const a = parsePersistedProject(raw)
+    const b = parsePersistedProject(v3Save())
+    expect(a).toEqual(b)
+    expect(JSON.stringify(raw)).toBe(snapshot)
   })
 })

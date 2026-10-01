@@ -6,6 +6,7 @@ import {
   createDependency,
   createResource,
   createAssignment,
+  nextId,
   __resetIdCounterForTests,
   seedIdCounterFromProject,
   DEFAULT_CALENDAR_ID,
@@ -136,5 +137,24 @@ describe('seedIdCounterFromProject', () => {
       expect(first.tasks[t.id]).toBeUndefined()
       first.tasks[t.id] = t
     }
+  })
+
+  it('v1.0：也扫基线 id —— 否则重载后新建基线会与既有 id 相撞', () => {
+    __resetIdCounterForTests()
+    const project = createProject('P', '2026-03-02') // id = proj_1，计数器到此为 1
+    // 手工塞一条既有基线。id 刻意取 'bl_2'（base36 = 2）—— 正是「不扫基线时」
+    // 计数器会发出的下一个 'bl' id。baselines 是数组：撞 id 不会像 Record 那样
+    // 静默覆盖，而是让 activeBaselineId 指向错误的对象，比覆盖更难查。
+    project.baselines = [
+      { id: 'bl_2', name: '基线一', createdAt: '2026-03-01T00:00:00.000Z', entries: {} },
+    ]
+
+    __resetIdCounterForTests() // 模拟页面重载：模块级计数器归零
+    seedIdCounterFromProject(project)
+
+    // 不扫基线 → 计数器只到 1 → 这里会发回 'bl_2'，与既有基线撞 id
+    const created = nextId('bl')
+    expect(created).not.toBe('bl_2')
+    expect(project.baselines.some((baseline) => baseline.id === created)).toBe(false)
   })
 })

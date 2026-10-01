@@ -56,6 +56,8 @@ function renderTree(columns = GANTT_OUTLINE_COLUMNS, schedules: Record<string, C
         schedules={schedules}
         efforts={{}}
         costs={{}}
+        earnedValues={{}}
+        baselineDiffs={{}}
         columns={columns}
         selectedTaskId={null}
         onSelect={() => {}}
@@ -143,6 +145,8 @@ describe('OutlineTree', () => {
           schedules={{}}
           efforts={{}}
           costs={{}}
+          earnedValues={{}}
+          baselineDiffs={{}}
           columns={GANTT_OUTLINE_COLUMNS}
           selectedTaskId={null}
           onSelect={() => {}}
@@ -249,6 +253,8 @@ describe('OutlineTree', () => {
             schedules={{}}
             efforts={{}}
             costs={{}}
+            earnedValues={{}}
+            baselineDiffs={{}}
             columns={columns}
             selectedTaskId={null}
             onSelect={() => {}}

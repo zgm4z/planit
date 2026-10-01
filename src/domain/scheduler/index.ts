@@ -4,6 +4,7 @@ import { runCpm } from './cpm'
 import { levelLeaves } from './leveling'
 import { detectConflicts, summarizeParents } from './summarize'
 import { collectCosts, collectEfforts, effectiveDuration, resourceBounds } from './effort'
+import { collectBaselineDiffs, collectEarnedValues } from './earnedValue'
 import { sumUnits } from '../model/units'
 
 export { CycleError } from './graph'
@@ -19,6 +20,7 @@ export { summarizeParents, detectConflicts } from './summarize'
  *   ③ 正推 / ④ 逆推 / ⑤ 浮时 ├ 都在 runCpm 里
  *   ⑥ 摘要汇总 + 冲突检测 ┘
  *   ⑦ 资源平衡        ← v0.6 填充（CPM 之后、摘要之前；只改 scheduled*）
+ *   ⑧ 基线与挣值      ← v1.0 填充（派生；差异用最终 scheduled*，挣值的 BAC 取 costs.total）
  *
  * `fixedEffort` 任务的工期**必须**在 ① 算出来 —— 工期是 CPM 正推的输入。
  * 资源可用期在此翻译成任务级排期边界（见 ResourceBounds）。
@@ -78,7 +80,13 @@ export function solve(project: Project): ScheduleResult {
   const efforts = collectEfforts(project, leaves, units, durations)
   const { costs, resourceTotals } = collectCosts(project, leaves, durations, calendar)
 
-  return { schedules, conflicts, efforts, costs, resourceTotals, leveling }
+  // ⑧ 基线与挣值（v1.0）：全部**派生**，不进 Project、不入撤销栈。
+  //    必须在摘要汇总之后 —— 差异的「当前」端要最终的 scheduled*；
+  //    也必须在 collectCosts 之后 —— 挣值的 BAC 取 costs.total。
+  const earnedValues = collectEarnedValues(project, costs, leaves)
+  const baselineDiffs = collectBaselineDiffs(project, schedules)
+
+  return { schedules, conflicts, efforts, costs, resourceTotals, leveling, earnedValues, baselineDiffs }
 }
 
 /** 深度优先收集全部叶子任务（childIds 为空者） */

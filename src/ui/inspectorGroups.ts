@@ -5,8 +5,9 @@
  * 数组顺序即渲染顺序（Accordion 项的顺序、以及「哪些组默认展开」都读它）。
  *
  * 「分批原则」（ROADMAP「通用约定」）：每个分组三选一 —— 可用 / 显示但禁用 + 注明版本 /
- * 不出现。后三组依赖未实现的功能，属第二类：**渲染出来但整组禁用**，并给出
- * `reasonKey`，让用户看出「这里以后会有东西」（spec §3.3 / §3.5 / §3.6 / §3.7）。
+ * 不出现。**后两组**（资源分配 / 预计的工作量）依赖未实现的功能，属第二类：
+ * **渲染出来但整组禁用**，并给出 `reasonKey`，让用户看出「这里以后会有东西」
+ * （spec §3.5 / §3.6）。「基线」组在 v1.0 已解禁（Task 5），不再是占位组。
  */
 export type InspectorGroupKey =
   | 'info'
@@ -30,12 +31,7 @@ export interface InspectorGroup {
 export const INSPECTOR_GROUPS: readonly InspectorGroup[] = [
   { key: 'info', labelKey: 'inspector.groups.info' },
   { key: 'schedule', labelKey: 'inspector.groups.schedule' },
-  {
-    key: 'baseline',
-    labelKey: 'inspector.groups.baseline',
-    placeholder: true,
-    reasonKey: 'inspector.placeholder.baselineHint',
-  },
+  { key: 'baseline', labelKey: 'inspector.groups.baseline' },
   { key: 'relations', labelKey: 'inspector.groups.relations' },
   { key: 'assignments', labelKey: 'inspector.groups.assignments' },
   {
@@ -53,13 +49,16 @@ export const INSPECTOR_GROUPS: readonly InspectorGroup[] = [
 ]
 
 /**
- * 默认展开的分组 = 本版真正能改的四组（spec §5）。
+ * 默认展开的分组 = 本版真正能改的五组（spec §5）。**基线组解禁后必须在这里**——
+ * 不变式「默认展开的 ⟺ 非占位组」（inspectorGroups.test.ts）据此守护注册表的自洽，
+ * 漏加就会出现「有内容却默认折叠」的不一致。
  * **展开状态不持久化** —— 它是面板的临时状态，与 `viewStore.collapsedIds`
  * （那是项目数据的视图）不同。
  */
 export const DEFAULT_OPEN_GROUPS: InspectorGroupKey[] = [
   'info',
   'schedule',
+  'baseline',
   'relations',
   'assignments',
 ]

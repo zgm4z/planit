@@ -19,9 +19,10 @@ describe('normalizeVisibleColumns', () => {
   })
 
   it('本版禁用（但认识）的 key 同样被丢掉', () => {
-    // bcws / baselineStart 是 v1.0 的基线与挣值列，认识但本版禁用。绝不能放进来 ——
+    // acwp / cv 依赖实际成本录入（v1.0 未交付），认识但禁用。绝不能放进来 ——
     // 菜单里它们的开关是 disabled，渲染出来就关不掉了。
-    expect(normalizeVisibleColumns(['title', 'bcws', 'baselineStart'])).toEqual(['title'])
+    // v1.0 起 bcws / baselineStart 已解禁，因此这里改用仍禁用的 acwp / cv 取样。
+    expect(normalizeVisibleColumns(['title', 'acwp', 'cv'])).toEqual(['title'])
   })
 
   it('去重并按注册表顺序排列（与输入顺序无关）', () => {

@@ -120,6 +120,29 @@ export function ProjectInspector() {
       )}
 
       <Divider />
+      {/* 基准日（挣值的「到某日为止」）：项目级设置，落在项目面板（偏差 3 / 偏差 7）。
+          输入框驱动 → 合并键 `project.setStatusDate` + onBlur 打断合并。 */}
+      <TextInput
+        type="date"
+        label={t('inspector.project.statusDate')}
+        data-testid="project-status-date"
+        value={project.statusDate ?? ''}
+        onBlur={breakCoalescing}
+        onChange={(event) =>
+          dispatch({
+            type: 'project.setStatusDate',
+            label: 'commands.project.setStatusDate',
+            // 清空 = 未设基准日（PV / SV 不可算）—— 必须给 undefined，不能留空串
+            payload: { statusDate: event.target.value || undefined },
+            coalesceKey: 'project.setStatusDate',
+          })
+        }
+      />
+      <Text fz="xs" c="dimmed">
+        {t('inspector.project.statusDateHint')}
+      </Text>
+
+      <Divider />
       <Text fz="xs" fw={650} c="dimmed" tt="uppercase">
         {t('inspector.project.format')}
       </Text>
