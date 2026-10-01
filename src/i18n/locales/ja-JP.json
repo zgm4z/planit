@@ -18,7 +18,7 @@
     "redoWithLabel": "やり直す：{{label}}",
     "zoom": { "day": "日", "week": "週", "month": "月" },
     "zoomLabel": "ズーム",
-    "view": { "gantt": "ガント", "outline": "タスクリスト" },
+    "view": { "gantt": "ガント", "outline": "タスクリスト", "calendar": "カレンダー", "resources": "リソース" },
     "language": "言語",
     "more": "その他"
   },
@@ -269,6 +269,19 @@
     "custom": "カスタム",
     "weekdays": { "mon": "月", "tue": "火", "wed": "水", "thu": "木", "fri": "金", "sat": "土", "sun": "日" }
   },
+  "calendarView": {
+    "prevMonth": "前の月",
+    "nextMonth": "次の月",
+    "customDays": "カスタム日",
+    "noExceptions": "例外日はまだありません。",
+    "normalHours": "標準稼働時間",
+    "hoursPerDay": "1日の稼働時間",
+    "addException": "例外を追加",
+    "rangeStart": "開始",
+    "rangeEnd": "終了",
+    "kindLabel": "種類",
+    "removeException": "この例外を削除"
+  },
   "commands": {
     "task.create": "タスクを作成",
     "task.rename": "タスク名を変更",
@@ -316,7 +329,9 @@
     "resource.setEfficiency": "効率を設定",
     "resource.setAvailablePeriod": "可用期間を設定",
     "resource.setCost": "コストを設定",
-    "calendar.setHoursPerDay": "1日の労働時間を設定"
+    "calendar.setHoursPerDay": "1日の労働時間を設定",
+    "calendar.addExceptionRange": "例外期間を追加",
+    "calendar.removeExceptionRange": "例外期間を削除"
   },
   "conflicts": {
     "constraintViolatedByDependency": "タスクは「{{constraint}} {{date}}」に固定されていますが、依存関係は {{earliest}} 以降を要求しています",

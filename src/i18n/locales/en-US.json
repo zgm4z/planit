@@ -18,7 +18,7 @@
     "redoWithLabel": "Redo: {{label}}",
     "zoom": { "day": "Day", "week": "Week", "month": "Month" },
     "zoomLabel": "Zoom",
-    "view": { "gantt": "Gantt", "outline": "Task list" },
+    "view": { "gantt": "Gantt", "outline": "Task list", "calendar": "Calendar", "resources": "Resources" },
     "language": "Language",
     "more": "More"
   },
@@ -269,6 +269,19 @@
     "custom": "Custom",
     "weekdays": { "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri", "sat": "Sat", "sun": "Sun" }
   },
+  "calendarView": {
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "customDays": "Custom days",
+    "noExceptions": "No exception days yet.",
+    "normalHours": "Normal hours",
+    "hoursPerDay": "Hours per day",
+    "addException": "Add exception",
+    "rangeStart": "Start",
+    "rangeEnd": "End",
+    "kindLabel": "Type",
+    "removeException": "Remove this exception"
+  },
   "commands": {
     "task.create": "Create task",
     "task.rename": "Rename task",
@@ -316,7 +329,9 @@
     "resource.setEfficiency": "Set efficiency",
     "resource.setAvailablePeriod": "Set available period",
     "resource.setCost": "Set cost",
-    "calendar.setHoursPerDay": "Set hours per day"
+    "calendar.setHoursPerDay": "Set hours per day",
+    "calendar.addExceptionRange": "Add exception range",
+    "calendar.removeExceptionRange": "Remove exception range"
   },
   "conflicts": {
     "constraintViolatedByDependency": "Task is pinned to \"{{constraint}} {{date}}\", but a dependency requires it no earlier than {{earliest}}",
