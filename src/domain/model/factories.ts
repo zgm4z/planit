@@ -24,7 +24,7 @@ export function nextId(prefix: string): string {
 }
 
 /** 仅供测试使用：重置 id 计数器，让断言可复现 */
-export function resetIdCounter(): void {
+export function __resetIdCounterForTests(): void {
   counter = 0
 }
 
@@ -39,10 +39,8 @@ export function seedIdCounterFromProject(project: Project): void {
   let max = 0
 
   const scan = (id: string): void => {
-    const suffix = id.split('_').pop()
-    if (!suffix) return
-    const value = Number.parseInt(suffix, 36)
-    if (Number.isFinite(value) && value > max) max = value
+    const value = Number.parseInt(id.split('_').pop() ?? '', 36)
+    if (!Number.isNaN(value) && value > max) max = value
   }
 
   scan(project.id)
