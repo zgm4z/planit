@@ -111,6 +111,76 @@
   flex-shrink: 0;
 }
 
+// ── 菜单栏（§10）──────────────────────────────────────────
+
+.menubar {
+  display: flex;
+  align-items: center;
+  // 菜单标题同属一族，间距比「组内 6」再紧一档（§2.1 的 2px 档）：
+  // 它们读作**一条连续的菜单栏**，而不是六个彼此独立的控件。
+  gap: var(--planit-sp-2);
+  flex-shrink: 0;
+}
+
+// 菜单标题：**文字**按钮（§10.1 的形态），不是图标。
+// 悬停 / 展开用表面色阶表达，不用彩色底（§4.2 用色纪律 3）。
+.menuTitle {
+  appearance: none;
+  height: 28px;
+  padding: 0 var(--planit-sp-8);
+  border: 0;
+  border-radius: var(--planit-sp-6);
+  background: transparent;
+  font-family: inherit; // <button> 默认不继承字体，不写会退回系统的 UI 字体
+  font-size: var(--planit-fs-sm);
+  line-height: 1;
+  color: var(--planit-text);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--planit-dur-fast) var(--planit-ease-out);
+
+  &:hover,
+  &[data-open] {
+    background: var(--planit-bg-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+// 下拉本体（withinPortal → 挂在 body 下，故这些选择器不能靠 .toolbar 前缀限定）。
+// 与既有 Menu 的视觉一致（§10.4），只补三处：
+//   1) 最小宽度：免得「文件」（只有一个条目）的下拉窄成一小条；
+//   2) 键盘聚焦环 —— 下拉在 portal 里，`.toolbar :global(.mantine-Menu-item:focus-visible)`
+//      那条选不中它（§6 的聚焦反馈必须在）；
+//   3) 禁用态改用**色阶**而不是 Mantine 默认的 opacity 表达（见下）。
+.menuDropdown {
+  min-width: 200px;
+
+  :global(.mantine-Menu-item:focus-visible) {
+    @include focus-ring;
+  }
+
+  // Mantine 的禁用条目是 opacity: 0.6 + dimmed 色。对「禁用理由」这种**承载信息**
+  // 的文字，0.6 的透明度会把对比度压到 ~2.5:1（§4.2 要求 ≥ 4.5:1）。
+  // 改为完全不透明、只用 --text-faint（4.51:1）表达「不可用」—— 与可用条目的
+  // --text（11:1）一眼可分，却仍然读得清。禁用另由 cursor 与「无悬停高亮」共同表达。
+  :global(.mantine-Menu-item[data-disabled]) {
+    opacity: 1;
+    color: var(--planit-text-faint);
+  }
+}
+
+// 条目右侧槽：快捷键（§10.3.3，只在真绑定时显示）或禁用理由（§10.3.2）。
+// 11px 元数据层 + 等宽数字（§1.3），--text-faint —— 辅助信息，不与条目标签争视线。
+.menuShortcut,
+.menuReason {
+  font-size: var(--planit-fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--planit-text-faint);
+}
+
 // ── 状态栏 ──────────────────────────────────────────────
 
 .statusbar {
