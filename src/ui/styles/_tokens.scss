@@ -15,40 +15,8 @@ $breakpoint-md: 900px;
   white-space: nowrap;
 }
 
-// ── 运行时 CSS 变量 ──────────────────────────────────────
-// 一次性输出到 :root。Mantine 主题（theme.ts）读同一批变量，
-// 因此「改主题 = 改这批变量」在两边同时生效。
-
-:root {
-  // 表面
-  --planit-bg-app: #f8fafc;
-  --planit-bg-surface: #ffffff;
-  --planit-bg-subtle: #f1f5f9;
-  --planit-bg-hover: #f1f5f9;
-
-  // 描边
-  --planit-border: #e2e8f0;
-  --planit-border-strong: #cbd5e1;
-
-  // 文字
-  --planit-text: #0f172a;
-  --planit-text-secondary: #475569;
-  --planit-text-muted: #94a3b8;
-
-  // 强调
-  --planit-accent: #6366f1;
-  --planit-accent-strong: #4f46e5;
-  --planit-accent-soft: #eef2ff;
-  --planit-accent-gradient: linear-gradient(90deg, #6366f1, #8b5cf6);
-
-  // 语义
-  --planit-critical: #ef4444;
-  --planit-critical-soft: #fee2e2;
-  --planit-success: #22c55e;
-
-  // 尺寸（甘特图的像素常量，JS 侧从 useSharedVirtualizer.ts 读同一批数字）
-  --planit-row-height: 28px;
-  --planit-ruler-height: 32px;
-  --planit-outline-width: 320px;
-  --planit-inspector-width: 300px;
-}
+// 运行时 CSS 变量（:root 块）**不在这里输出**。
+// 本文件被 vite.config.ts 的 additionalData 注入进每一个 .module.scss，
+// 若 :root 留在这里，dev 模式下每个 module 都会各输出一份。
+// 令牌的一次性输出放在 global.scss，由 main.tsx 单独 import 一次。
+// 新增令牌请改 global.scss。
