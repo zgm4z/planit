@@ -633,3 +633,132 @@ describe('v0.5 工作量命令', () => {
     expect(run(project, 'calendar.setHoursPerDay', { hoursPerDay: 0 }).calendars.default.hoursPerDay).toBe(1)
   })
 })
+
+describe('v1.0 基线命令', () => {
+  beforeEach(setup)
+
+  /** 建一个 4 工作日任务（03-02..03-05），返回项目与 id */
+  function withTask(): { p: Project; taskId: string } {
+    const p = run(project, 'task.create', { name: 'A' })
+    const taskId = p.rootIds[0]
+    return { p: run(p, 'task.setDuration', { taskId, duration: 4 }), taskId }
+  }
+
+  it('project.setBaseline 快照当前排期、设为活动基线，name 取 payload', () => {
+    const { p, taskId } = withTask()
+    const next = run(p, 'project.setBaseline', { name: '基线 1' })
+
+    expect(next.baselines).toHaveLength(1)
+    const baseline = next.baselines[0]
+    expect(baseline.name).toBe('基线 1')
+    expect(typeof baseline.createdAt).toBe('string')
+    expect(next.activeBaselineId).toBe(baseline.id)
+    // 快照的是**引擎算出的排期**（scheduled*），工期 4 → 03-02..03-05
+    expect(baseline.entries[taskId]).toMatchObject({
+      name: 'A',
+      start: '2026-03-02',
+      finish: '2026-03-05',
+    })
+  })
+
+  it('基线 id 用 nextId(bl) 生成，且前缀可区分（不是别的实体的 id）', () => {
+    // 这条断言让「id 生成」可判别：若实现改用 nextId('task')/写死 id，
+    // 前缀不同或与既有 taskId 相同 → 红。
+    const { p, taskId } = withTask()
+    const next = run(p, 'project.setBaseline', { name: '基线 1' })
+    expect(next.baselines[0].id).toMatch(/^bl_/)
+    expect(next.baselines[0].id).not.toBe(taskId)
+  })
+
+  it('快照随排期变化：改工期后再存一次，两条基线各自保留当时的值', () => {
+    const { p, taskId } = withTask()
+    const first = run(p, 'project.setBaseline', { name: '基线 1' })
+
+    // 工期 4 → 6（03-02..03-09），再存一条
+    const changed = run(first, 'task.setDuration', { taskId, duration: 6 })
+    const second = run(changed, 'project.setBaseline', { name: '基线 2' })
+
+    expect(second.baselines).toHaveLength(2)
+    expect(second.baselines[0].entries[taskId].finish).toBe('2026-03-05') // 第一条不动
+    expect(second.baselines[1].entries[taskId].finish).toBe('2026-03-09')
+    expect(second.activeBaselineId).toBe(second.baselines[1].id) // 新存的成为活动
+  })
+
+  it('快照只含叶子任务，不含摘要任务', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+    const child = p.tasks[parent].childIds[0]
+
+    const next = run(p, 'project.setBaseline', { name: '基线 1' })
+    const entries = next.baselines[0].entries
+    expect(entries[child]).toBeDefined()
+    expect(entries[parent]).toBeUndefined() // 摘要不快照
+  })
+
+  it('删任务**不**级联删基线条目（spec §1.2：基线是历史记录）', () => {
+    const { p, taskId } = withTask()
+    const saved = run(p, 'project.setBaseline', { name: '基线 1' })
+
+    const deleted = run(saved, 'task.delete', { taskId })
+
+    expect(deleted.tasks[taskId]).toBeUndefined()
+    // 基线条目仍在 —— 这条断言专门守住「不做级联」这个决定
+    expect(deleted.baselines[0].entries[taskId]).toBeDefined()
+    expect(deleted.baselines[0].entries[taskId].name).toBe('A')
+    expect(deleted.activeBaselineId).toBe(deleted.baselines[0].id)
+  })
+})
+
+describe('v1.0 切换 / 删除基线 + 基准日', () => {
+  beforeEach(setup)
+
+  function twoBaselines(): { p: Project } {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'project.setBaseline', { name: '基线 1' })
+    p = run(p, 'project.setBaseline', { name: '基线 2' })
+    return { p }
+  }
+
+  it('project.setActiveBaseline 切换；null 表示不对比；未知 id 是 no-op', () => {
+    const { p } = twoBaselines()
+    const first = p.baselines[0].id
+
+    const switched = run(p, 'project.setActiveBaseline', { baselineId: first })
+    expect(switched.activeBaselineId).toBe(first)
+
+    const cleared = run(switched, 'project.setActiveBaseline', { baselineId: null })
+    expect(cleared.activeBaselineId).toBeNull()
+
+    // 未知 id → no-op（不能把 activeBaselineId 指到一个不存在的东西上）
+    const bogus = run(switched, 'project.setActiveBaseline', { baselineId: 'ghost' })
+    expect(bogus.activeBaselineId).toBe(first)
+  })
+
+  it('project.deleteBaseline 删非活动基线时不动 activeBaselineId', () => {
+    const { p } = twoBaselines()
+    const [first, second] = p.baselines
+    const next = run(p, 'project.deleteBaseline', { baselineId: first.id })
+
+    expect(next.baselines.map((b) => b.id)).toEqual([second.id])
+    expect(next.activeBaselineId).toBe(second.id) // 活动的是第二条，未受影响
+  })
+
+  it('project.deleteBaseline 删掉活动基线时把 activeBaselineId 归零', () => {
+    const { p } = twoBaselines()
+    const active = p.activeBaselineId!
+
+    const next = run(p, 'project.deleteBaseline', { baselineId: active })
+    expect(next.baselines.map((b) => b.id)).not.toContain(active)
+    expect(next.activeBaselineId).toBeNull() // 绝不悬空
+  })
+
+  it('project.setStatusDate 写入 / 清除（undefined）', () => {
+    const set = run(project, 'project.setStatusDate', { statusDate: '2026-03-04' })
+    expect(set.statusDate).toBe('2026-03-04')
+
+    const cleared = run(set, 'project.setStatusDate', { statusDate: undefined })
+    expect(cleared.statusDate).toBeUndefined()
+  })
+})

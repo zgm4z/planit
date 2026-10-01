@@ -348,8 +348,11 @@ describe('parsePersistedProject — v3 → v4 迁移', () => {
   })
 
   it('migrateV2ToV3 产出的是 v3，而不是当前版本（逐跳的关键）', () => {
-    // 若这里写成 SCHEMA_VERSION（=4），v2 存档会被戳成「v3 形状 + v4 版本号」，
-    // while 循环随即跳过 v3→v4 —— 正是 schema.ts 注释警告的畸形结果。
+    // 若这里写成 SCHEMA_VERSION（=4），v2 存档会被戳成「v3 形状 + v4 版本号」。
+    // 但 while 循环按**计数器**推进（不看产出的 schemaVersion），所以它碰巧仍会
+    // 补跑 v3→v4、**不暴露**这个畸形 —— 也就是说 v1 / v2 的**全链路断言抓不住这一步的
+    // 回归**（实测：把这里的 3 改回 SCHEMA_VERSION，链路断言全绿）。
+    // **本直断言是这一处唯一的守卫，别删。**
     expect(migrateV2ToV3(v2Save().project as never).schemaVersion).toBe(3)
   })
 
