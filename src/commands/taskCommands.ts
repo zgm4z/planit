@@ -1,12 +1,14 @@
 import type { Draft } from 'immer'
 import type {
   DateStr,
+  EffortMode,
   Project,
   Scheduling,
   SchedulingOrder,
   TaskId,
 } from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
+import { sumUnits } from '../domain/model/units'
 import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
 
@@ -24,6 +26,8 @@ export interface TaskSetNotePayload { taskId: TaskId; note: string }
 export interface TaskSetPriorityPayload { taskId: TaskId; priority: number }
 export interface TaskSetDelayPayload { taskId: TaskId; delay: number }
 export interface TaskSetAllowSplittingPayload { taskId: TaskId; allowSplitting: boolean }
+export interface TaskSetEffortModePayload { taskId: TaskId; effortMode: EffortMode }
+export interface TaskSetEffortPayload { taskId: TaskId; effort: number | undefined }
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
@@ -91,6 +95,12 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
       if (removed.has(dep.fromTaskId) || removed.has(dep.toTaskId)) {
         delete draft.dependencies[depId]
       }
+    }
+
+    // 同样清理整棵子树的 assignment —— 与依赖同理：只删任务会留下指向
+    // 不存在任务的孤儿分配，污染资源总计且无法被撤销恢复。
+    for (const [assignmentId, assignment] of Object.entries(draft.assignments)) {
+      if (removed.has(assignment.taskId)) delete draft.assignments[assignmentId]
     }
 
     for (const id of [...subtree].reverse()) {
@@ -190,5 +200,28 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     task.allowSplitting = payload.allowSplitting
+  },
+
+  // ── v0.5 新增 ─────────────────────────────────────────
+  // 合并键：setEffortMode 点击驱动 → 不传；setEffort 输入框驱动 → 传 `task.setEffort:<taskId>`
+  'task.setEffortMode': (draft, payload: TaskSetEffortModePayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.kind === 'group') return // 摘要任务的投入由子任务汇总
+
+    // 切到「固定工作量」且尚无 effort 时，用「当前工期 × Σunits」初始化：
+    // 否则反解会把工期算成 1（effort 缺省 0），任务会突然跳变。
+    // Σunits 走与引擎**同一份** sumUnits（src/domain/model/units.ts），不另算一遍。
+    if (payload.effortMode === 'fixedEffort' && task.effort === undefined) {
+      task.effort = task.duration * Math.max(sumUnits(draft, payload.taskId), 1)
+    }
+    task.effortMode = payload.effortMode
+  },
+
+  'task.setEffort': (draft, payload: TaskSetEffortPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.kind === 'group') return
+    task.effort = payload.effort === undefined ? undefined : Math.max(0, payload.effort)
   },
 }
