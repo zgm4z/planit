@@ -126,15 +126,12 @@ export interface ComputedSchedule {
   isCritical: boolean
 }
 
-export type ConflictKind =
-  | 'constraintViolatedByDependency'
-  | 'impossibleConstraint'
+/** 冲突的说明参数。文案本身由 UI 层按当前语言渲染 —— 领域层不产出自然语言。 */
+export type ConflictParams =
+  | { kind: 'constraintViolatedByDependency'; constraint: ConstraintType; date: DateStr; earliest: DateStr }
+  | { kind: 'impossibleConstraint'; slack: number }
 
-export interface ConflictInfo {
-  taskId: TaskId
-  kind: ConflictKind
-  message: string
-}
+export type ConflictInfo = ConflictParams & { taskId: TaskId }
 
 export interface ScheduleResult {
   schedules: Record<TaskId, ComputedSchedule>

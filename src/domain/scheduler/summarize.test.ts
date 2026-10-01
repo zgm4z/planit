@@ -105,10 +105,13 @@ describe('detectConflicts', () => {
     const conflicts = detectConflicts(tasks, schedules, ['A'])
 
     expect(conflicts).toHaveLength(1)
-    expect(conflicts[0].taskId).toBe('A')
-    expect(conflicts[0].kind).toBe('constraintViolatedByDependency')
-    expect(conflicts[0].message).toContain('2026-03-04')
-    expect(conflicts[0].message).toContain('2026-03-09')
+    expect(conflicts[0]).toEqual({
+      taskId: 'A',
+      kind: 'constraintViolatedByDependency',
+      constraint: 'startOn',
+      date: '2026-03-04',
+      earliest: '2026-03-09',
+    })
   })
 
   it('无约束任务浮时为负时报 impossibleConstraint', () => {
@@ -119,8 +122,11 @@ describe('detectConflicts', () => {
     const conflicts = detectConflicts(tasks, schedules, ['A'])
 
     expect(conflicts).toHaveLength(1)
-    expect(conflicts[0].kind).toBe('impossibleConstraint')
-    expect(conflicts[0].message).toContain('-2')
+    expect(conflicts[0]).toEqual({
+      taskId: 'A',
+      kind: 'impossibleConstraint',
+      slack: -2,
+    })
   })
 
   it('浮时非负的任务不产生冲突', () => {

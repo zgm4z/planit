@@ -1,7 +1,6 @@
 import type {
   ComputedSchedule,
   ConflictInfo,
-  ConstraintType,
   Task,
   TaskId,
 } from '../model/types'
@@ -89,28 +88,21 @@ export function detectConflicts(
       conflicts.push({
         taskId: id,
         kind: 'constraintViolatedByDependency',
-        message: `任务被固定为「${CONSTRAINT_LABEL[task.scheduling.type]} ${task.scheduling.date}」，但依赖要求它不早于 ${schedule.earlyStart}`,
+        constraint: task.scheduling.type,
+        date: task.scheduling.date,
+        earliest: schedule.earlyStart,
       })
     } else {
       conflicts.push({
         taskId: id,
         kind: 'impossibleConstraint',
-        message: `排期不可行：该任务浮时为负（${schedule.totalSlack} 个工作日）`,
+        slack: schedule.totalSlack,
       })
     }
   }
 
   for (const rootId of rootIds) visit(rootId)
   return conflicts
-}
-
-const CONSTRAINT_LABEL: Record<ConstraintType, string> = {
-  startOn: '固定开始',
-  finishOn: '固定结束',
-  startNoEarlierThan: '开始不早于',
-  startNoLaterThan: '开始不晚于',
-  finishNoEarlierThan: '结束不早于',
-  finishNoLaterThan: '结束不晚于',
 }
 
 function minOf(dates: string[]): string {
