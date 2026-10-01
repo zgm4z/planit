@@ -44,7 +44,8 @@ export function OutlineTable({
 
   return (
     <div className={styles.outlineTable} data-testid="outline-table">
-      <Menu trigger="click" closeOnItemClick={false} withinPortal data-testid="column-menu-root">
+      {/* 表头菜单只由右键打开（Menu.ContextMenu），左键不触发。 */}
+      <Menu closeOnItemClick={false} withinPortal data-testid="column-menu-root">
         {/* 右键表头任意处即打开菜单（Menu.ContextMenu 按光标定位）。
             必须是单个接受 ref 的元素 —— 因此包住整个表头，而不是逐个单元格包。 */}
         <Menu.ContextMenu>

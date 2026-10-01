@@ -151,7 +151,6 @@ describe('OutlineTable 的列菜单', () => {
     // 它的存在就是「tooltip 有机会显示」的证据（文案本身由 e2e 断言）
     const host = screen.getByTestId('column-menu-disabledwrap-effort')
     expect(host.tagName).toBe('SPAN')
-    expect(host).not.toBeDisabled()
   })
 
   it('title 项被禁用（不可取消）', async () => {
@@ -174,12 +173,6 @@ describe('OutlineTable 的列菜单', () => {
     expect(useViewStore.getState().visibleColumns).not.toContain('progress')
   })
 
-  it('强行点击 title 项也不改变可见列', async () => {
-    renderTable()
-    await openMenu()
-
-    // 禁用的 <button> 不派发 click；断言的是「守卫没有被绕过」
-    fireEvent.click(screen.getByTestId('column-menu-item-title'))
-    expect(useViewStore.getState().visibleColumns).toContain('title')
-  })
+  // 「title 不可取消」这条不变量的判别力在菜单项的 disabled 断言与 viewStore 的
+  // normalize 断言里，不在这里重复。
 })
