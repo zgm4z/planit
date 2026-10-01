@@ -15,7 +15,7 @@ export interface TaskMoveToPayload { taskId: TaskId; startDate: DateStr }
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 
-/** 删除任务时同时清理它的父指针、以及所有与它相关的依赖 */
+/** 把任务从父节点的 childIds（或 rootIds）中摘除。调用方负责清理依赖 */
 function detachTask(draft: Draft<Project>, taskId: TaskId): void {
   const task = draft.tasks[taskId]
   if (!task) return
@@ -28,25 +28,20 @@ function detachTask(draft: Draft<Project>, taskId: TaskId): void {
     const index = draft.rootIds.indexOf(taskId)
     if (index >= 0) draft.rootIds.splice(index, 1)
   }
-
-  for (const [depId, dep] of Object.entries(draft.dependencies)) {
-    if (dep.fromTaskId === taskId || dep.toTaskId === taskId) {
-      delete draft.dependencies[depId]
-    }
-  }
 }
 
 export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.create': (draft, payload: TaskCreatePayload) => {
     const task = createTask({ name: payload.name })
-    const parentId = payload.parentId ?? null
-    task.parentId = parentId
+    // parentId 指向的任务不存在时（悬空 id）回退到根层，不留下悬空的 parentId。
+    // createTask 已把 parentId 默认为 null，因此回退分支无需再赋值。
+    const parent = payload.parentId ? draft.tasks[payload.parentId] : undefined
 
     draft.tasks[task.id] = task
-    if (parentId && draft.tasks[parentId]) {
-      draft.tasks[parentId].childIds.push(task.id)
+    if (parent) {
+      task.parentId = parent.id
+      parent.childIds.push(task.id)
     } else {
-      task.parentId = null
       draft.rootIds.push(task.id)
     }
   },
@@ -65,8 +60,19 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     }
 
     const subtree = collect(payload.taskId)
+    if (subtree.length === 0) return // 任务不存在，no-op
+
     // 先摘掉根节点（更新父节点的 childIds / rootIds），再逐个删
     detachTask(draft, payload.taskId)
+
+    // 清理整棵子树的依赖 —— 只清理根节点会留下指向已删除任务的孤儿依赖，
+    // 这些孤儿会被持久化、污染统计，且因不在 patch 里而无法被撤销恢复
+    const removed = new Set(subtree)
+    for (const [depId, dep] of Object.entries(draft.dependencies)) {
+      if (removed.has(dep.fromTaskId) || removed.has(dep.toTaskId)) {
+        delete draft.dependencies[depId]
+      }
+    }
 
     for (const id of [...subtree].reverse()) {
       delete draft.tasks[id]

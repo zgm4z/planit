@@ -12,12 +12,6 @@ function setup(): void {
   for (const [type, handler] of Object.entries(taskHandlers)) {
     registerHandler(type as CommandType, handler)
   }
-  // task.delete 的依赖清理需要存在一条依赖。真正的 dependency.create 命令
-  // 属于 Task 10，这里注册一个最小实现，让删除清理逻辑可被单独验证。
-  registerHandler('dependency.create', (draft, payload: { fromTaskId: string; toTaskId: string }) => {
-    const dep = createDependency(payload.fromTaskId, payload.toTaskId)
-    draft.dependencies[dep.id] = dep
-  })
   project = createProject('测试项目', '2026-03-02')
 }
 
@@ -93,12 +87,34 @@ describe('task.delete', () => {
     const a = p1.rootIds[0]
     const p2 = run(p1, 'task.create', { name: 'B' })
     const b = p2.rootIds[1]
-    const p3 = run(p2, 'dependency.create', { fromTaskId: a, toTaskId: b })
-    const depId = Object.keys(p3.dependencies)[0]
+
+    // 直接构造依赖，不经由命令 —— 避免测试前向引用尚未实现的 dependency.create
+    const dep = createDependency(a, b)
+    const p3 = { ...p2, dependencies: { ...p2.dependencies, [dep.id]: dep } }
 
     const p4 = run(p3, 'task.delete', { taskId: a })
 
-    expect(p4.dependencies[depId]).toBeUndefined()
+    expect(p4.dependencies[dep.id]).toBeUndefined()
+  })
+
+  it('删除父任务时清理整棵子树的依赖，不留孤儿', () => {
+    const p1 = run(project, 'task.create', { name: '父' })
+    const parentId = firstRoot(p1)
+    const p2 = run(p1, 'task.create', { name: '子', parentId })
+    const childId = p2.tasks[parentId].childIds[0]
+    const p3 = run(p2, 'task.create', { name: 'C' })
+    const cId = p3.rootIds[1]
+
+    // 依赖挂在【子】任务上，不在被删的父任务上
+    const dep = createDependency(childId, cId)
+    const p4 = { ...p3, dependencies: { ...p3.dependencies, [dep.id]: dep } }
+    expect(Object.keys(p4.dependencies)).toHaveLength(1)
+
+    const p5 = run(p4, 'task.delete', { taskId: parentId })
+
+    expect(p5.tasks[parentId]).toBeUndefined()
+    expect(p5.tasks[childId]).toBeUndefined()
+    expect(p5.dependencies[dep.id]).toBeUndefined() // 关键：孤儿必须被清掉
   })
 })
 
@@ -207,7 +223,15 @@ describe('摘要任务保护', () => {
     const p2 = run(p1, 'task.create', { name: '子', parentId })
     const p3 = run(p2, 'task.setDuration', { taskId: parentId, duration: 9 })
 
-    expect(p3.tasks[parentId].duration).not.toBe(9)
+    expect(p3.tasks[parentId].duration).toBe(1)
+
+    // patch 级断言：store 依赖「无 patch = 未产生变更」来决定是否入撤销栈
+    const result = execute(p2, {
+      type: 'task.setDuration',
+      label: '操作',
+      payload: { taskId: parentId, duration: 9 },
+    })
+    expect(result.patches).toHaveLength(0)
   })
 
   it('对摘要任务拖拽排期不生效', () => {
