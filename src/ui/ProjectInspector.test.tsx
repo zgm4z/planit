@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -104,6 +104,39 @@ describe('ProjectInspector', () => {
     expect(screen.getByTestId('project-summary-workdays')).toHaveTextContent('5 天')
     expect(screen.getByText('任务数')).toBeInTheDocument()
     expect(screen.getByTestId('project-summary-tasks')).toHaveTextContent('2')
+  })
+
+  it('基线事实行：无基线显示「未设置基线」，保存后显示活动基线名（多条附条数）', () => {
+    renderProjectInspector()
+
+    // 标签与上面三行同栅格（§3.4）；值按 testid 定位那一格
+    expect(screen.getByText('基线')).toBeInTheDocument()
+
+    // 无基线（§3.3 的「未配置」）：**说明性文字**而不是 `—` —— 它得说出「还没做这件事」。
+    // 这正是「打开项目默认不选中任务、右栏停在项目 Tab」时，菜单「项目 > 保存基线」
+    // 的反馈落点：没有它，点完菜单界面纹丝不动（点了没反应）。
+    expect(screen.getByTestId('project-baseline')).toHaveTextContent('未设置基线')
+
+    // 保存一条基线（走真实命令，保证形状合法）→ 该格变成活动基线名
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 1' },
+      }),
+    )
+    expect(useProjectStore.getState().project!.activeBaselineId).not.toBeNull()
+    expect(screen.getByTestId('project-baseline')).toHaveTextContent('基线 1')
+
+    // 再存一条 → 活动基线变成「基线 2」，并附总条数（一眼看出「有几条、哪条在用」）
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 2' },
+      }),
+    )
+    expect(screen.getByTestId('project-baseline')).toHaveTextContent('基线 2（共 2 条）')
   })
 
   it('分组结构：名称置顶 + 四组，主分组（时间线 / 摘要）默认展开、次要分组（格式 / 工作日历）默认收起', () => {
