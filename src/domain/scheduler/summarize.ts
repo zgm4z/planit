@@ -17,6 +17,9 @@ import type {
  *   lateFinish  = max(children.lateFinish)
  *   totalSlack  = min(children.totalSlack)   ← 最紧的子任务决定整个摘要
  *   isCritical  = any(children.isCritical)
+ *
+ * 前提：childIds 构成一棵树（无环）。树形不变量由命令层保证，
+ * 与依赖环不同，这里不做环检测。
  */
 export function summarizeParents(
   tasks: Record<TaskId, Task>,
@@ -59,6 +62,9 @@ export function summarizeParents(
 /**
  * 如实记录排期矛盾，不做调和。摘要任务本身不判冲突。
  * 判定依据是浮时为负 —— 意味着「约束要求的最晚」早于「依赖要求的最早」。
+ *
+ * 前提：childIds 构成一棵树（无环）。树形不变量由命令层保证，
+ * 与依赖环不同，这里不做环检测。
  */
 export function detectConflicts(
   tasks: Record<TaskId, Task>,
@@ -83,7 +89,7 @@ export function detectConflicts(
       conflicts.push({
         taskId: id,
         kind: 'constraintViolatedByDependency',
-        message: `任务被固定为「${describeConstraint(task.scheduling.type)} ${task.scheduling.date}」，但依赖要求它不早于 ${schedule.earlyStart}`,
+        message: `任务被固定为「${CONSTRAINT_LABEL[task.scheduling.type]} ${task.scheduling.date}」，但依赖要求它不早于 ${schedule.earlyStart}`,
       })
     } else {
       conflicts.push({
@@ -105,10 +111,6 @@ const CONSTRAINT_LABEL: Record<ConstraintType, string> = {
   startNoLaterThan: '开始不晚于',
   finishNoEarlierThan: '结束不早于',
   finishNoLaterThan: '结束不晚于',
-}
-
-function describeConstraint(type: ConstraintType): string {
-  return CONSTRAINT_LABEL[type]
 }
 
 function minOf(dates: string[]): string {

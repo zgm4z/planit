@@ -78,12 +78,19 @@ describe('summarizeParents', () => {
     expect(r.Root.totalSlack).toBe(4)
   })
 
-  it('叶子任务的结果原样保留在这次汇总里', () => {
-    const tasks: Record<string, Task> = { Leaf: task('Leaf') }
-    const leaf = { Leaf: sch({ earlyStart: '2026-03-09' }) }
-    const r = summarizeParents(tasks, leaf, ['Leaf'])
+  it('汇总结果与叶子排期合并在同一张表里', () => {
+    const tasks: Record<string, Task> = {
+      Root: task('Root', { childIds: ['Child'] }),
+      Child: task('Child', { parentId: 'Root' }),
+    }
+    const leaf = { Child: sch({ earlyStart: '2026-03-09', earlyFinish: '2026-03-11' }) }
+    const r = summarizeParents(tasks, leaf, ['Root'])
 
-    expect(r.Leaf.earlyStart).toBe('2026-03-09')
+    // Child 原样保留；Root 只能由 visit 递归汇总得到
+    expect(r.Child.earlyStart).toBe('2026-03-09')
+    expect(r.Root).toEqual(
+      sch({ earlyStart: '2026-03-09', earlyFinish: '2026-03-11' }),
+    )
   })
 })
 
@@ -102,6 +109,18 @@ describe('detectConflicts', () => {
     expect(conflicts[0].kind).toBe('constraintViolatedByDependency')
     expect(conflicts[0].message).toContain('2026-03-04')
     expect(conflicts[0].message).toContain('2026-03-09')
+  })
+
+  it('无约束任务浮时为负时报 impossibleConstraint', () => {
+    const t = task('A') // 默认 mode: 'auto'
+    const tasks = { A: t }
+    const schedules = { A: sch({ totalSlack: -2, earlyStart: '2026-03-09' }) }
+
+    const conflicts = detectConflicts(tasks, schedules, ['A'])
+
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0].kind).toBe('impossibleConstraint')
+    expect(conflicts[0].message).toContain('-2')
   })
 
   it('浮时非负的任务不产生冲突', () => {
