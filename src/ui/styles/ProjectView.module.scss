@@ -140,4 +140,121 @@
   font-size: 10px;
 }
 
+// ── 列（甘特视图左列与大纲视图共用）───────────────────────
+
+// 单元格的**共用**外观（两个视图都读它）。表格化的部分（列分隔线、12px 字号）
+// 见下方只作用于大纲视图的规则。
+.outlineCell {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  height: 100%;
+  color: var(--planit-text);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+// 「表格化的列外观」**只在大纲视图**生效。`data-view` 由 ProjectView 挂在唯一的
+// 滚动容器上（见那里的注释）—— 它是两个视图间**唯一**的形态开关。
+//
+// 甘特视图若也套这套单元格外观，会带回 Task 3 引入的三处偏差：
+// 1) 在 kind / title 之间凭空多一条竖线；
+// 2) 让末格右边框叠到 .outline 的 border-right 上（1px 变 2px）；
+// 3) 把任务名从 13px（Mantine `md` baseline）压到 12px。
+// 甘特视图改动前是「单格、13px、无竖线」，这里必须保持等价。
+[data-view='outline'] .outlineCell {
+  border-right: 1px solid var(--planit-border);
+  font-size: 12px;
+}
+
+// 标题列：横向滚动时钉在左缘（spec §4.4）。甘特视图里左列整体已经 sticky，
+// 这里是 no-op；大纲视图里才真正生效。
+.outlineCellTitle {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  gap: 4px;
+}
+
+// 不透明垫底**只在大纲视图**需要 —— 否则横向滚动时下方的单元格会透上来。
+// 甘特视图若也给：它会盖掉整行的 hover / 选中底色，悬停一行时只剩 28px 的
+// kind 列变色、标题区保持白色，看起来像渲染残缺（改动前是整行一起变灰）。
+[data-view='outline'] {
+  .outlineCellTitle {
+    background: var(--planit-bg-surface);
+  }
+
+  .outlineRowSelected .outlineCellTitle {
+    background: var(--planit-accent-soft);
+  }
+}
+
+.outlineCellMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--planit-text-muted);
+}
+
+.outlineNoteText {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outlineNoteInput {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  outline: none;
+}
+
+// ── 大纲视图的全宽表格 ────────────────────────────────────
+
+// width: max-content 让表宽 = 各列之和；min-width: 100% 让内容窄时铺满容器，
+// 于是 title 的 flex:1 在宽屏下拉满、在窄屏下横向滚动。
+.outlineTable {
+  width: max-content;
+  min-width: 100%;
+}
+
+.outlineHeader {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  background: var(--planit-bg-surface);
+  border-bottom: 1px solid var(--planit-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--planit-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.outlineHeaderCell {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  height: var(--planit-ruler-height);
+  border-right: 1px solid var(--planit-border);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+// 表头的 title 单元格：横向滚动时钉住。z-index 高于表头自身的 3，
+// 否则它会滑到其它表头单元格**下面**去。
+.outlineHeaderCellSticky {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--planit-bg-surface);
+}
+
 // 甘特图的行与任务条样式在 GanttPane.module.scss（GanttRows / TaskBar 使用）

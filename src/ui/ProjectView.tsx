@@ -6,6 +6,8 @@ import { DependencyLayer } from './DependencyLayer'
 import { GanttRows } from './GanttRows'
 import { Inspector } from './Inspector'
 import { OutlineTree } from './OutlineTree'
+import { GANTT_OUTLINE_COLUMNS, OUTLINE_COLUMNS } from './outlineColumns'
+import { OutlineTable } from './OutlineTable'
 import { TimeRuler } from './TimeRuler'
 import { dragCommitCommands } from './barDrag'
 import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
@@ -34,6 +36,8 @@ export function ProjectView() {
   const selectTask = useViewStore((state) => state.selectTask)
   const toggleCollapsed = useViewStore((state) => state.toggleCollapsed)
   const dayWidth = useViewStore((state) => state.dayWidth)
+  const activeView = useViewStore((state) => state.activeView)
+  const visibleColumns = useViewStore((state) => state.visibleColumns)
   const schedulesResult = useScheduleStore((state) => state.result)
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -41,6 +45,13 @@ export function ProjectView() {
   const rows = useMemo(
     () => (project ? flattenVisibleRows(project, collapsedIds) : []),
     [project, collapsedIds],
+  )
+
+  // 可见列 —— 顺序由注册表决定，visibleColumns 只表达 membership。
+  // 两个视图共用这一份，绝不各自 filter 一遍。
+  const outlineColumns = useMemo(
+    () => OUTLINE_COLUMNS.filter((column) => visibleColumns.includes(column.key)),
+    [visibleColumns],
   )
 
   // 两侧列消费同一份 virtualItems —— 行永远对齐
@@ -167,87 +178,110 @@ export function ProjectView() {
       <Toolbar />
 
       <div className={styles.body}>
-        <div className={styles.scroll} ref={scrollRef} data-testid="shared-scroll">
-          <div
-            className={styles.grid}
-            style={
-              {
-                '--gantt-width': `${ganttWidth}px`,
-                '--day-width': `${dayWidth}px`,
-              } as CSSProperties
-            }
-          >
-            <div className={styles.corner} data-testid="outline-header">
-              {t('outline.columnTitle')}
-            </div>
-
-            <div className={styles.ruler} data-testid="gantt-ruler">
-              <TimeRuler scale={scale} totalDays={totalDays} />
-            </div>
-
-            <div className={styles.outline} data-testid="outline-column">
-              <OutlineTree
-                project={project}
-                rows={rows}
-                virtualItems={virtualItems}
-                selectedTaskId={selectedTaskId}
-                onSelect={selectTask}
-                onToggleCollapse={toggleCollapsed}
-              />
-            </div>
-
+        {/* 唯一的滚动容器：**同一个 DOM 节点**在两个视图间复用（只换 class 与 data-view），
+            否则 useSharedVirtualizer 会盯上一个已卸载的节点。内容在甘特 grid 与
+            大纲表格之间切换 —— 大纲视图里甘特面板的 DOM 整个不存在（不是宽度为 0）。 */}
+        <div
+          className={styles.scroll}
+          ref={scrollRef}
+          data-testid="shared-scroll"
+          data-view={activeView}
+        >
+          {activeView === 'gantt' ? (
             <div
-              className={styles.gantt}
-              style={{
-                height: `${rows.length * ROW_HEIGHT}px`,
-                // 每自然日一条竖线，构成背景网格
-                backgroundImage:
-                  'repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--day-width) - 1px), var(--planit-border) calc(var(--day-width) - 1px), var(--planit-border) var(--day-width))',
-              }}
-              data-testid="gantt-pane"
+              className={styles.grid}
+              style={
+                {
+                  '--gantt-width': `${ganttWidth}px`,
+                  '--day-width': `${dayWidth}px`,
+                } as CSSProperties
+              }
             >
-              {weekendBands.map((band) => (
-                <div
-                  key={band.left}
-                  className={ganttStyles.weekendBand}
-                  style={{ left: band.left, width: band.width }}
-                  data-testid="workday-band"
-                  aria-hidden
+              <div className={styles.corner} data-testid="outline-header">
+                {t('outline.columnTitle')}
+              </div>
+
+              <div className={styles.ruler} data-testid="gantt-ruler">
+                <TimeRuler scale={scale} totalDays={totalDays} />
+              </div>
+
+              <div className={styles.outline} data-testid="outline-column">
+                <OutlineTree
+                  project={project}
+                  rows={rows}
+                  virtualItems={virtualItems}
+                  schedules={schedulesResult.schedules}
+                  columns={GANTT_OUTLINE_COLUMNS}
+                  selectedTaskId={selectedTaskId}
+                  onSelect={selectTask}
+                  onToggleCollapse={toggleCollapsed}
                 />
-              ))}
+              </div>
 
-              {todayX !== null && (
-                <div className={ganttStyles.todayLine} style={{ left: todayX }} aria-hidden />
-              )}
-
-              <GanttRows
-                project={project}
-                calendar={calendar}
-                rows={rows}
-                virtualItems={virtualItems}
-                schedules={schedulesResult.schedules}
-                conflictIds={conflictIds}
-                scale={scale}
-                dragShadow={drag.shadow}
-                onBarPointerDown={(event, taskId, mode) => {
-                  // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，
-                  // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
-                  selectTask(taskId)
-                  const schedule = schedulesResult.schedules[taskId]
-                  if (!schedule) return
-                  drag.begin(event, taskId, mode, schedule.scheduledStart, project.tasks[taskId].duration)
+              <div
+                className={styles.gantt}
+                style={{
+                  height: `${rows.length * ROW_HEIGHT}px`,
+                  // 每自然日一条竖线，构成背景网格
+                  backgroundImage:
+                    'repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--day-width) - 1px), var(--planit-border) calc(var(--day-width) - 1px), var(--planit-border) var(--day-width))',
                 }}
-                onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
-              />
+                data-testid="gantt-pane"
+              >
+                {weekendBands.map((band) => (
+                  <div
+                    key={band.left}
+                    className={ganttStyles.weekendBand}
+                    style={{ left: band.left, width: band.width }}
+                    data-testid="workday-band"
+                    aria-hidden
+                  />
+                ))}
 
-              <DependencyLayer
-                dependencies={Object.values(project.dependencies)}
-                rectByTaskId={rectByTaskId}
-                totalHeight={rows.length * ROW_HEIGHT}
-                totalWidth={ganttWidth}
-              />
+                {todayX !== null && (
+                  <div className={ganttStyles.todayLine} style={{ left: todayX }} aria-hidden />
+                )}
+
+                <GanttRows
+                  project={project}
+                  calendar={calendar}
+                  rows={rows}
+                  virtualItems={virtualItems}
+                  schedules={schedulesResult.schedules}
+                  conflictIds={conflictIds}
+                  scale={scale}
+                  dragShadow={drag.shadow}
+                  onBarPointerDown={(event, taskId, mode) => {
+                    // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，
+                    // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
+                    selectTask(taskId)
+                    const schedule = schedulesResult.schedules[taskId]
+                    if (!schedule) return
+                    drag.begin(event, taskId, mode, schedule.scheduledStart, project.tasks[taskId].duration)
+                  }}
+                  onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
+                />
+
+                <DependencyLayer
+                  dependencies={Object.values(project.dependencies)}
+                  rectByTaskId={rectByTaskId}
+                  totalHeight={rows.length * ROW_HEIGHT}
+                  totalWidth={ganttWidth}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <OutlineTable
+              project={project}
+              rows={rows}
+              virtualItems={virtualItems}
+              schedules={schedulesResult.schedules}
+              columns={outlineColumns}
+              selectedTaskId={selectedTaskId}
+              onSelect={selectTask}
+              onToggleCollapse={toggleCollapsed}
+            />
+          )}
         </div>
 
         {/* 右侧栏分成上下两段：Inspector 自负滚动，日历设置钉在底部。
