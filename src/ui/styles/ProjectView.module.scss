@@ -190,4 +190,50 @@
   outline: none;
 }
 
+// ── 大纲视图的全宽表格 ────────────────────────────────────
+
+// width: max-content 让表宽 = 各列之和；min-width: 100% 让内容窄时铺满容器，
+// 于是 title 的 flex:1 在宽屏下拉满、在窄屏下横向滚动。
+.outlineTable {
+  width: max-content;
+  min-width: 100%;
+}
+
+.outlineHeader {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  background: var(--planit-bg-surface);
+  border-bottom: 1px solid var(--planit-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--planit-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.outlineHeaderCell {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  height: var(--planit-ruler-height);
+  border-right: 1px solid var(--planit-border);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+// 表头的 title 单元格：横向滚动时钉住。z-index 高于表头自身的 3，
+// 否则它会滑到其它表头单元格**下面**去。
+.outlineHeaderCellSticky {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--planit-bg-surface);
+}
+
 // 甘特图的行与任务条样式在 GanttPane.module.scss（GanttRows / TaskBar 使用）

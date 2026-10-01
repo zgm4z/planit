@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
-import { useViewStore, type ZoomLevel } from '../store/viewStore'
+import { useViewStore, type ActiveView, type ZoomLevel } from '../store/viewStore'
 import { canIndent, canOutdent } from './outlineActions'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
@@ -33,6 +33,8 @@ export function Toolbar() {
   const zoom = useViewStore((state) => state.zoom)
   const setZoom = useViewStore((state) => state.setZoom)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
+  const activeView = useViewStore((state) => state.activeView)
+  const setActiveView = useViewStore((state) => state.setActiveView)
   const scheduleError = useScheduleStore((state) => state.error)
 
   // 可用性判断与命令层守卫一致：不可达的操作直接禁用，而不是让用户点了没反应
@@ -120,6 +122,19 @@ export function Toolbar() {
       </Tooltip>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* 视图切换：两个并列的视图，不是同一布局的两种宽度（spec §1）。
+            label 用 span 包一层带 data-testid —— e2e 靠它点击，不依赖文案。 */}
+        <SegmentedControl
+          size="xs"
+          value={activeView}
+          onChange={(value) => setActiveView(value as ActiveView)}
+          data-testid="view-switcher"
+          data={[
+            { value: 'gantt', label: <span data-testid="view-option-gantt">{t('toolbar.view.gantt')}</span> },
+            { value: 'outline', label: <span data-testid="view-option-outline">{t('toolbar.view.outline')}</span> },
+          ]}
+        />
+
         <SegmentedControl
           size="xs"
           value={zoom}

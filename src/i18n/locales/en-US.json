@@ -18,6 +18,7 @@
     "undoWithLabel": "Undo: {{label}}",
     "redo": "Redo",
     "zoom": { "day": "Day", "week": "Week", "month": "Month" },
+    "view": { "gantt": "Gantt", "outline": "Task list" },
     "language": "Language"
   },
   "outline": {
