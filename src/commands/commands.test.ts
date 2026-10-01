@@ -351,6 +351,11 @@ describe('task.kind 不变式', () => {
 })
 
 describe('v0.2 新命令', () => {
+  // 每个 describe 都必须自己 setup —— 少了它，这组用例只能靠上一个 describe
+  // 留下的模块级 handlers / project 才跑得通，一被 -t 过滤或 shuffle 就报
+  // 「未注册的命令类型」。
+  beforeEach(setup)
+
   function oneTask(): { p: Project; id: string } {
     const p = run(project, 'task.create', { name: 'A' })
     return { p, id: p.rootIds[0] }
