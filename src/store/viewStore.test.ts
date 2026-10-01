@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { DEFAULT_VISIBLE_COLUMNS } from '../ui/outlineColumns'
+import { DEFAULT_VISIBLE_COLUMNS } from './columnKeys'
 import {
   OUTLINE_COLUMNS_STORAGE_KEY,
   loadVisibleColumns,
