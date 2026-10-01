@@ -1,6 +1,11 @@
 import { enablePatches, produceWithPatches, type Patch } from 'immer'
 import type { Project } from '../domain/model/types'
 import type { Command, CommandHandler, CommandType } from './types'
+import { taskHandlers } from './taskCommands'
+import { taskStructureHandlers } from './taskStructureCommands'
+import { dependencyHandlers } from './dependencyCommands'
+import { calendarHandlers } from './calendarCommands'
+import { projectHandlers } from './projectCommands'
 
 // Immer 的 patch 能力需显式开启，且必须在任何 produceWithPatches 之前
 enablePatches()
@@ -45,4 +50,19 @@ export function execute(project: Project, command: Command): ExecutionResult {
 /** 仅供测试：清空注册表 */
 export function __resetRegistryForTests(): void {
   handlers = new Map()
+}
+
+/** 应用启动时调用一次，注册全部内置命令 */
+export function initCommands(): void {
+  const all: Record<string, CommandHandler<any>> = {
+    ...taskHandlers,
+    ...taskStructureHandlers,
+    ...dependencyHandlers,
+    ...calendarHandlers,
+    ...projectHandlers,
+  }
+
+  for (const [type, handler] of Object.entries(all)) {
+    registerHandler(type as CommandType, handler)
+  }
 }
