@@ -122,6 +122,38 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
     earlyFinish = reran.earlyFinish
   }
 
+  // ── 自由宽延 ──────────────────────────────────────────
+  //
+  // 每条出边的松弛 = 「该依赖自己的正向下界」到「后继实际 earlyStart」的距离。
+  // 用 forwardBound（而不是 spec §5.2 的 `workdaysBetween(earlyFinish, toEarlyStart) - 1`）
+  // 是因为后者在 lag ≠ 0 时会高估：带 lag 的边一推就把后继带走，松弛应为 0。
+  //
+  // lag = 0 的 FS 边恒有 forwardBound = addWorkdays(earlyFinish, 1)，于是
+  // workdaysBetween(addWorkdays(earlyFinish, 1), toEarlyStart)
+  //   === workdaysBetween(earlyFinish, toEarlyStart) - 1
+  // —— 两式在 lag = 0 时逐字等价，只是新式对四种依赖类型都成立。
+  const freeSlackOf = (id: TaskId): number => {
+    const successors = graph.outgoing.get(id) ?? []
+    const totalSlack = workdaysBetween(earlyStart.get(id)!, lateStart.get(id)!, calendar)
+    if (successors.length === 0) return totalSlack
+
+    return Math.min(
+      ...successors.map((dep) =>
+        workdaysBetween(
+          forwardBound({
+            dep,
+            fromStart: earlyStart.get(id)!,
+            fromFinish: earlyFinish.get(id)!,
+            toDuration: byId.get(dep.toTaskId)!.duration,
+            cal: calendar,
+          }),
+          earlyStart.get(dep.toTaskId)!,
+          calendar,
+        ),
+      ),
+    )
+  }
+
   // ── 浮时与关键路径 ─────────────────────────────────────
   const result: Record<TaskId, ComputedSchedule> = {}
   for (const id of graph.order) {
@@ -137,6 +169,7 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
       scheduledStart: useLate ? lateStart.get(id)! : earlyStart.get(id)!,
       scheduledFinish: useLate ? lateFinish.get(id)! : earlyFinish.get(id)!,
       totalSlack: slack,
+      freeSlack: freeSlackOf(id),
       isCritical: slack === 0,
     }
   }

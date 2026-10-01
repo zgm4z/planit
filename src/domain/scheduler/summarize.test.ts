@@ -12,6 +12,7 @@ const sch = (o: Partial<ComputedSchedule>): ComputedSchedule => ({
   scheduledStart: '2026-03-02',
   scheduledFinish: '2026-03-04',
   totalSlack: 0,
+  freeSlack: 0,
   isCritical: true,
   ...o,
 })

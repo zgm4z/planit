@@ -161,6 +161,11 @@ export interface ComputedSchedule {
   scheduledFinish: DateStr
   /** 总浮时（工作日） */
   totalSlack: number
+  /**
+   * 自由宽延（工作日）：本任务可推迟多久而不影响**任何后继任务**的最早开始。
+   * 没有后继时与 totalSlack 相同。
+   */
+  freeSlack: number
   isCritical: boolean
 }
 

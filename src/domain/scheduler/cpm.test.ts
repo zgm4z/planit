@@ -391,3 +391,76 @@ describe('runCpm — 排期方向', () => {
     expect(r.D.scheduledFinish).toBe('2026-03-12')
   })
 })
+
+// ── 自由宽延（spec §5）──────────────────────────────────
+//
+// 沿用黄金用例 A(3d) ─┬─> B(2d) ─┐
+//                      └─> C(5d) ─┴─> D(1d)
+// 手算：
+//   A 完成后 B、C 立刻开工（lag 0）→ A.freeSlack = 0
+//   B 完成 03-06，D 最早 03-12，但 D 被 C(03-11 完成) 顶着 → B 可推 3 天
+//   C 完成 03-11，D 最早 03-12 → C.freeSlack = 0
+//   D 无后继 → freeSlack = totalSlack = 0
+describe('runCpm — 自由宽延', () => {
+  // 注意变量名与上面「排期方向」describe 里的 golden() 函数区分开，
+  // 别在同一个文件里重复声明同名标识符。
+  const goldenR = runCpm({
+    tasks: [mk('A', 3), mk('B', 2), mk('C', 5), mk('D', 1)],
+    dependencies: [
+      createDependency('A', 'B'),
+      createDependency('A', 'C'),
+      createDependency('B', 'D'),
+      createDependency('C', 'D'),
+    ],
+    calendar: createCalendar(),
+    direction: 'forward',
+    projectStart: '2026-03-02',
+  })
+
+  it('边界 1：没有后继的任务，自由宽延等于总宽延', () => {
+    expect(goldenR.D.totalSlack).toBe(0)
+    expect(goldenR.D.freeSlack).toBe(goldenR.D.totalSlack)
+  })
+
+  it('边界 2：共同后继的两个任务，较晚结束的那个 freeSlack 为 0', () => {
+    expect(goldenR.B.earlyFinish).toBe('2026-03-06')
+    expect(goldenR.C.earlyFinish).toBe('2026-03-11')
+    expect(goldenR.B.freeSlack).toBe(3)
+    expect(goldenR.C.freeSlack).toBe(0)
+    // B 的总宽延也是 3 —— 它一推迟就直接顶到 D 的最早开始
+    expect(goldenR.B.totalSlack).toBe(3)
+  })
+
+  it('边界 3：带正 lag 的依赖链 —— 一推就动后继，自由宽延为 0', () => {
+    // A(2d) 03-02..03-03 --FS lag 1--> B(1d) 03-05
+    // 推 A 一天 → B 跟着推到 03-06，所以 A 一天都推不得。
+    const r = runCpm({
+      tasks: [mk('A', 2), mk('B', 1)],
+      dependencies: [createDependency('A', 'B', 'FS', 1)],
+      calendar: createCalendar(),
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.A.earlyFinish).toBe('2026-03-03')
+    expect(r.B.earlyStart).toBe('2026-03-05')
+    expect(r.A.freeSlack).toBe(0)
+    expect(r.B.freeSlack).toBe(r.B.totalSlack)
+  })
+
+  it('后继被别的依赖推后时，前置任务获得对应的自由宽延', () => {
+    // A(1d) ──FS 0──> B(1d)
+    // C(3d) ──FS 0──> B(1d)     ← C 把 B 顶到 03-05
+    // A 03-02..03-02 结束即可，B 却要等到 03-05 → A 可推 2 天
+    const r = runCpm({
+      tasks: [mk('A', 1), mk('C', 3), mk('B', 1)],
+      dependencies: [createDependency('A', 'B'), createDependency('C', 'B')],
+      calendar: createCalendar(),
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.C.earlyFinish).toBe('2026-03-04')
+    expect(r.B.earlyStart).toBe('2026-03-05')
+    expect(r.A.freeSlack).toBe(2)
+    expect(r.A.totalSlack).toBe(2)
+  })
+})
