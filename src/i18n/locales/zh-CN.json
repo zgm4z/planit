@@ -26,7 +26,48 @@
   "outline": {
     "columnTitle": "任务",
     "expand": "展开子任务",
-    "collapse": "折叠子任务"
+    "collapse": "折叠子任务",
+    "cell": {
+      "days": "{{count}} 天",
+      "percent": "{{value}}%"
+    },
+    "menu": {
+      "title": "显示列",
+      "titleLocked": "标题列始终显示，不可取消"
+    },
+    "disabledReason": {
+      "resources": "需要资源与工作量功能（v0.5）",
+      "baseline": "需要基线功能（v1.0）"
+    },
+    "columns": {
+      "kind": "类型",
+      "title": "标题",
+      "note": "备注",
+      "id": "ID",
+      "assignees": "已分配",
+      "start": "开始",
+      "finish": "结束",
+      "duration": "工期",
+      "priority": "优先级",
+      "progress": "进度",
+      "totalSlack": "总宽延",
+      "freeSlack": "自由宽延",
+      "effort": "工作量",
+      "taskCost": "任务成本",
+      "resourceCost": "资源成本",
+      "totalCost": "总成本",
+      "baselineStart": "基线开始",
+      "baselineFinish": "基线结束",
+      "startVariance": "开始差异",
+      "finishVariance": "结束差异",
+      "bcws": "BCWS",
+      "bcwp": "BCWP",
+      "acwp": "ACWP",
+      "cv": "CV",
+      "sv": "SV",
+      "eac": "EAC",
+      "bac": "BAC"
+    }
   },
   "gantt": {
     "dragHint": "{{start}} → {{finish}} · {{days}} 个工作日",
@@ -94,7 +135,8 @@
     "calendar.setWorkingDays": "修改工作日",
     "calendar.addException": "添加节假日",
     "calendar.removeException": "移除例外日期",
-    "project.rename": "重命名项目"
+    "project.rename": "重命名项目",
+    "task.setNote": "修改备注"
   },
   "conflicts": {
     "constraintViolatedByDependency": "任务被固定为「{{constraint}} {{date}}」，但依赖要求它不早于 {{earliest}}",

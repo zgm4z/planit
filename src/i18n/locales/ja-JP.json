@@ -20,7 +20,52 @@
     "zoom": { "day": "日", "week": "週", "month": "月" },
     "language": "言語"
   },
-  "outline": { "columnTitle": "タスク", "expand": "サブタスクを展開", "collapse": "サブタスクを折りたたむ" },
+  "outline": {
+    "columnTitle": "タスク",
+    "expand": "サブタスクを展開",
+    "collapse": "サブタスクを折りたたむ",
+    "cell": {
+      "days": "{{count}} 日",
+      "percent": "{{value}}%"
+    },
+    "menu": {
+      "title": "表示列",
+      "titleLocked": "タイトル列は常に表示され、非表示にできません"
+    },
+    "disabledReason": {
+      "resources": "リソースと工数の機能（v0.5）が必要です",
+      "baseline": "基準とアーンドバリューの機能（v1.0）が必要です"
+    },
+    "columns": {
+      "kind": "種類",
+      "title": "タイトル",
+      "note": "メモ",
+      "id": "ID",
+      "assignees": "担当",
+      "start": "開始",
+      "finish": "終了",
+      "duration": "期間",
+      "priority": "優先度",
+      "progress": "進捗",
+      "totalSlack": "総余裕",
+      "freeSlack": "自由余裕",
+      "effort": "工数",
+      "taskCost": "タスクコスト",
+      "resourceCost": "リソースコスト",
+      "totalCost": "総コスト",
+      "baselineStart": "基準開始",
+      "baselineFinish": "基準終了",
+      "startVariance": "開始差異",
+      "finishVariance": "終了差異",
+      "bcws": "BCWS",
+      "bcwp": "BCWP",
+      "acwp": "ACWP",
+      "cv": "CV",
+      "sv": "SV",
+      "eac": "EAC",
+      "bac": "BAC"
+    }
+  },
   "gantt": {
     "dragHint": "{{start}} → {{finish}} · {{days}} 稼働日",
     "startLink": "リンク開始"
@@ -87,7 +132,8 @@
     "calendar.setWorkingDays": "稼働日を変更",
     "calendar.addException": "例外日を追加",
     "calendar.removeException": "例外日を削除",
-    "project.rename": "プロジェクト名を変更"
+    "project.rename": "プロジェクト名を変更",
+    "task.setNote": "メモを変更"
   },
   "conflicts": {
     "constraintViolatedByDependency": "タスクは「{{constraint}} {{date}}」に固定されていますが、依存関係は {{earliest}} 以降を要求しています",

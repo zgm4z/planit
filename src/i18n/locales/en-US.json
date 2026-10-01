@@ -20,7 +20,52 @@
     "zoom": { "day": "Day", "week": "Week", "month": "Month" },
     "language": "Language"
   },
-  "outline": { "columnTitle": "Task", "expand": "Expand subtasks", "collapse": "Collapse subtasks" },
+  "outline": {
+    "columnTitle": "Task",
+    "expand": "Expand subtasks",
+    "collapse": "Collapse subtasks",
+    "cell": {
+      "days": "{{count}} d",
+      "percent": "{{value}}%"
+    },
+    "menu": {
+      "title": "Columns",
+      "titleLocked": "Title is always shown and cannot be hidden"
+    },
+    "disabledReason": {
+      "resources": "Requires resources & effort (v0.5)",
+      "baseline": "Requires baselines & earned value (v1.0)"
+    },
+    "columns": {
+      "kind": "Type",
+      "title": "Title",
+      "note": "Note",
+      "id": "ID",
+      "assignees": "Assignees",
+      "start": "Start",
+      "finish": "Finish",
+      "duration": "Duration",
+      "priority": "Priority",
+      "progress": "Progress",
+      "totalSlack": "Total slack",
+      "freeSlack": "Free slack",
+      "effort": "Effort",
+      "taskCost": "Task cost",
+      "resourceCost": "Resource cost",
+      "totalCost": "Total cost",
+      "baselineStart": "Baseline start",
+      "baselineFinish": "Baseline finish",
+      "startVariance": "Start variance",
+      "finishVariance": "Finish variance",
+      "bcws": "BCWS",
+      "bcwp": "BCWP",
+      "acwp": "ACWP",
+      "cv": "CV",
+      "sv": "SV",
+      "eac": "EAC",
+      "bac": "BAC"
+    }
+  },
   "gantt": {
     "dragHint": "{{start}} → {{finish}} · {{days}} workdays",
     "startLink": "Start link"
@@ -87,7 +132,8 @@
     "calendar.setWorkingDays": "Change working days",
     "calendar.addException": "Add exception",
     "calendar.removeException": "Remove exception",
-    "project.rename": "Rename project"
+    "project.rename": "Rename project",
+    "task.setNote": "Change note"
   },
   "conflicts": {
     "constraintViolatedByDependency": "Task is pinned to \"{{constraint}} {{date}}\", but a dependency requires it no earlier than {{earliest}}",
