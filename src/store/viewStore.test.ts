@@ -74,12 +74,14 @@ describe('viewStore 的列配置', () => {
   })
 
   it('toggleColumn 打开 / 关闭一列', () => {
+    // 用 `note` 取样而不是 `progress`：progress 现在**在默认集里**（§7 的列优先级），
+    // 首次 toggle 会把它关掉 —— 那样断言的是「关闭」而不是「打开」，判别力反了。
     const { toggleColumn } = useViewStore.getState()
-    toggleColumn('progress')
-    expect(useViewStore.getState().visibleColumns).toContain('progress')
+    toggleColumn('note')
+    expect(useViewStore.getState().visibleColumns).toContain('note')
 
-    toggleColumn('progress')
-    expect(useViewStore.getState().visibleColumns).not.toContain('progress')
+    toggleColumn('note')
+    expect(useViewStore.getState().visibleColumns).not.toContain('note')
   })
 
   it('toggleColumn 对 title 是 no-op —— title 不允许取消', () => {

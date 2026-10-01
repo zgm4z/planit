@@ -71,8 +71,9 @@ describe('OutlineTable', () => {
     expect(screen.getAllByTestId(/^outline-col-/)).toHaveLength(DEFAULT_VISIBLE_COLUMNS.length)
     expect(screen.getByTestId('outline-col-title')).toHaveTextContent('标题')
     expect(screen.getByTestId('outline-col-duration')).toHaveTextContent('工期')
-    // 没开的列不出表头
-    expect(screen.queryByTestId('outline-col-progress')).not.toBeInTheDocument()
+    // 没开的列不出表头。`progress` 现在是**默认可见列**（§7 的列优先级），
+    // 因此改用仍非默认的 `note` 取样 —— 取样列若已经默认可见，这条断言会假绿。
+    expect(screen.queryByTestId('outline-col-note')).not.toBeInTheDocument()
   })
 
   /**
@@ -171,12 +172,14 @@ describe('OutlineTable 的列菜单', () => {
     renderTable()
     await openMenu()
 
-    await user.click(screen.getByTestId('column-menu-item-progress'))
-    expect(useViewStore.getState().visibleColumns).toContain('progress')
-    expect(localStorage.getItem('planit.outlineColumns')).toContain('progress')
+    // 用非默认列 `note` 取样：默认列（如 progress）首次点击是「关闭」，
+    // 断言会从「打开」变成「关闭」，判别力反了。
+    await user.click(screen.getByTestId('column-menu-item-note'))
+    expect(useViewStore.getState().visibleColumns).toContain('note')
+    expect(localStorage.getItem('planit.outlineColumns')).toContain('note')
 
-    await user.click(screen.getByTestId('column-menu-item-progress'))
-    expect(useViewStore.getState().visibleColumns).not.toContain('progress')
+    await user.click(screen.getByTestId('column-menu-item-note'))
+    expect(useViewStore.getState().visibleColumns).not.toContain('note')
   })
 
   // 「title 不可取消」这条不变量的判别力在菜单项的 disabled 断言与 viewStore 的

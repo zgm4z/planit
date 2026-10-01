@@ -189,11 +189,22 @@
 
 // 标题列：横向滚动时钉在左缘（spec §4.4）。甘特视图里左列整体已经 sticky，
 // 这里是 no-op；大纲视图里才真正生效。
+//
+// §7：**标题列有 160px 下限，绝不参与等比压缩**。flex-basis 是 240px，窄屏时
+// 允许收缩，但绝不越过 160 —— 越过就意味着「任务名看不见了」，而保住的却是
+// 已经被响应式砍掉的那些低价值列（正是 spec §7 点名的当前缺陷）。
 .outlineCellTitle {
   position: sticky;
   left: 0;
   z-index: 1;
+  min-width: 160px;
   gap: 4px;
+}
+
+// 空值 / 算不出来：弱化的 `—`（§3.3 / §6）。比正文 `--text` 低一档，
+// 让「真的是 0」（正常 `--text`）与「这一格没有数字」在灰度上可分辨。
+.outlineCellEmpty {
+  color: var(--planit-text-faint);
 }
 
 // 不透明垫底**只在大纲视图**需要 —— 否则横向滚动时下方的单元格会透上来。
@@ -286,6 +297,8 @@
   position: sticky;
   left: 0;
   z-index: 4;
+  // 与行的 title 单元格同一份下限 —— 表头与行必须逐列对齐（§4.4 的不变量）
+  min-width: 160px;
   background: var(--planit-bg-surface);
 }
 

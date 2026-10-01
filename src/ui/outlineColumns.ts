@@ -119,16 +119,62 @@ export const OUTLINE_COLUMNS: readonly OutlineColumn[] = [
 ]
 
 /**
- * 大纲视图的初始可见列。spec 没有规定默认集 —— 取「看排期时最常用的五列」。
+ * 大纲视图的**初始可见列**，按 spec §7 的列优先级取「信息量最高的五列」：
+ *
+ *   标题 > 开始/结束 > 工期 > 进度 > 浮时 > ID/备注
+ *
+ * 为什么把 `kind`（类型图标）以及 `note`/`id`/`priority` 从默认集里拿掉：
+ * 它们是**噪音**而非信息 —— 一列 28px 的类型字形，在摘要底带 + 缩进已经把结构
+ * 表达得很清楚的表里是重复的；`note`/`priority` 在真实项目里常年整列为空；
+ * `id` 是内部标识，用户几乎不用它排期。默认集每多一列噪音，就多挤占一列
+ * 「开始 / 结束 / 工期 / 进度」的横向空间 —— 这正是 spec §7 说的「丢了最重要的、
+ * 留了噪音」。这些列**仍然可用**，只是不再**默认**显示（右键表头即可打开）。
+ *
  * 必须已按注册表顺序排列，且含 `title`（否则首次打开就是一张空表）。
  */
 export const DEFAULT_VISIBLE_COLUMNS: OutlineColumnKey[] = [
-  'kind',
   'title',
   'start',
   'finish',
   'duration',
+  'progress',
 ]
+
+/**
+ * 响应式断点（spec §7，与 Mantine 的 `$breakpoint-md: 900px` 对齐）。
+ *
+ * `NARROW`：< 1100 —— 右栏改抽屉、左列 280、隐藏「备注 / ID / 优先级」、工具栏溢出。
+ * `COMPACT`：< 900 —— 只剩「标题 / 开始 / 结束 / 工期」，左列 240。
+ */
+export const NARROW_LAYOUT_WIDTH = 1100
+export const COMPACT_LAYOUT_WIDTH = 900
+
+/** < 1100 时按 §7 **强制隐藏**的低价值列（它们让位给标题列，不是等比压缩） */
+const NARROW_HIDDEN_COLUMNS: readonly OutlineColumnKey[] = ['note', 'id', 'priority']
+
+/** < 900 时**唯一保留**的四列 —— 顺序即 §7 的优先级 */
+const COMPACT_KEPT_COLUMNS: readonly OutlineColumnKey[] = ['title', 'start', 'finish', 'duration']
+
+/**
+ * 某断点下**因响应式而必须隐藏**的列。
+ *
+ * 这**不是**用户的列偏好 —— 用户的偏好存在 `viewStore.visibleColumns` 里、写进
+ * localStorage，绝不因为一次窄屏浏览而被改写（否则回到宽屏时用户会发现自己的
+ * 列配置被悄悄改过）。这里返回的是一份**派生的、临时的**隐藏集，渲染时叠加在
+ * 用户偏好**之上**：`有效列 = 用户偏好 − 响应式隐藏`。
+ *
+ * 永远不动 `title`（它是 COMPACT 的保留列之一，也是全表的地基）。
+ */
+export function responsiveHiddenColumns(isNarrow: boolean, isCompact: boolean): OutlineColumnKey[] {
+  if (isCompact) {
+    // 全量 key 减去保留列 —— 用一个正向的「保留集」表达，比逐列写 if 更难写错
+    return OUTLINE_COLUMNS.map((column) => column.key).filter(
+      (key) => !COMPACT_KEPT_COLUMNS.includes(key),
+    )
+  }
+  if (isNarrow) return [...NARROW_HIDDEN_COLUMNS]
+  return []
+}
 
 /**
  * 甘特视图左列固定渲染的两列：类型图标 + 标题。
@@ -199,6 +245,12 @@ export function resolveScheduleDates(schedule: ComputedSchedule): {
  */
 export type CellValue =
   | { type: 'text'; text: string }
+  /**
+   * 日期。**与 `text` 分开**，好让渲染层统一过 `formatDate`（§1.3「日期一律
+   * YYYY-MM-DD」）—— 与数字量纲各占一个变体是同一条分层原则：取值层给**类型化的
+   * 值**，格式化只发生在 `format.ts`，两者不互相跑冒滴漏。
+   */
+  | { type: 'date'; value: DateStr }
   | { type: 'days'; count: number }
   | { type: 'percent'; value: number }
   /** v0.5：投入（人·工作日） */
@@ -290,9 +342,9 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
     case 'id':
       return { type: 'text', text: task.id }
     case 'start':
-      return schedule ? { type: 'text', text: resolveScheduleDates(schedule).start } : EMPTY
+      return schedule ? { type: 'date', value: resolveScheduleDates(schedule).start } : EMPTY
     case 'finish':
-      return schedule ? { type: 'text', text: resolveScheduleDates(schedule).finish } : EMPTY
+      return schedule ? { type: 'date', value: resolveScheduleDates(schedule).finish } : EMPTY
     case 'duration':
       // 摘要行（group）**不给** duration：这个字段从不被维护 —— `summarizeParents`
       // （src/domain/scheduler/summarize.ts）只汇总排期 / 浮时，**不碰 duration**；
@@ -344,11 +396,11 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
     // 永不为空串，二者当前等价，但同一函数里混用两种口径迟早被后人「统一」错方向。
     case 'baselineStart': {
       const diff = ctx.baselineDiffs?.[task.id]
-      return diff?.baselineStart === undefined ? EMPTY : { type: 'text', text: diff.baselineStart }
+      return diff?.baselineStart === undefined ? EMPTY : { type: 'date', value: diff.baselineStart }
     }
     case 'baselineFinish': {
       const diff = ctx.baselineDiffs?.[task.id]
-      return diff?.baselineFinish === undefined ? EMPTY : { type: 'text', text: diff.baselineFinish }
+      return diff?.baselineFinish === undefined ? EMPTY : { type: 'date', value: diff.baselineFinish }
     }
     // 差异是**工作日**（正数 = 延后），与 sv（货币）不同量纲 —— spec 缺陷 D4。
     // 摘要行不产生 diff 键（基线快照只含叶子）→ 这里自然落到 EMPTY，与 duration /

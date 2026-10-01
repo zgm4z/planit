@@ -12,6 +12,7 @@ import {
   getOutlineCellValue,
   isEnabledOutlineColumnKey,
   isOutlineColumnKey,
+  responsiveHiddenColumns,
   resolveScheduleDates,
   type OutlineColumnKey,
 } from './outlineColumns'
@@ -115,6 +116,12 @@ describe('OUTLINE_COLUMNS 注册表', () => {
   it('只有 title 是 flex，且它在默认可见列里', () => {
     expect(OUTLINE_COLUMNS.filter((c) => c.flex).map((c) => c.key)).toEqual(['title'])
     expect(DEFAULT_VISIBLE_COLUMNS).toContain('title')
+  })
+
+  it('默认可见列 = §7 的信息量优先五列，不含 kind / note / id / priority 等噪音列', () => {
+    // 显式钉住默认集 —— 上一版把 kind 与两列恒空的 note/priority 摆在默认里，
+    // 挤占了「开始 / 结束」的横向空间（spec §7 说的「丢了最重要的、留了噪音」）。
+    expect(DEFAULT_VISIBLE_COLUMNS).toEqual(['title', 'start', 'finish', 'duration', 'progress'])
   })
 
   it('默认可见列的每个 key 都是可用列，且顺序与注册表一致', () => {
@@ -224,6 +231,40 @@ describe('isOutlineColumnKey / isEnabledOutlineColumnKey', () => {
   })
 })
 
+describe('responsiveHiddenColumns — §7 的列隐藏（按优先级，不是等比压缩）', () => {
+  it('宽屏（≥1100）不隐藏任何列', () => {
+    expect(responsiveHiddenColumns(false, false)).toEqual([])
+  })
+
+  it('< 1100 隐藏 note / id / priority —— 把宽度让给标题列', () => {
+    expect(new Set(responsiveHiddenColumns(true, false))).toEqual(new Set(['note', 'id', 'priority']))
+  })
+
+  it('< 900 只保留 title / start / finish / duration', () => {
+    const hidden = new Set(responsiveHiddenColumns(true, true))
+    expect(ENABLED_KEYS.filter((key) => !hidden.has(key))).toEqual([
+      'title',
+      'start',
+      'finish',
+      'duration',
+    ])
+  })
+
+  it('任何档位下都不隐藏 title（全表的地基）', () => {
+    expect(responsiveHiddenColumns(true, false)).not.toContain('title')
+    expect(responsiveHiddenColumns(true, true)).not.toContain('title')
+    expect(responsiveHiddenColumns(false, false)).not.toContain('title')
+  })
+
+  it('隐藏集只做减法：不引入用户偏好里没有的 key（响应式不改写偏好）', () => {
+    // 这条不变量的意义在调用方（ProjectView）：有效列 = 用户偏好 − 隐藏集。
+    // 这里保证隐藏集本身不含「新增」语义 —— 它永远不会凭空让一列出现。
+    for (const key of responsiveHiddenColumns(true, true)) {
+      expect(isOutlineColumnKey(key)).toBe(true)
+    }
+  })
+})
+
 describe('resolveScheduleDates — 单一日期口径', () => {
   it('返回 scheduled*（最终排期），不是 early*', () => {
     // 刻意让 scheduled* 与 early* 不同：只有读对了字段才能通过
@@ -260,9 +301,10 @@ describe('getOutlineCellValue', () => {
     expect(getOutlineCellValue('title', ctx)).toEqual({ type: 'text', text: '写文档' })
     expect(getOutlineCellValue('note', ctx)).toEqual({ type: 'text', text: '备注' })
     expect(getOutlineCellValue('id', ctx)).toEqual({ type: 'text', text: task.id })
-    // 断言的是 scheduled*（最终排期），不是 early* —— 见 ctx 上的注释
-    expect(getOutlineCellValue('start', ctx)).toEqual({ type: 'text', text: '2026-03-10' })
-    expect(getOutlineCellValue('finish', ctx)).toEqual({ type: 'text', text: '2026-03-12' })
+    // 断言的是 scheduled*（最终排期），不是 early* —— 见 ctx 上的注释。
+    // 日期列走 `date` 变体（渲染层过 formatDate 保证 YYYY-MM-DD），不是裸 text。
+    expect(getOutlineCellValue('start', ctx)).toEqual({ type: 'date', value: '2026-03-10' })
+    expect(getOutlineCellValue('finish', ctx)).toEqual({ type: 'date', value: '2026-03-12' })
     expect(getOutlineCellValue('duration', ctx)).toEqual({ type: 'days', count: 3 })
     expect(getOutlineCellValue('priority', ctx)).toEqual({ type: 'text', text: '4' })
     expect(getOutlineCellValue('progress', ctx)).toEqual({ type: 'percent', value: 40 })
@@ -360,8 +402,8 @@ describe('getOutlineCellValue', () => {
         },
       },
     }
-    expect(getOutlineCellValue('baselineStart', withDiff)).toEqual({ type: 'text', text: '2026-03-02' })
-    expect(getOutlineCellValue('baselineFinish', withDiff)).toEqual({ type: 'text', text: '2026-03-04' })
+    expect(getOutlineCellValue('baselineStart', withDiff)).toEqual({ type: 'date', value: '2026-03-02' })
+    expect(getOutlineCellValue('baselineFinish', withDiff)).toEqual({ type: 'date', value: '2026-03-04' })
     // 差异是**工作日**（unit = days），不是金额 —— 与 sv 不同量纲
     expect(getOutlineCellValue('startVariance', withDiff)).toEqual({ type: 'days', count: 0 })
     expect(getOutlineCellValue('finishVariance', withDiff)).toEqual({ type: 'days', count: 2 })
