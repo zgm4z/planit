@@ -94,6 +94,13 @@ export async function listProjects(): Promise<ProjectSummary[]> {
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
 }
 
+/**
+ * 删除一个项目。
+ *
+ * **当前没有 UI 调用方** —— 第一阶段未提供「删除计划」入口（设计文档的验收标准
+ * 里也没有这一条）。保留它是因为这是仓储层该有的 API：将来在项目列表加删除
+ * 按钮时直接调用即可，无需再动持久化代码。
+ */
 export async function deleteProject(id: string): Promise<void> {
   await withStore('readwrite', (store) => store.delete(id))
 }

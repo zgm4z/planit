@@ -16,11 +16,9 @@
 
   // 描边
   --planit-border: #e2e8f0;
-  --planit-border-strong: #cbd5e1;
 
   // 文字
   --planit-text: #0f172a;
-  --planit-text-secondary: #475569;
   --planit-text-muted: #94a3b8;
 
   // 强调
@@ -31,11 +29,10 @@
 
   // 语义
   --planit-critical: #ef4444;
-  --planit-critical-soft: #fee2e2;
-  --planit-success: #22c55e;
 
-  // 尺寸（甘特图的像素常量，JS 侧从 useSharedVirtualizer.ts 读同一批数字）
-  --planit-row-height: 28px;
+  // 尺寸（甘特图布局用）。**行高不在此列** —— 行高只由 JS 的
+  // useSharedVirtualizer.ROW_HEIGHT 决定（虚拟化器用它算位置、行用它作内联 height），
+  // CSS 不持有对应变量，因此没有「两处要同步」的问题。
   --planit-ruler-height: 32px;
   --planit-outline-width: 320px;
   --planit-inspector-width: 300px;

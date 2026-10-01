@@ -28,7 +28,6 @@ export const theme = createTheme({
     lg: '14px',
     xl: '16px',
   },
-  // 与 --planit-row-height 对齐
   spacing: {
     xs: '4px',
     sm: '8px',

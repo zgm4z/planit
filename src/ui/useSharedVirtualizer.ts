@@ -1,7 +1,11 @@
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import type { RefObject } from 'react'
 
-/** 行高。JS 与 CSS（--planit-row-height）必须保持一致，改动时两处同步 */
+/**
+ * 行高（像素）。**这是唯一来源** —— 虚拟化器用它做 estimateSize，每行用它作
+ * 内联 height，CSS 侧不持有对应的自定义属性（早期那个 `--planit-row-height`
+ * 并无任何 CSS 消费方，已删除）。改这里即可，不存在「两处同步」。
+ */
 export const ROW_HEIGHT = 28
 
 /**
