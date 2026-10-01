@@ -11,6 +11,7 @@
     "notFound": "项目不存在，可能已被删除"
   },
   "toolbar": {
+    "backToList": "返回项目列表",
     "newTask": "新建任务",
     "indent": "缩进",
     "indentHint": "缩进为前一个任务的子任务",

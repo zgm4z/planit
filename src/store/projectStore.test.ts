@@ -137,6 +137,34 @@ describe('projectStore.undo / redo', () => {
   })
 })
 
+describe('projectStore.closeProject', () => {
+  beforeEach(reset)
+
+  it('closeProject 清空项目、历史栈与错误状态', () => {
+    const a = seedTask('A')
+    const b = seedTask('B')
+
+    // 制造 lastError：A→B 之后再 B→A 会成环，被命令层拒绝并写入 lastError
+    state().dispatch({ type: 'dependency.create', label: '建立依赖', payload: { fromTaskId: a, toTaskId: b } })
+    state().dispatch({ type: 'dependency.create', label: '建立依赖', payload: { fromTaskId: b, toTaskId: a } })
+
+    // 让 redoStack 也非空
+    state().undo()
+
+    // 前置条件：三处状态都必须真的非空，否则下面的断言会假绿
+    expect(state().undoStack.length).toBeGreaterThan(0)
+    expect(state().redoStack.length).toBeGreaterThan(0)
+    expect(state().lastError).toBeTruthy()
+
+    state().closeProject()
+
+    expect(state().project).toBeNull()
+    expect(state().undoStack).toEqual([])
+    expect(state().redoStack).toEqual([])
+    expect(state().lastError).toBeNull()
+  })
+})
+
 describe('命令合并（coalesceKey）', () => {
   beforeEach(reset)
 

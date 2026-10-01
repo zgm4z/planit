@@ -8,6 +8,7 @@
     "notFound": "Project not found — it may have been deleted"
   },
   "toolbar": {
+    "backToList": "Back to project list",
     "newTask": "New task",
     "indent": "Indent",
     "indentHint": "Make this a child of the previous task",

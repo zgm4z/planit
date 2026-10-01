@@ -27,6 +27,7 @@ interface ProjectState {
   undo: () => void
   redo: () => void
   loadProject: (project: Project) => void
+  closeProject: () => void
   clearError: () => void
 }
 
@@ -106,6 +107,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadProject: (project) => {
     set({ project, undoStack: [], redoStack: [], lastError: null })
+  },
+
+  /**
+   * 关闭当前项目，回到项目列表。
+   *
+   * 同时清空历史栈 —— 撤销栈是**项目级**的，跨项目保留会让 A 项目的
+   * 撤销记录作用到 B 项目上，那是灾难性的。
+   */
+  closeProject: () => {
+    set({ project: null, undoStack: [], redoStack: [], lastError: null })
   },
 
   clearError: () => set({ lastError: null }),

@@ -1,0 +1,145 @@
+// 变量与 mixin 由 vite.config.ts 的 additionalData 自动注入，无需 @use
+
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--planit-bg-app);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+// 唯一的滚动容器：垂直滚动整个内容，水平滚动甘特图
+.scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--planit-bg-surface);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: var(--planit-outline-width) var(--gantt-width);
+  grid-template-rows: var(--planit-ruler-height) auto;
+  min-height: 100%;
+}
+
+// 左上角：同时固定在顶部与左侧
+.corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--planit-bg-surface);
+  border-right: 1px solid var(--planit-border);
+  border-bottom: 1px solid var(--planit-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--planit-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ruler {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--planit-bg-surface);
+  border-bottom: 1px solid var(--planit-border);
+}
+
+// 左列在水平滚动时固定
+.outline {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--planit-bg-surface);
+  border-right: 1px solid var(--planit-border);
+}
+
+.gantt {
+  position: relative;
+}
+
+.virtualLayer {
+  position: relative;
+  width: 100%;
+}
+
+// ── 任务树 ──────────────────────────────────────────────
+
+.outlineRow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--planit-border);
+  cursor: default;
+  user-select: none;
+
+  &:hover {
+    background: var(--planit-bg-hover);
+  }
+}
+
+.outlineRowSelected {
+  background: var(--planit-accent-soft);
+
+  &:hover {
+    background: var(--planit-accent-soft);
+  }
+}
+
+.outlineRowInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.outlineToggle {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--planit-text-muted);
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--planit-text);
+  }
+}
+
+.outlineName {
+  @include truncate;
+}
+
+.outlineNameSummary {
+  font-weight: 600;
+}
+
+.milestoneGlyph {
+  color: var(--planit-accent-strong);
+  font-size: 10px;
+}
+
+// ── 甘特图行（Task 16 起在行内绘制网格与任务条）──────────
+// 与左侧 outlineRow 用同一份 virtualItems 定位，因此行高与行距完全一致。
+.ganttRow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px solid var(--planit-border);
+}
