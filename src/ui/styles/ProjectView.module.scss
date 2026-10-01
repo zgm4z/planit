@@ -140,11 +140,4 @@
   font-size: 10px;
 }
 
-// ── 甘特图行（Task 16 起在行内绘制网格与任务条）──────────
-// 与左侧 outlineRow 用同一份 virtualItems 定位，因此行高与行距完全一致。
-.ganttRow {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-bottom: 1px solid var(--planit-border);
-}
+// 甘特图的行与任务条样式在 GanttPane.module.scss（GanttRows / TaskBar 使用）

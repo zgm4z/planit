@@ -1,0 +1,95 @@
+// 甘特图区域（刻度、网格、任务条）的样式。
+// 变量与 mixin 由 vite.config.ts 的 additionalData 自动注入，无需 @use。
+
+.rulerTick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--planit-border);
+  padding-left: 4px;
+  font-size: 10px;
+  color: var(--planit-text-muted);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.todayLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--planit-critical);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.weekendBand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--planit-bg-subtle);
+  pointer-events: none;
+}
+
+.bar {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--planit-accent-gradient);
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.35);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.barCritical {
+  background: var(--planit-accent-strong);
+}
+
+.barConflict {
+  outline: 2px solid var(--planit-critical);
+  outline-offset: 1px;
+}
+
+.barProgress {
+  height: 100%;
+  background: rgba(15, 23, 42, 0.22);
+  pointer-events: none;
+}
+
+.barHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.barHandleLeft {
+  left: 0;
+}
+
+.barHandleRight {
+  right: 0;
+}
+
+.milestone {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--planit-accent-strong);
+  transform: rotate(45deg);
+  cursor: grab;
+}
+
+.milestoneCritical {
+  background: var(--planit-critical);
+}
+
+.row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px solid var(--planit-border);
+}
