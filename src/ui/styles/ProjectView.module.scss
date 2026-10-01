@@ -391,3 +391,30 @@
   color: var(--planit-text-faint);
   font-size: var(--planit-fs-sm);
 }
+/* ── v0.7 日历视图 ─────────────────────────────── */
+.calendarView { display: flex; align-items: flex-start; min-height: 100%; }
+.calendarLeft { flex: 1 1 auto; min-width: 0; padding: var(--planit-sp-16); }
+.calendarRight {
+  flex: 0 0 280px;
+  padding: var(--planit-sp-16);
+  border-left: 1px solid var(--planit-border);
+}
+.calendarNav {
+  display: flex; align-items: center; gap: var(--planit-sp-8);
+  margin-bottom: var(--planit-sp-8);
+}
+.calendarGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--planit-sp-2); }
+.calendarHead {
+  font-size: var(--planit-fs-xs);
+  color: var(--planit-text-muted);
+  text-align: center;
+}
+.calendarDay {
+  min-height: 40px;
+  padding: var(--planit-sp-4);
+  border: 1px solid var(--planit-border);
+  border-radius: 2px;
+  font-size: var(--planit-fs-xs);
+}
+.calendarDayOff { background: var(--planit-bg-subtle); color: var(--planit-text-faint); }
+.calendarDayPad { border-color: transparent; }

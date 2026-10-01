@@ -21,7 +21,7 @@
     "redoWithLabel": "重做：{{label}}",
     "zoom": { "day": "日", "week": "周", "month": "月" },
     "zoomLabel": "缩放",
-    "view": { "gantt": "甘特图", "outline": "任务列表" },
+    "view": { "gantt": "甘特图", "outline": "任务列表", "calendar": "日历", "resources": "资源" },
     "language": "语言",
     "more": "更多"
   },
@@ -278,6 +278,19 @@
     "custom": "自定义",
     "weekdays": { "mon": "一", "tue": "二", "wed": "三", "thu": "四", "fri": "五", "sat": "六", "sun": "日" }
   },
+  "calendarView": {
+    "prevMonth": "上一月",
+    "nextMonth": "下一月",
+    "customDays": "自定义日",
+    "noExceptions": "还没有例外日期。",
+    "normalHours": "正常时数",
+    "hoursPerDay": "每日工时（小时）",
+    "addException": "添加例外",
+    "rangeStart": "开始",
+    "rangeEnd": "结束",
+    "kindLabel": "类型",
+    "removeException": "移除这条例外"
+  },
   "commands": {
     "task.create": "新建任务",
     "task.rename": "重命名任务",
@@ -325,7 +338,9 @@
     "resource.setEfficiency": "设置效率",
     "resource.setAvailablePeriod": "设置可用期间",
     "resource.setCost": "设置成本",
-    "calendar.setHoursPerDay": "设置每日工时"
+    "calendar.setHoursPerDay": "设置每日工时",
+    "calendar.addExceptionRange": "添加例外日期",
+    "calendar.removeExceptionRange": "移除例外日期"
   },
   "conflicts": {
     "constraintViolatedByDependency": "任务被固定为「{{constraint}} {{date}}」，但依赖要求它不早于 {{earliest}}",

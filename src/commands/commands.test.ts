@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createProject } from '../domain/model/factories'
 import type { Project } from '../domain/model/types'
 import { CycleError } from '../domain/scheduler/graph'
+import { isWorkday } from '../domain/calendar/workdays'
 import { registerHandler, execute, __resetRegistryForTests } from './registry'
 import { taskHandlers } from './taskCommands'
 import { taskStructureHandlers } from './taskStructureCommands'
@@ -760,5 +761,98 @@ describe('v1.0 切换 / 删除基线 + 基准日', () => {
 
     const cleared = run(set, 'project.setStatusDate', { statusDate: undefined })
     expect(cleared.statusDate).toBeUndefined()
+  })
+})
+
+describe('v0.7 区间例外命令', () => {
+  beforeEach(setup)
+
+  it('addExceptionRange 把区间展开成逐日条目（首尾都含）', () => {
+    const next = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-16',
+      end: '2026-03-20',
+      kind: 'holiday',
+    })
+    const exceptions = next.calendars.default.exceptions
+    expect(Object.keys(exceptions).sort()).toEqual([
+      '2026-03-16', '2026-03-17', '2026-03-18', '2026-03-19', '2026-03-20',
+    ])
+    expect(exceptions['2026-03-18']).toEqual({ kind: 'holiday' })
+  })
+
+  it('kind = custom 展开成 custom 条目，引擎据此判为工作日（区间内每一天）', () => {
+    const next = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-14', // 周六
+      end: '2026-03-15', // 周日
+      kind: 'custom',
+    })
+    const calendar = next.calendars.default
+    expect(calendar.exceptions['2026-03-14']).toEqual({
+      kind: 'custom',
+      start: '2026-03-14',
+      end: '2026-03-14',
+    })
+    // 未被读取的 start/end 在这里**按单日写入**；生效靠的是单日精确查表（isWorkday）
+    expect(isWorkday('2026-03-14', calendar)).toBe(true)
+    expect(isWorkday('2026-03-15', calendar)).toBe(true)
+  })
+
+  it('holiday 区间让区间内每一天都变成非工作日（这正是「区间只生效首日」的修复点）', () => {
+    const next = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-16',
+      end: '2026-03-18',
+      kind: 'holiday',
+    })
+    expect(isWorkday('2026-03-17', next.calendars.default)).toBe(false)
+  })
+
+  it('start === end 是合法的单日例外', () => {
+    const next = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-16',
+      end: '2026-03-16',
+      kind: 'holiday',
+    })
+    expect(Object.keys(next.calendars.default.exceptions)).toEqual(['2026-03-16'])
+  })
+
+  it('反向区间（end < start）是 no-op，不写任何键', () => {
+    const next = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-20',
+      end: '2026-03-16',
+      kind: 'holiday',
+    })
+    expect(next.calendars.default.exceptions).toEqual({})
+  })
+
+  it('未知 calendarId 是 no-op（不抛）', () => {
+    const next = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'ghost',
+      start: '2026-03-16',
+      end: '2026-03-17',
+      kind: 'holiday',
+    })
+    expect(next.calendars).toEqual(project.calendars)
+  })
+
+  it('removeExceptionRange 只删区间内的键，区间外原样保留', () => {
+    const added = run(project, 'calendar.addExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-16',
+      end: '2026-03-20',
+      kind: 'holiday',
+    })
+    const removed = run(added, 'calendar.removeExceptionRange', {
+      calendarId: 'default',
+      start: '2026-03-17',
+      end: '2026-03-19',
+    })
+    expect(Object.keys(removed.calendars.default.exceptions).sort()).toEqual([
+      '2026-03-16', '2026-03-20',
+    ])
   })
 })

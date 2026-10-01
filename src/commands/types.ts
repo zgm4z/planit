@@ -54,6 +54,9 @@ export type CommandType =
   | 'task.setEffort'
   // 日历（v0.5）
   | 'calendar.setHoursPerDay'
+  // 日历（v0.7）：按区间增删例外。**在命令层逐日展开** —— 引擎的 isWorkday 只认单日键
+  | 'calendar.addExceptionRange'
+  | 'calendar.removeExceptionRange'
   // 基线 / 挣值（v1.0）
   | 'project.setBaseline'
   | 'project.setActiveBaseline'
