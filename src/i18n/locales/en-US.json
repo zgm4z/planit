@@ -170,6 +170,7 @@
     "select": "Select resource",
     "empty": "No resources yet.",
     "create": "New resource",
+    "delete": "Delete resource",
     "name": "Name",
     "email": "Email",
     "kind": "Type",

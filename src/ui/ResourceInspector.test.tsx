@@ -94,6 +94,25 @@ describe('资源面板', () => {
     await user.click(screen.getByRole('button', { name: '新建资源' }))
     expect(Object.keys(useProjectStore.getState().project!.resources)).toHaveLength(2)
   })
+
+  it('新建资源后自动选中新资源（面板显示的当前资源名指向新资源）', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    // 新建前展示的是既有资源「张三」
+    expect(screen.getByLabelText('名称')).toHaveValue('张三')
+    await user.click(screen.getByRole('button', { name: '新建资源' }))
+    // 建完即改：名称输入框应指向新资源（资源数 1 → 新资源名「名称 2」），而非旧资源
+    expect(screen.getByLabelText('名称')).toHaveValue('名称 2')
+  })
+
+  it('点删除按钮后，该资源从 project.resources 消失（级联清分配由命令层负责）', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await user.click(screen.getByRole('button', { name: '删除资源' }))
+    const resources = useProjectStore.getState().project!.resources
+    expect(resources[resourceId]).toBeUndefined()
+    expect(Object.keys(resources)).toHaveLength(0)
+  })
 })
 
 describe('资源面板 —— 一个真实分配下的总计', () => {

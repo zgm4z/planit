@@ -1,14 +1,41 @@
 import { useState } from 'react'
-import { ActionIcon, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { ActionIcon, Button, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
-import type { CommandType } from '../commands/types'
+import type {
+  ResourceRenamePayload,
+  ResourceSetAvailablePeriodPayload,
+  ResourceSetAvailabilityPayload,
+  ResourceSetCostPayload,
+  ResourceSetEfficiencyPayload,
+  ResourceSetEmailPayload,
+  ResourceSetKindPayload,
+} from '../commands/resourceCommands'
 import type { ResourceKind } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { AssignmentSection } from './AssignmentSection'
 
 const KINDS: ResourceKind[] = ['staff', 'equipment', 'material', 'group']
+
+/**
+ * `send` 只服务本面板里**输入框驱动**的资源命令。把「命令类型 → payload」钉在一张
+ * 本地小表上，泛型参数就能让每个调用点的 payload 形状被真正检查 —— 否则 payload
+ * 只能是 `unknown`，字段名写错（把 resourceId 拼成 id）编译器也不会报。
+ *
+ * 根因是全局的 `Command<P>` 不是按 type 收窄的可辨识联合；给**整个** CommandType
+ * 建映射属于 commands/types.ts 的职责，不在本次改动范围，故此处只收本面板用到的这几条。
+ */
+interface ResourceCommandMap {
+  'resource.rename': ResourceRenamePayload
+  'resource.setKind': ResourceSetKindPayload
+  'resource.setEmail': ResourceSetEmailPayload
+  'resource.setAvailability': ResourceSetAvailabilityPayload
+  'resource.setEfficiency': ResourceSetEfficiencyPayload
+  'resource.setAvailablePeriod': ResourceSetAvailablePeriodPayload
+  'resource.setCost': ResourceSetCostPayload
+}
 
 /**
  * 资源面板（spec §4.1）—— Inspector 的第三个 Tab。
@@ -32,9 +59,49 @@ export function ResourceInspector() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = (selectedId ? project.resources[selectedId] : undefined) ?? resources[0]
 
-  /** 统一 dispatch 辅助：命令类型是联合字面量，这里显式收窄 */
-  const send = (type: CommandType, label: string, payload: unknown, coalesceKey?: string) =>
-    dispatch({ type, label, payload, coalesceKey } as Parameters<typeof dispatch>[0])
+  /** 统一 dispatch 辅助：泛型把 payload 与命令类型对上（见 ResourceCommandMap） */
+  const send = <T extends keyof ResourceCommandMap>(
+    type: T,
+    label: string,
+    payload: ResourceCommandMap[T],
+    coalesceKey?: string,
+  ) => dispatch({ type, label, payload, coalesceKey })
+
+  /**
+   * 新建资源并**立刻选中它**——「建完即改」是新建流程最自然的期望；
+   * 不选中就会让用户下一眼（与下一次编辑）落在旧资源上。
+   *
+   * `resource.create` 的 id 由命令层 `nextId('res')` 生成，payload 不接受 id、命令也不
+   * 回传新 id（见 resourceCommands.ts），因此在 UI 侧无法预知。这里用 dispatch 前后
+   * resources 的 **key 差集**定位刚建的那一个。dispatch 是同步的，`getState()` 读到的
+   * 已是新状态，选中态立即生效，无需等下一次渲染。
+   */
+  const handleCreate = () => {
+    const before = new Set(Object.keys(project.resources))
+    dispatch({
+      type: 'resource.create',
+      label: 'commands.resource.create',
+      payload: { name: `${t('resource.name')} ${resources.length + 1}` },
+    })
+    const after = useProjectStore.getState().project?.resources ?? {}
+    const newId = Object.keys(after).find((id) => !before.has(id))
+    if (newId) setSelectedId(newId)
+  }
+
+  /**
+   * 删除当前资源。`resource.delete` 会**级联清掉它的全部分配**（spec §5，Task 4 已实现），
+   * 是破坏性操作；但不加二次确认——与「删任务」等既有破坏性操作一致，靠撤销兜底。
+   * 删完把选中态归零：派生选择自然落到剩下资源里的第一个（全删光则进空态）。
+   */
+  const handleDelete = () => {
+    if (!selected) return
+    dispatch({
+      type: 'resource.delete',
+      label: 'commands.resource.delete',
+      payload: { resourceId: selected.id },
+    })
+    setSelectedId(null)
+  }
 
   if (!selected) {
     return (
@@ -45,13 +112,7 @@ export function ResourceInspector() {
         <ActionIcon
           variant="light"
           aria-label={t('resource.create')}
-          onClick={() =>
-            dispatch({
-              type: 'resource.create',
-              label: 'commands.resource.create',
-              payload: { name: `${t('resource.name')} 1` },
-            })
-          }
+          onClick={handleCreate}
         >
           +
         </ActionIcon>
@@ -78,13 +139,7 @@ export function ResourceInspector() {
         <ActionIcon
           variant="light"
           aria-label={t('resource.create')}
-          onClick={() =>
-            dispatch({
-              type: 'resource.create',
-              label: 'commands.resource.create',
-              payload: { name: `${t('resource.name')} ${resources.length + 1}` },
-            })
-          }
+          onClick={handleCreate}
         >
           +
         </ActionIcon>
@@ -186,6 +241,15 @@ export function ResourceInspector() {
           send('resource.setCost', 'commands.resource.setCost', { resourceId: selected.id, cost: { ...selected.cost, currency: event.target.value } }, `resource.setCost:${selected.id}`)
         }
       />
+
+      <Button
+        color="red"
+        variant="light"
+        leftSection={<IconTrash size={16} />}
+        onClick={handleDelete}
+      >
+        {t('resource.delete')}
+      </Button>
 
       <Text fz="xs" c="dimmed">
         {t('resource.totalAssignments', { count: totals.assignments })}
