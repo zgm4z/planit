@@ -30,6 +30,7 @@ import type {
   Task,
   TaskId,
 } from '../domain/model/types'
+import { findActiveBaseline } from '../domain/model/baseline'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore, type InspectorTab } from '../store/viewStore'
@@ -292,7 +293,8 @@ function BaselineGroup({ taskId, isSummary }: { taskId: TaskId; isSummary: boole
   const diff = useScheduleStore((state) => state.result.baselineDiffs[taskId])
 
   const baselines = project.baselines
-  const active = baselines.find((baseline) => baseline.id === project.activeBaselineId)
+  // 活动基线判定收敛到 findActiveBaseline（菜单 / 项目面板同一处取）—— 见该函数的注释。
+  const active = findActiveBaseline(project)
   const baselineId = useId()
 
   // 基线里有、但项目里已不存在的任务 —— 逐个列出并标注「已删除」（spec §1.2 / 判据 2）。

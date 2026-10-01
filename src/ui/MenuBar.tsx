@@ -4,6 +4,7 @@ import { Menu } from '@mantine/core'
 import { IconCheck } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
+import { findActiveBaseline } from '../domain/model/baseline'
 import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useViewStore, type ActiveView, type ZoomLevel } from '../store/viewStore'
@@ -485,7 +486,9 @@ function ProjectItems() {
   if (!project) return null
 
   const baselines = project.baselines
-  const activeBaseline = baselines.find((baseline) => baseline.id === project.activeBaselineId)
+  // 活动基线的判定收敛到 findActiveBaseline（项目面板的基线事实行同一处取）——
+  // 「删除当前基线」的可删目标就是它，禁用与否也由它决定（§10.3.2：不满足前提就禁用）。
+  const activeBaseline = findActiveBaseline(project)
   const deleteBaselineDisabled = activeBaseline === undefined
 
   const directions: { value: SchedulingDirection; label: string }[] = [

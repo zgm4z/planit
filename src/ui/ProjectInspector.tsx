@@ -2,6 +2,7 @@ import { useId } from 'react'
 import { Accordion, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 
+import { findActiveBaseline } from '../domain/model/baseline'
 import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
@@ -56,6 +57,43 @@ export function ProjectInspector() {
 
   // backward 下开始日期是派生值：所有叶子 scheduledStart 的最小值
   const derivedStart = summary?.start ?? project.startDate
+
+  // ── 基线事实（项目级）─────────────────────────────────────────────────
+  // 菜单「项目 > 保存基线 / 删除当前基线」的**落点**：打开项目默认不选中任务、
+  // 右栏停在本 Tab，而基线的操作界面只在「任务」Tab —— 这里若无这一行，用户点完
+  // 菜单界面纹丝不动，正是「点了没反应比明确禁用更糟」。
+  //
+  // 数据源与菜单的两条命令**同源**：都走 findActiveBaseline（唯一的活动基线判定），
+  // 条数直接取 project.baselines —— 绝不在这里另写一份「有没有基线」的规则。
+  const baselines = project.baselines
+  const activeBaseline = findActiveBaseline(project)
+
+  // 三种事实（§3.3）：
+  //   没有基线            → null → 由 StatRow 的 unset 渲染说明性文字「未设置基线」
+  //                        （能说出原因就给原因，比一个 `—` 有用）
+  //   有基线且有活动基线   → 活动基线名；多条时附条数 —— 一眼看出「有几条、哪条在用」
+  //   有基线但选了「不对比」→ 说明「共 N 条、未选对比」，同样不能空着
+  const baselineValue =
+    baselines.length === 0
+      ? null
+      : activeBaseline
+        ? baselines.length > 1
+          ? t('inspector.project.baselineCount', {
+              name: activeBaseline.name,
+              count: baselines.length,
+            })
+          : activeBaseline.name
+        : t('inspector.project.baselineNoneActive', { count: baselines.length })
+
+  // 放在变量里是因为摘要为空 / 非空两个分支都要用它（空态也得看得见基线事实）。
+  const baselineRow = (
+    <StatRow
+      label={t('inspector.project.baselineLabel')}
+      value={baselineValue}
+      unset={t('inspector.baseline.noBaseline')}
+      testId="project-baseline"
+    />
+  )
 
   return (
     <Stack gap={GAP_BLOCK}>
@@ -197,16 +235,22 @@ export function ProjectInspector() {
                   value={formatDays(summary.taskCount) ?? '—'}
                   testId="project-summary-tasks"
                 />
+                {/* 基线事实：与上三行同栅格。它是**项目级**的，不随摘要算不算得出来
+                    而消失 —— 所以两个分支都渲染（空项目也能保存基线，得看得到反应）。 */}
+                {baselineRow}
               </StatList>
             ) : (
-              // 算不出来（§3.3）：一个可排的任务都没有 → 弱化 —
-              <Text
-                fz="sm"
-                data-testid="project-summary-empty"
-                style={{ color: 'var(--planit-text-faint)' }}
-              >
-                —
-              </Text>
+              <StatList>
+                {/* 算不出来（§3.3）：一个可排的任务都没有 → 弱化 — */}
+                <Text
+                  fz="sm"
+                  data-testid="project-summary-empty"
+                  style={{ color: 'var(--planit-text-faint)' }}
+                >
+                  —
+                </Text>
+                {baselineRow}
+              </StatList>
             )}
           </Accordion.Panel>
         </Accordion.Item>
