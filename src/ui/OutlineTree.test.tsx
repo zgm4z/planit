@@ -80,7 +80,15 @@ beforeEach(async () => {
   parentId = parent.id
   childId = child.id
 
-  useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+  useProjectStore.setState({
+    project,
+    undoStack: [],
+    redoStack: [],
+    lastError: null,
+    // 合并屏障是跨用例的全局状态：漏清会让下一条 dispatch 强制新开记录，
+    // 把「两次编辑是否合并」这条断言变成假阳性 / 假阴性
+    coalesceBarrier: false,
+  })
 })
 
 describe('OutlineTree', () => {
@@ -174,6 +182,42 @@ describe('OutlineTree', () => {
     expect(useProjectStore.getState().project!.tasks[childId].note).toBe('这是一条备注')
     // 提交后回到只读态
     expect(screen.getByTestId(`outline-note-${childId}`)).toBeInTheDocument()
+  })
+
+  it('备注列：失焦即提交（不必按回车）', async () => {
+    const user = userEvent.setup()
+    renderTree(OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'note'))
+
+    await user.dblClick(screen.getByTestId(`outline-note-${childId}`))
+    const input = screen.getByTestId(`outline-note-input-${childId}`)
+    await user.type(input, '失焦就提交')
+    fireEvent.blur(input)
+
+    expect(useProjectStore.getState().project!.tasks[childId].note).toBe('失焦就提交')
+    // 提交后回到只读态
+    expect(screen.getByTestId(`outline-note-${childId}`)).toBeInTheDocument()
+  })
+
+  it('备注列：两次连续编辑各成一条撤销记录（中间无其它命令也不塌缩）', async () => {
+    const user = userEvent.setup()
+    renderTree(OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'note'))
+
+    // 第一次编辑：双击 → 输入 → **失焦**提交（顺带覆盖失焦这条路径）
+    await user.dblClick(screen.getByTestId(`outline-note-${childId}`))
+    await user.type(screen.getByTestId(`outline-note-input-${childId}`), '备注①')
+    fireEvent.blur(screen.getByTestId(`outline-note-input-${childId}`))
+
+    // 第二次编辑**同一个任务** —— 中间没有任何其它命令（连选中都没动过）。
+    // 两次 dispatch 的 coalesceKey 相同，若编辑开始时没打断合并，就会塌缩成一条。
+    await user.dblClick(screen.getByTestId(`outline-note-${childId}`))
+    await user.type(screen.getByTestId(`outline-note-input-${childId}`), '又改了{Enter}')
+
+    // 两次编辑各留一条撤销记录 —— 这才是本用例的判据（笔记内容仅作旁证；
+    // renderTree 传的是静态 project prop，编辑框初值取自那份不随 store 更新的快照）。
+    // 塌缩成一条时，一次 Ctrl+Z 会把两次编辑一起退回
+    // （这正是 projectStore 的 coalesceBarrier 明文要防的 bug）。
+    expect(useProjectStore.getState().undoStack).toHaveLength(2)
+    expect(useProjectStore.getState().project!.tasks[childId].note).toBe('又改了')
   })
 
   it('备注列：Escape 放弃编辑，store 不变', async () => {

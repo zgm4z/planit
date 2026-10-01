@@ -142,30 +142,51 @@
 
 // ── 列（甘特视图左列与大纲视图共用）───────────────────────
 
+// 单元格的**共用**外观（两个视图都读它）。表格化的部分（列分隔线、12px 字号）
+// 见下方只作用于大纲视图的规则。
 .outlineCell {
   display: flex;
   align-items: center;
   padding: 0 8px;
   height: 100%;
-  border-right: 1px solid var(--planit-border);
-  font-size: 12px;
   color: var(--planit-text);
   overflow: hidden;
   white-space: nowrap;
 }
 
+// 「表格化的列外观」**只在大纲视图**生效。`data-view` 由 ProjectView 挂在唯一的
+// 滚动容器上（见那里的注释）—— 它是两个视图间**唯一**的形态开关。
+//
+// 甘特视图若也套这套单元格外观，会带回 Task 3 引入的三处偏差：
+// 1) 在 kind / title 之间凭空多一条竖线；
+// 2) 让末格右边框叠到 .outline 的 border-right 上（1px 变 2px）；
+// 3) 把任务名从 13px（Mantine `md` baseline）压到 12px。
+// 甘特视图改动前是「单格、13px、无竖线」，这里必须保持等价。
+[data-view='outline'] .outlineCell {
+  border-right: 1px solid var(--planit-border);
+  font-size: 12px;
+}
+
 // 标题列：横向滚动时钉在左缘（spec §4.4）。甘特视图里左列整体已经 sticky，
-// 这里是 no-op；大纲视图里才真正生效。背景必须给 —— 否则下方的单元格会透上来。
+// 这里是 no-op；大纲视图里才真正生效。
 .outlineCellTitle {
   position: sticky;
   left: 0;
   z-index: 1;
   gap: 4px;
-  background: var(--planit-bg-surface);
 }
 
-.outlineRowSelected .outlineCellTitle {
-  background: var(--planit-accent-soft);
+// 不透明垫底**只在大纲视图**需要 —— 否则横向滚动时下方的单元格会透上来。
+// 甘特视图若也给：它会盖掉整行的 hover / 选中底色，悬停一行时只剩 28px 的
+// kind 列变色、标题区保持白色，看起来像渲染残缺（改动前是整行一起变灰）。
+[data-view='outline'] {
+  .outlineCellTitle {
+    background: var(--planit-bg-surface);
+  }
+
+  .outlineRowSelected .outlineCellTitle {
+    background: var(--planit-accent-soft);
+  }
 }
 
 .outlineCellMono {

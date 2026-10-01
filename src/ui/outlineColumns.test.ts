@@ -206,6 +206,16 @@ describe('getOutlineCellValue', () => {
     expect(getOutlineCellValue('freeSlack', ctx)).toEqual({ type: 'days', count: 1 })
   })
 
+  it('kind 列是字形的唯一权威来源：分组 ▤（不是三角）/ 里程碑 ◆ / 任务 ▪', () => {
+    // 渲染层（OutlineTree 的 KindCell）已改为消费这里的结果，不再另存一份表 ——
+    // 这条断言因此是「同一条规则两份实现」的唯一防线。
+    const group: Task = { ...createTask({ name: 'G', kind: 'group' }) }
+    // 分组**不是** ▾ —— ▾ 是 title 列折叠按钮的字形，两者重复正是缺陷 1
+    expect(getOutlineCellValue('kind', { ...ctx, task: group })).toEqual({ type: 'text', text: '▤' })
+    const milestone: Task = { ...createTask({ name: 'M', kind: 'milestone' }) }
+    expect(getOutlineCellValue('kind', { ...ctx, task: milestone })).toEqual({ type: 'text', text: '◆' })
+  })
+
   it('里程碑的 duration 显示破折号而不是 0 天', () => {
     const milestone: Task = { ...createTask({ name: 'M', kind: 'milestone' }) }
     expect(getOutlineCellValue('duration', { ...ctx, task: milestone })).toEqual({
