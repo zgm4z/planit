@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { Draft } from 'immer'
 import { createProject } from '../domain/model/factories'
 import type { Project } from '../domain/model/types'
 import { CycleError } from '../domain/scheduler/graph'
@@ -8,6 +7,7 @@ import { taskHandlers } from './taskCommands'
 import { taskStructureHandlers } from './taskStructureCommands'
 import { dependencyHandlers } from './dependencyCommands'
 import { calendarHandlers } from './calendarCommands'
+import { projectHandlers } from './projectCommands'
 import type { CommandType } from './types'
 
 let project: Project
@@ -19,11 +19,7 @@ function setup(): void {
     ...taskStructureHandlers,
     ...dependencyHandlers,
     ...calendarHandlers,
-    // 计划的 Task 11 才把 project.rename 的 handler 定义进 initCommands()，
-    // 但本文件在 Task 10 就要断言它。这里按计划 Task 11 的写法原样内联注册。
-    'project.rename': (draft: Draft<Project>, payload: { name: string }) => {
-      draft.name = payload.name
-    },
+    ...projectHandlers,
   }
   for (const [type, handler] of Object.entries(all)) {
     registerHandler(type as CommandType, handler)

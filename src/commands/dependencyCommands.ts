@@ -40,6 +40,9 @@ export const dependencyHandlers: Record<string, CommandHandler<any>> = {
       lag,
     }
 
+    // 注意：这里对「现有依赖 + 探测边」整体试排。如果 project.dependencies
+    // 本身已经含环（只可能来自损坏的持久化数据），任何新边都会被拒绝，
+    // 哪怕它与那个环无关。正常操作流下命令层不允许制造环，故不可达。
     // 试排一次：若新增这条边会成环，buildGraph 会抛出 CycleError，
     // produce 随之丢弃整个 draft，命令不产生任何效果。
     buildGraph(Object.values(draft.tasks), [...Object.values(draft.dependencies), probe])
