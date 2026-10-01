@@ -63,9 +63,13 @@ export interface Task {
   effortMode: EffortMode
   /** 该任务在「依赖允许的时间窗」内尽量早做还是晚做。默认 asap */
   schedulingOrder: SchedulingOrder
-  /** 备注。纯展示，引擎不消费 */
+  /** 备注。纯展示，引擎不消费。必填而非可选：v0.3 会把它做成常驻可编辑列，'' 省掉渲染处的 ?? '' */
   note: string
-  /** 占位：允许拆分。v0.5 消费 */
+  /**
+   * 占位：允许拆分。
+   * 注意不是 v0.5 —— v0.5 的 spec 明确「拆分排期不在本版」，该版本里
+   * 「允许拆分」仍保持禁用。所以它的消费者最早在 v0.6 之后。
+   */
   allowSplitting: boolean
   /** 占位：平衡优先级。数值越大越优先，v0.6 消费 */
   priority: number

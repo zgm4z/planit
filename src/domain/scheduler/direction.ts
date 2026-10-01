@@ -15,6 +15,15 @@ import type { Task } from '../model/types'
  * spec §4.2 的代码块把 backward 那两格写反了（把它算成
  * backward+asap → late、backward+alap → early），与它自己的表和
  * 解释文字都矛盾；此处按表实现。
+ *
+ * 与 Task.scheduling 的分工（两者不冲突，别在别处再定义一遍）：
+ *   Task.scheduling   定义**可行窗口** —— constraintLowerBound / constraintUpperBound
+ *                     给出 [下界, 上界]，硬日期约束把窗口夹紧
+ *   schedulingOrder   在窗口**之内**选端点 —— early 取早端，late 取晚端
+ *
+ * 极端组合（例如 startNoEarlierThan + alap）不需要特判：如果晚端落在
+ * 约束下界之前，lateStart < earlyStart，totalSlack 变负，
+ * detectConflicts 会如实报成 constraintViolatedByDependency。
  */
 export function usesLateSchedule(task: Task): boolean {
   return task.schedulingOrder === 'alap'
