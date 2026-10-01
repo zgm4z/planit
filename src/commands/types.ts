@@ -35,6 +35,25 @@ export type CommandType =
   | 'project.setDirection'
   | 'project.setStartDate'
   | 'project.setEndDate'
+  // 资源（v0.5）
+  | 'resource.create'
+  | 'resource.rename'
+  | 'resource.delete'
+  | 'resource.setKind'
+  | 'resource.setEmail'
+  | 'resource.setAvailability'
+  | 'resource.setEfficiency'
+  | 'resource.setAvailablePeriod'
+  | 'resource.setCost'
+  // 分配（v0.5）
+  | 'assignment.create'
+  | 'assignment.delete'
+  | 'assignment.setUnits'
+  // 工作量（v0.5）
+  | 'task.setEffortMode'
+  | 'task.setEffort'
+  // 日历（v0.5）
+  | 'calendar.setHoursPerDay'
 
 /**
  * 一次数据变更的完整描述。`payload` 必须是可序列化的普通数据

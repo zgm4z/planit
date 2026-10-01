@@ -27,14 +27,15 @@
     "collapse": "サブタスクを折りたたむ",
     "cell": {
       "days": "{{count}} 日",
-      "percent": "{{value}}%"
+      "percent": "{{value}}%",
+      "effort": "{{count}} 人日",
+      "cost": "{{amount}}"
     },
     "menu": {
       "title": "表示列",
       "titleLocked": "タイトル列は常に表示され、非表示にできません"
     },
     "disabledReason": {
-      "resources": "リソースと工数の機能（v0.5）が必要です",
       "baseline": "基準とアーンドバリューの機能（v1.0）が必要です"
     },
     "columns": {
@@ -74,7 +75,8 @@
   "inspector": {
     "title": "タスクの詳細",
     "projectTitle": "プロジェクトの詳細",
-    "tabs": { "task": "タスク", "project": "プロジェクト" },
+    "resourceTitle": "リソースの詳細",
+    "tabs": { "task": "タスク", "project": "プロジェクト", "resource": "リソース" },
     "groups": {
       "info": "タスク情報",
       "schedule": "スケジュール設定",
@@ -87,11 +89,8 @@
     "placeholder": {
       "baseline": "基準は未設定",
       "baselineHint": "基準との比較は v1.0 で提供されます。",
-      "assignmentsHint": "リソース機能は v0.5 で提供されます。",
-      "allocationHint": "リソース配分ポリシーは v0.5 で提供されます。",
+      "allocationHint": "リソース平準化は v0.6 で提供されます。",
       "expectedEffortHint": "工数は最小値・最大値・期待値の加重平均として計算できます。これらの値は Monte Carlo シミュレーションの変動要素としても使われます。見込み工数は v0.6 / v1.0 で提供されます。",
-      "resource": "リソース",
-      "units": "単位",
       "allocationOnChange": "リソース配分が変更されたとき",
       "allocationNeeds": "タスクの進捗に必要なもの",
       "min": "最小値",
@@ -111,7 +110,17 @@
     "taskCost": "タスクコスト",
     "resourceCost": "リソースコスト",
     "totalCost": "総コスト",
-    "disabledReason": { "effort": "工数と残りは v0.5 で提供されます", "cost": "コストは v0.5 で提供されます" },
+    "effortMode": "工数モード",
+    "effortModeDuration": "期間固定",
+    "effortModeEffort": "工数固定",
+    "effortInput": "工数",
+    "assignments": {
+      "none": "なし",
+      "units": "単位",
+      "addResource": "リソースを追加",
+      "selectResource": "リソースを選択…",
+      "addTask": "タスクを追加"
+    },
     "summaryHint": "これはサマリータスクです。日付は子タスクから集計されるため、直接編集できません。",
     "scheduling": "スケジューリング",
     "manualHint": "このタスクは手動で設定されており、自動では移動できません。",
@@ -152,11 +161,33 @@
       "taskCount": "タスク数：{{count}}",
       "format": "書式",
       "currency": "通貨",
-      "currencyHint": "通貨と書式は v0.5 で提供されます",
+      "currencyHint": "プロジェクト単位の通貨と書式は v1.0 で提供されます",
       "unitConversion": "工数単位の換算",
-      "hoursPerDay": "1 稼働日 = {{hours}} 時間",
-      "unitConversionHint": "編集は v0.5 で提供されます"
+      "hoursPerDay": "1 稼働日 = {{hours}} 時間"
     }
+  },
+  "resource": {
+    "select": "リソースを選択",
+    "empty": "リソースがまだありません。",
+    "create": "新規リソース",
+    "delete": "リソースを削除",
+    "name": "名前",
+    "email": "メール",
+    "kind": "種類",
+    "kind_staff": "担当者",
+    "kind_equipment": "設備",
+    "kind_material": "資材",
+    "kind_group": "グループ",
+    "availability": "可用率（%）",
+    "efficiency": "効率",
+    "availableFrom": "可用開始",
+    "availableUntil": "可用終了",
+    "usageCost": "使用コスト",
+    "hourlyCost": "時間コスト",
+    "currency": "通貨",
+    "totalAssignments": "使用回数：{{count}}",
+    "totalHours": "総時間：{{count}}",
+    "totalCost": "総コスト：{{amount}} {{currency}}"
   },
   "scheduling": {
     "auto": "自動",
@@ -210,7 +241,22 @@
     "task.setAllowSplitting": "分割を許可",
     "project.setDirection": "スケジュール方向を設定",
     "project.setStartDate": "プロジェクト開始日を設定",
-    "project.setEndDate": "プロジェクト終了日を設定"
+    "project.setEndDate": "プロジェクト終了日を設定",
+    "assignment.create": "リソースを割り当て",
+    "assignment.delete": "割り当てを解除",
+    "assignment.setUnits": "単位を設定",
+    "task.setEffortMode": "工数モードを設定",
+    "task.setEffort": "工数を設定",
+    "resource.create": "リソースを作成",
+    "resource.rename": "リソース名を変更",
+    "resource.delete": "リソースを削除",
+    "resource.setKind": "リソース種類を設定",
+    "resource.setEmail": "メールを設定",
+    "resource.setAvailability": "可用率を設定",
+    "resource.setEfficiency": "効率を設定",
+    "resource.setAvailablePeriod": "可用期間を設定",
+    "resource.setCost": "コストを設定",
+    "calendar.setHoursPerDay": "1日の労働時間を設定"
   },
   "conflicts": {
     "constraintViolatedByDependency": "タスクは「{{constraint}} {{date}}」に固定されていますが、依存関係は {{earliest}} 以降を要求しています",

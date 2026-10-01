@@ -1,6 +1,6 @@
 import type { Project } from '../domain/model/types'
 import { SCHEMA_VERSION } from '../domain/model/factories'
-import { migrateV1ToV2 } from './migrate'
+import { migrateV1ToV2, migrateV2ToV3 } from './migrate'
 
 // 单一来源：从 domain 层重导出，避免两处版本号各自漂移
 export { SCHEMA_VERSION }
@@ -12,27 +12,26 @@ export interface PersistedProject {
 }
 
 /**
- * 历史版本 → 迁移函数。**每个条目必须直接产出当前版本的 Project**（单跳，
- * 不是链式）—— 表里只登记历史版本，当前版本走上面的快路径、不在表里。
+ * 历史版本 → **它的下一个版本**。每个条目只跳一跳，链式推进由
+ * `parsePersistedProject` 的 while 循环驱动。
  *
- * 升到 v3 时别只加一条 `2: migrateV2ToV3` 就走：`MIGRATIONS[1]` 仍是
- * `migrateV1ToV2`，而它内部写死的 `schemaVersion: SCHEMA_VERSION` 会读到 3，
- * 于是产出「v2 形状 + 戳成 v3」的畸形结果。要么给每个历史版本各写一个
- * 直达当前版本的迁移函数，要么把这里改成一个逐跳驱动的循环。
+ * 为什么是逐跳而不是「直达当前版本」：直达版本要求每个历史迁移函数都自己
+ * 知道当前版本号（写死 `schemaVersion: SCHEMA_VERSION`），一旦 bump 就会
+ * 产出「旧形状 + 新版本号」的畸形结果（见 migrations 的历史注记）。
+ * 逐跳把「版本号」与「形状变换」解耦：`migrateV1ToV2` 只管出 v2，
+ * `migrateV2ToV3` 只管出 v3，谁也不知道 SCHEMA_VERSION 是几。
  *
- * 用 `Partial<Record<…>>` 是刻意的：让「键可能不存在」被类型系统表达出来，
- * 下面 `if (migrate)` 的守卫因此不是恒真。
  * 形参用 `never` 是为了让各迁移函数（入参类型各不相同）都能登记进来 ——
  * 代价是这里丢了类型安全，加新条目时靠人工保证入参对得上。
  */
-const MIGRATIONS: Partial<Record<number, (project: never) => Project>> = {
+const MIGRATIONS: Partial<Record<number, (project: never) => unknown>> = {
   1: migrateV1ToV2,
+  2: migrateV2ToV3,
 }
 
 /**
- * 校验并解出存档中的 Project。v1 会被迁移到当前版本。
- * 任何异常都抛出可读的错误 —— 绝不静默返回一个空项目，
- * 那会让用户以为数据丢了。
+ * 校验并解出存档中的 Project。历史版本会按版本号**逐跳**迁移到当前版本。
+ * 任何异常都抛出可读的错误 —— 绝不静默返回一个空项目，那会让用户以为数据丢了。
  */
 export function parsePersistedProject(raw: unknown): Project {
   if (typeof raw !== 'object' || raw === null) {
@@ -53,9 +52,18 @@ export function parsePersistedProject(raw: unknown): Project {
   }
 
   // 信封与内层必须表达同一个版本；不一致说明数据被半途改过，宁可拒绝
-  if (envelopeVersion === projectVersion) {
-    const migrate = MIGRATIONS[envelopeVersion as number]
-    if (migrate) return migrate(candidate.project as never)
+  if (envelopeVersion === projectVersion && typeof envelopeVersion === 'number') {
+    let current: unknown = candidate.project
+    let version: number = envelopeVersion
+
+    while (version < SCHEMA_VERSION) {
+      const migrate = MIGRATIONS[version]
+      if (!migrate) break
+      current = migrate(current as never)
+      version += 1
+    }
+
+    if (version === SCHEMA_VERSION) return current as Project
   }
 
   throw new Error(

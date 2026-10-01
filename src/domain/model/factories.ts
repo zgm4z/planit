@@ -1,10 +1,15 @@
 import type {
+  Assignment,
   Calendar,
   CalendarId,
   DateStr,
   Dependency,
   DependencyType,
+  EffortMode,
   Project,
+  Resource,
+  ResourceId,
+  ResourceKind,
   Task,
   TaskId,
   TaskKind,
@@ -14,7 +19,7 @@ import { formatDate } from '../dateUtils'
 export const DEFAULT_CALENDAR_ID: CalendarId = 'default'
 
 /** 与设计文档一致的 schema 版本，持久化时用于校验 */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 let counter = 0
 
@@ -108,6 +113,8 @@ export interface CreateTaskInput {
   parentId?: TaskId | null
   duration?: number
   kind?: TaskKind
+  effortMode?: EffortMode
+  effort?: number
 }
 
 /**
@@ -128,11 +135,12 @@ export function createTask(input: CreateTaskInput): Task {
     duration: kind === 'milestone' ? 0 : (input.duration ?? 1),
     scheduling: { mode: 'auto' },
     progress: 0,
-    effortMode: 'fixedDuration',
     schedulingOrder: 'asap',
     note: '',
     allowSplitting: false,
     priority: 0,
+    effortMode: input.effortMode ?? 'fixedDuration',
+    effort: input.effort,
     delay: 0,
   }
 }
@@ -144,4 +152,38 @@ export function createDependency(
   lag = 0,
 ): Dependency {
   return { id: nextId('dep'), fromTaskId, toTaskId, type, lag }
+}
+
+export interface CreateResourceInput {
+  name: string
+  kind?: ResourceKind
+  parentId?: ResourceId | null
+  availability?: number
+}
+
+/** 新资源的默认可用率 = 1（100%），货币默认 CNY —— 都可在资源面板改 */
+export function createResource(input: CreateResourceInput): Resource {
+  return {
+    id: nextId('res'),
+    name: input.name,
+    kind: input.kind ?? 'staff',
+    parentId: input.parentId ?? null,
+    availability: input.availability ?? 1,
+    cost: { currency: 'CNY' },
+  }
+}
+
+export interface CreateAssignmentInput {
+  taskId: TaskId
+  resourceId: ResourceId
+  units?: number
+}
+
+export function createAssignment(input: CreateAssignmentInput): Assignment {
+  return {
+    id: nextId('asg'),
+    taskId: input.taskId,
+    resourceId: input.resourceId,
+    units: input.units ?? 1,
+  }
 }

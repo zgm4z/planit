@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Menu, Tooltip } from '@mantine/core'
 import { IconCheck } from '@tabler/icons-react'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { ComputedSchedule, Project, TaskId } from '../domain/model/types'
+import type { ComputedSchedule, Project, TaskCosts, TaskId } from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
 import { cellFlex, OUTLINE_COLUMNS, type OutlineColumn } from './outlineColumns'
 import { useViewStore } from '../store/viewStore'
@@ -14,6 +14,9 @@ interface OutlineTableProps {
   rows: FlatRow[]
   virtualItems: VirtualItem[]
   schedules: Record<TaskId, ComputedSchedule>
+  /** v0.5：引擎派生的投入与成本 —— UI 只读，不重算 */
+  efforts: Record<TaskId, number>
+  costs: Record<TaskId, TaskCosts>
   /** 已按注册表顺序排好的可见列 */
   columns: OutlineColumn[]
   selectedTaskId: TaskId | null
@@ -33,6 +36,8 @@ export function OutlineTable({
   rows,
   virtualItems,
   schedules,
+  efforts,
+  costs,
   columns,
   selectedTaskId,
   onSelect,
@@ -121,6 +126,8 @@ export function OutlineTable({
         rows={rows}
         virtualItems={virtualItems}
         schedules={schedules}
+        efforts={efforts}
+        costs={costs}
         columns={columns}
         selectedTaskId={selectedTaskId}
         onSelect={onSelect}

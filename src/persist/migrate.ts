@@ -1,6 +1,15 @@
-import type { Project, Task } from '../domain/model/types'
+import type { Project, Resource, ResourceCost, Task } from '../domain/model/types'
 import { SCHEMA_VERSION } from '../domain/model/factories'
 import { deriveKind } from '../domain/model/kind'
+
+/** v2 存档里的资源形状：5 种 kind（含 'cost'），cost 是 { rate, per, currency } */
+type V2Resource = Omit<
+  Resource,
+  'kind' | 'email' | 'availableFrom' | 'availableUntil' | 'cost'
+> & {
+  kind: 'group' | 'staff' | 'equipment' | 'material' | 'cost'
+  cost: { rate: number; per: 'hour' | 'day' | 'unit'; currency: string }
+}
 
 /** v1 存档里的任务形状：有 isMilestone，没有 kind 与四个占位字段 */
 type V1Task = Omit<
@@ -8,9 +17,10 @@ type V1Task = Omit<
   'kind' | 'schedulingOrder' | 'note' | 'allowSplitting' | 'priority' | 'delay'
 > & { isMilestone: boolean }
 
-type V1Project = Omit<Project, 'schedulingDirection' | 'tasks'> & {
+type V1Project = Omit<Project, 'schedulingDirection' | 'tasks' | 'resources'> & {
   schemaVersion: number
   tasks: Record<string, V1Task>
+  resources: Record<string, V2Resource>
 }
 
 /**
@@ -21,8 +31,7 @@ type V1Project = Omit<Project, 'schedulingDirection' | 'tasks'> & {
  */
 export function migrateTaskV1ToV2(task: V1Task): Task {
   // v1 的任务不该有 kind。带上它说明这份存档与版本号不符 —— 可能是手工改过，
-  // 也可能是跑过「新形状 + 旧版本号」的中间态构建（见 migrateV1ToV2 的说明）。
-  // 与其静默把已有的 kind 覆盖掉，不如报错。
+  // 也可能是跑过「新形状 + 旧版本号」的中间态构建。
   if ('kind' in task) {
     throw new Error(
       `v1 存档的任务 ${task.id} 带有 kind 字段，形状与版本号（v1）不符，已拒绝迁移以免损坏数据`,
@@ -43,22 +52,58 @@ export function migrateTaskV1ToV2(task: V1Task): Task {
   }
 }
 
+type V2Project = Omit<Project, 'resources'> & {
+  schemaVersion: number
+  resources: Record<string, V2Resource>
+}
+
 /**
- * v1 项目整体迁到 v2。纯函数：入参对象不被改动，每次调用返回全新对象。
+ * v1 项目整体迁到 **v2**（不是「当前版本」）。纯函数，入参不被改动。
  *
- * `endDate` 刻意不设 —— 未设置即「forward 无期限 / backward 用正推完成日」，
- * 比塞一个 `startDate + 30` 之类的哨兵值安全得多（哨兵会悄悄截断长项目）。
+ * ⚠️ 这里刻意写死 `schemaVersion: 2` 而**不是** `SCHEMA_VERSION`：迁移现在是
+ * **逐跳链式**，`migrateV1ToV2` 的产出会再喂给 `migrateV2ToV3`。若写成
+ * `SCHEMA_VERSION`（=3），v1 存档会被戳成「v2 形状 + v3 版本号」，v2→v3 那步
+ * 就会把已经是新形状的资源再迁一次 —— 正是 schema.ts 注释里警告的畸形结果。
  *
- * ⚠️ 这次 bump 与 v0.2 的 Task 1–4 是**绑定的**：Task 1 起落盘形状就已经变了
- * （isMilestone → kind），版本号到本任务才动。单独发布中间任何一个任务，
- * v0.1 的老存档都会通过版本校验、以 undefined 的 kind 载入。要发就整批发。
+ * `endDate` 刻意不设 —— 未设置即「forward 无期限 / backward 用正推完成日」。
  */
-export function migrateV1ToV2(project: V1Project): Project {
+export function migrateV1ToV2(project: V1Project): V2Project {
   const tasks: Record<string, Task> = {}
   for (const [id, task] of Object.entries(project.tasks)) {
     tasks[id] = migrateTaskV1ToV2(task)
   }
 
-  const { schemaVersion: _drop, ...rest } = project
-  return { ...rest, schemaVersion: SCHEMA_VERSION, schedulingDirection: 'forward', tasks }
+  const { schemaVersion: _drop, tasks: _tasks, ...rest } = project
+  return { ...rest, schemaVersion: 2, schedulingDirection: 'forward', tasks }
+}
+
+/**
+ * 单资源的 v2 → v3 迁移：去掉 `'cost'` 类型、把 `{ rate, per }` 折算进新成本。
+ *
+ * spec §2 说「保留其 `cost.hourly`」—— 但 v2 的成本**根本没有** `hourly` 字段，
+ * 按 `per` 折算才是可实现的（见计划偏差 2）。`per: 'day'` 用项目日历的
+ * `hoursPerDay` 除一下，让「日费率」在小时粒度上等价。
+ */
+export function migrateResourceV2ToV3(resource: V2Resource, hoursPerDay: number): Resource {
+  const { cost, kind, ...rest } = resource
+  const nextCost: ResourceCost = { currency: cost.currency }
+
+  if (cost.per === 'unit') nextCost.usage = cost.rate
+  else if (cost.per === 'day') nextCost.hourly = cost.rate / hoursPerDay
+  else nextCost.hourly = cost.rate
+
+  return { ...rest, kind: kind === 'cost' ? 'material' : kind, cost: nextCost }
+}
+
+/** v2 项目整体迁到 **v3**（= 当前版本）。纯函数。 */
+export function migrateV2ToV3(project: V2Project): Project {
+  const hoursPerDay = project.calendars[project.calendarId]?.hoursPerDay ?? 8
+
+  const resources: Record<string, Resource> = {}
+  for (const [id, resource] of Object.entries(project.resources)) {
+    resources[id] = migrateResourceV2ToV3(resource, hoursPerDay)
+  }
+
+  const { schemaVersion: _drop, resources: _resources, ...rest } = project
+  return { ...rest, schemaVersion: SCHEMA_VERSION, resources }
 }

@@ -99,15 +99,17 @@ describe('ProjectInspector', () => {
     expect(screen.getByText(/任务数：2/)).toBeInTheDocument()
   })
 
-  it('投入单位换算只读地取 calendar.hoursPerDay；货币禁用并注明版本', () => {
+  it('投入单位换算可编辑并写回 hoursPerDay；货币仍禁用但 hint 指向 v1.0', () => {
     renderProjectInspector()
-    const conversion = screen.getByLabelText('投入单位转换')
-    expect(conversion).toHaveValue('1 工作日 = 8 小时')
-    expect(conversion).toHaveAttribute('readonly')
 
-    // Mantine 9 的（禁用）Select 会把 options 的 listbox 容器也挂上 label 关联，
-    // 于是 getByLabelText('货币') 命中两个节点 —— 用 role 收窄到输入框本身（与全库对 Select 的查法一致）。
+    const conversion = screen.getByLabelText('投入单位转换')
+    expect(conversion).not.toHaveAttribute('readonly')
+
+    // NumberInput 的 clear 在 jsdom 里不稳定（min 的回填会黏住旧值），改用 fireEvent.change
+    fireEvent.change(conversion, { target: { value: '6' } })
+    expect(useProjectStore.getState().project!.calendars.default.hoursPerDay).toBe(6)
+
     expect(screen.getByRole('combobox', { name: '货币' })).toBeDisabled()
-    expect(screen.getByText(/货币与格式将在 v0\.5 提供/)).toBeInTheDocument()
+    expect(screen.getByText(/v1\.0 提供/)).toBeInTheDocument()
   })
 })

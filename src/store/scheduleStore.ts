@@ -9,7 +9,7 @@ interface ScheduleState {
   error: string | null
 }
 
-const EMPTY: ScheduleResult = { schedules: {}, conflicts: [] }
+const EMPTY: ScheduleResult = { schedules: {}, conflicts: [], efforts: {}, costs: {}, resourceTotals: {} }
 
 export const useScheduleStore = create<ScheduleState>(() => ({
   result: EMPTY,

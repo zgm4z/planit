@@ -30,14 +30,15 @@
     "collapse": "折叠子任务",
     "cell": {
       "days": "{{count}} 天",
-      "percent": "{{value}}%"
+      "percent": "{{value}}%",
+      "effort": "{{count}} 人日",
+      "cost": "{{amount}}"
     },
     "menu": {
       "title": "显示列",
       "titleLocked": "标题列始终显示，不可取消"
     },
     "disabledReason": {
-      "resources": "需要资源与工作量功能（v0.5）",
       "baseline": "需要基线功能（v1.0）"
     },
     "columns": {
@@ -77,7 +78,8 @@
   "inspector": {
     "title": "任务详情",
     "projectTitle": "项目详情",
-    "tabs": { "task": "任务", "project": "项目" },
+    "resourceTitle": "资源详情",
+    "tabs": { "task": "任务", "project": "项目", "resource": "资源" },
     "groups": {
       "info": "任务信息",
       "schedule": "日程安排",
@@ -90,11 +92,8 @@
     "placeholder": {
       "baseline": "未设置基线",
       "baselineHint": "基线对比将在 v1.0 提供。",
-      "assignmentsHint": "资源功能将在 v0.5 提供。",
-      "allocationHint": "资源分配策略将在 v0.5 提供。",
+      "allocationHint": "资源平衡将在 v0.6 提供。",
       "expectedEffortHint": "付出可被计算为最小值、最大值和期望值的加权平均值。这些值也被用作 Monte Carlo 模拟中可能的可变性。预计工作量将在 v0.6 / v1.0 提供。",
-      "resource": "资源",
-      "units": "单元",
       "allocationOnChange": "当资源分配更改时",
       "allocationNeeds": "任务进度需要",
       "min": "最小值",
@@ -114,7 +113,17 @@
     "taskCost": "任务成本",
     "resourceCost": "资源成本",
     "totalCost": "总成本",
-    "disabledReason": { "effort": "投入与剩余将在 v0.5 提供", "cost": "成本将在 v0.5 提供" },
+    "effortMode": "工作量模式",
+    "effortModeDuration": "固定工期",
+    "effortModeEffort": "固定工作量",
+    "effortInput": "投入",
+    "assignments": {
+      "none": "无",
+      "units": "单元",
+      "addResource": "添加资源",
+      "selectResource": "选择资源…",
+      "addTask": "添加任务"
+    },
     "summaryHint": "这是摘要任务，其日期由子任务汇总而来，不可直接编辑。",
     "scheduling": "排期方式",
     "manualHint": "此任务已手动安排，且无法自动移动。",
@@ -155,11 +164,33 @@
       "taskCount": "任务数：{{count}}",
       "format": "格式",
       "currency": "货币",
-      "currencyHint": "货币与格式将在 v0.5 提供",
+      "currencyHint": "项目级货币与格式将在 v1.0 提供",
       "unitConversion": "投入单位转换",
-      "hoursPerDay": "1 工作日 = {{hours}} 小时",
-      "unitConversionHint": "编辑将在 v0.5 提供"
+      "hoursPerDay": "1 工作日 = {{hours}} 小时"
     }
+  },
+  "resource": {
+    "select": "选择资源",
+    "empty": "还没有资源。",
+    "create": "新建资源",
+    "delete": "删除资源",
+    "name": "名称",
+    "email": "电子邮件",
+    "kind": "类型",
+    "kind_staff": "人员",
+    "kind_equipment": "设备",
+    "kind_material": "素材",
+    "kind_group": "群组",
+    "availability": "可用率（%）",
+    "efficiency": "效率",
+    "availableFrom": "可用起始",
+    "availableUntil": "可用结束",
+    "usageCost": "使用成本",
+    "hourlyCost": "小时成本",
+    "currency": "货币",
+    "totalAssignments": "总使用次数：{{count}}",
+    "totalHours": "总时数：{{count}}",
+    "totalCost": "总成本：{{amount}} {{currency}}"
   },
   "scheduling": {
     "auto": "自动排期",
@@ -213,7 +244,22 @@
     "task.setAllowSplitting": "允许拆分",
     "project.setDirection": "设置排期方向",
     "project.setStartDate": "设置项目开始日期",
-    "project.setEndDate": "设置项目结束日期"
+    "project.setEndDate": "设置项目结束日期",
+    "assignment.create": "分配资源",
+    "assignment.delete": "取消分配",
+    "assignment.setUnits": "设置单元",
+    "task.setEffortMode": "设置工作量模式",
+    "task.setEffort": "设置投入",
+    "resource.create": "新建资源",
+    "resource.rename": "重命名资源",
+    "resource.delete": "删除资源",
+    "resource.setKind": "设置资源类型",
+    "resource.setEmail": "设置电子邮件",
+    "resource.setAvailability": "设置可用率",
+    "resource.setEfficiency": "设置效率",
+    "resource.setAvailablePeriod": "设置可用期间",
+    "resource.setCost": "设置成本",
+    "calendar.setHoursPerDay": "设置每日工时"
   },
   "conflicts": {
     "constraintViolatedByDependency": "任务被固定为「{{constraint}} {{date}}」，但依赖要求它不早于 {{earliest}}",

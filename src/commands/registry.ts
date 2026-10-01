@@ -6,6 +6,8 @@ import { taskStructureHandlers } from './taskStructureCommands'
 import { dependencyHandlers } from './dependencyCommands'
 import { calendarHandlers } from './calendarCommands'
 import { projectHandlers } from './projectCommands'
+import { resourceHandlers } from './resourceCommands'
+import { assignmentHandlers } from './assignmentCommands'
 
 // Immer 的 patch 能力需显式开启，且必须在任何 produceWithPatches 之前
 enablePatches()
@@ -60,6 +62,8 @@ export function initCommands(): void {
     ...dependencyHandlers,
     ...calendarHandlers,
     ...projectHandlers,
+    ...resourceHandlers,
+    ...assignmentHandlers,
   }
 
   for (const [type, handler] of Object.entries(all)) {

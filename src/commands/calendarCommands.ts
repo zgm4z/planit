@@ -11,6 +11,7 @@ export interface AddExceptionPayload {
   exception: CalendarException
 }
 export interface RemoveExceptionPayload { calendarId: CalendarId; date: DateStr }
+export interface CalendarSetHoursPerDayPayload { hoursPerDay: number }
 
 export const calendarHandlers: Record<string, CommandHandler<any>> = {
   'calendar.setWorkingDays': (draft, payload: SetWorkingDaysPayload) => {
@@ -30,5 +31,12 @@ export const calendarHandlers: Record<string, CommandHandler<any>> = {
     const calendar = draft.calendars[payload.calendarId]
     if (!calendar) return
     delete calendar.exceptions[payload.date]
+  },
+
+  // v0.5：项目面板的「投入单位转换」可编辑（spec §4.3）。
+  // 输入框驱动 → 合并键 `calendar.setHoursPerDay`（单日历，无 id）。
+  'calendar.setHoursPerDay': (draft, payload: CalendarSetHoursPerDayPayload) => {
+    const calendar = draft.calendars[draft.calendarId]
+    if (calendar) calendar.hoursPerDay = Math.max(1, Math.round(payload.hoursPerDay))
   },
 }

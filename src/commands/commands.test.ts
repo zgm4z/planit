@@ -8,6 +8,8 @@ import { taskStructureHandlers } from './taskStructureCommands'
 import { dependencyHandlers } from './dependencyCommands'
 import { calendarHandlers } from './calendarCommands'
 import { projectHandlers } from './projectCommands'
+import { resourceHandlers } from './resourceCommands'
+import { assignmentHandlers } from './assignmentCommands'
 import type { CommandType } from './types'
 
 let project: Project
@@ -20,6 +22,8 @@ function setup(): void {
     ...dependencyHandlers,
     ...calendarHandlers,
     ...projectHandlers,
+    ...resourceHandlers,
+    ...assignmentHandlers,
   }
   for (const [type, handler] of Object.entries(all)) {
     registerHandler(type as CommandType, handler)
@@ -435,5 +439,197 @@ describe('v0.2 新命令', () => {
 
     const c = run(b, 'project.setEndDate', { endDate: undefined })
     expect(c.endDate).toBeUndefined()
+  })
+})
+
+describe('v0.5 资源命令', () => {
+  beforeEach(setup)
+
+  function withResource(): { p: Project; resourceId: string } {
+    const p = run(project, 'resource.create', { name: '张三' })
+    return { p, resourceId: Object.keys(p.resources)[0] }
+  }
+
+  it('resource.create 建一个默认 staff、可用率 1 的资源', () => {
+    const { p, resourceId } = withResource()
+    expect(p.resources[resourceId].name).toBe('张三')
+    expect(p.resources[resourceId].kind).toBe('staff')
+    expect(p.resources[resourceId].availability).toBe(1)
+    expect(p.resources[resourceId].cost).toEqual({ currency: 'CNY' })
+  })
+
+  it('resource.rename / setKind / setEmail / setAvailability（夹到 0–1）', () => {
+    let { p, resourceId } = withResource()
+    p = run(p, 'resource.rename', { resourceId, name: '李四' })
+    p = run(p, 'resource.setKind', { resourceId, kind: 'equipment' })
+    p = run(p, 'resource.setEmail', { resourceId, email: 'a@b.c' })
+    p = run(p, 'resource.setAvailability', { resourceId, availability: 1.7 })
+    expect(p.resources[resourceId]).toMatchObject({
+      name: '李四', kind: 'equipment', email: 'a@b.c', availability: 1,
+    })
+  })
+
+  it('setEfficiency 传 ≤0 等价于清除', () => {
+    let { p, resourceId } = withResource()
+    p = run(p, 'resource.setEfficiency', { resourceId, efficiency: 2 })
+    expect(p.resources[resourceId].efficiency).toBe(2)
+    p = run(p, 'resource.setEfficiency', { resourceId, efficiency: 0 })
+    expect(p.resources[resourceId].efficiency).toBeUndefined()
+  })
+
+  it('setAvailablePeriod 写入起止；setCost 整体替换', () => {
+    let { p, resourceId } = withResource()
+    p = run(p, 'resource.setAvailablePeriod', { resourceId, availableFrom: '2026-03-10', availableUntil: '2026-04-01' })
+    expect(p.resources[resourceId]).toMatchObject({ availableFrom: '2026-03-10', availableUntil: '2026-04-01' })
+    p = run(p, 'resource.setCost', { resourceId, cost: { hourly: 100, usage: 500, currency: 'CNY' } })
+    expect(p.resources[resourceId].cost).toEqual({ hourly: 100, usage: 500, currency: 'CNY' })
+  })
+
+  it('resource.delete 级联删掉它的全部 assignment（spec §5）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    const taskId = p.rootIds[0]
+    p = run(p, 'resource.create', { name: '张三' })
+    const resourceId = Object.keys(p.resources)[0]
+    p = run(p, 'assignment.create', { taskId, resourceId, units: 1 })
+    expect(Object.values(p.assignments)).toHaveLength(1)
+
+    p = run(p, 'resource.delete', { resourceId })
+    expect(p.resources[resourceId]).toBeUndefined()
+    expect(Object.values(p.assignments)).toHaveLength(0) // 级联
+  })
+})
+
+describe('v0.5 分配命令', () => {
+  beforeEach(setup)
+
+  function fixture(): { p: Project; taskId: string; resourceId: string } {
+    let p = run(project, 'task.create', { name: 'A' })
+    const taskId = p.rootIds[0]
+    p = run(p, 'resource.create', { name: '张三' })
+    return { p, taskId, resourceId: Object.keys(p.resources)[0] }
+  }
+
+  it('assignment.create 建一条默认 units=1 的分配', () => {
+    const { p, taskId, resourceId } = fixture()
+    const next = run(p, 'assignment.create', { taskId, resourceId, units: 1 })
+    const assignment = Object.values(next.assignments)[0]
+    expect(assignment).toMatchObject({ taskId, resourceId, units: 1 })
+  })
+
+  it('同一 (任务, 资源) 重复创建是 no-op（只留一条）', () => {
+    const { p, taskId, resourceId } = fixture()
+    let next = run(p, 'assignment.create', { taskId, resourceId, units: 1 })
+    const undoLen = Object.keys(next.assignments).length
+    next = run(next, 'assignment.create', { taskId, resourceId, units: 1 })
+    expect(Object.keys(next.assignments)).toHaveLength(undoLen)
+  })
+
+  it('摘要任务不能直接派资源（与依赖同理）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+    p = run(p, 'resource.create', { name: '张三' })
+    const resourceId = Object.keys(p.resources)[0]
+
+    const next = run(p, 'assignment.create', { taskId: parent, resourceId, units: 1 })
+    expect(Object.values(next.assignments)).toHaveLength(0)
+  })
+
+  it('setUnits 夹到 (0, 1]；delete 按 id 删除', () => {
+    const { p, taskId, resourceId } = fixture()
+    let next = run(p, 'assignment.create', { taskId, resourceId, units: 0.5 })
+    const assignmentId = Object.keys(next.assignments)[0]
+
+    next = run(next, 'assignment.setUnits', { assignmentId, units: 3 })
+    expect(next.assignments[assignmentId].units).toBe(1)
+
+    next = run(next, 'assignment.delete', { assignmentId })
+    expect(Object.values(next.assignments)).toHaveLength(0)
+  })
+
+  it('task.delete 级联删掉子树内任务的 assignment', () => {
+    const { p, taskId, resourceId } = fixture()
+    let next = run(p, 'assignment.create', { taskId, resourceId, units: 1 })
+    expect(Object.values(next.assignments)).toHaveLength(1)
+
+    next = run(next, 'task.delete', { taskId })
+    expect(Object.values(next.assignments)).toHaveLength(0) // 级联
+  })
+
+  it('task.delete 清的是整棵子树内的 assignment，不只是根节点', () => {
+    // 只清根节点是 v0.1 依赖清理踩过的坑：分配挂在**叶子**上，
+    // 删掉摘要根节点后叶子随之消失，它的分配就成了指向已删任务的孤儿。
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+    const child = p.tasks[parent].childIds[0]
+    p = run(p, 'resource.create', { name: '张三' })
+    const resourceId = Object.keys(p.resources)[0]
+    p = run(p, 'assignment.create', { taskId: child, resourceId, units: 1 })
+    expect(Object.values(p.assignments)).toHaveLength(1)
+
+    const next = run(p, 'task.delete', { taskId: parent })
+    expect(next.tasks[parent]).toBeUndefined()
+    expect(next.tasks[child]).toBeUndefined()
+    expect(Object.values(next.assignments)).toHaveLength(0)
+  })
+})
+
+describe('v0.5 工作量命令', () => {
+  beforeEach(setup)
+
+  function oneTask(): { p: Project; taskId: string } {
+    const p = run(project, 'task.create', { name: 'A' })
+    return { p, taskId: p.rootIds[0] }
+  }
+
+  it('task.setEffort 写入 effort，负值被夹到 0，undefined 清除', () => {
+    const { p, taskId } = oneTask()
+    expect(run(p, 'task.setEffort', { taskId, effort: 7 }).tasks[taskId].effort).toBe(7)
+    expect(run(p, 'task.setEffort', { taskId, effort: -3 }).tasks[taskId].effort).toBe(0)
+    expect(run(p, 'task.setEffort', { taskId, effort: undefined }).tasks[taskId].effort).toBeUndefined()
+  })
+
+  it('切到 fixedEffort 时用「工期 × Σunits」初始化 effort（避免工期突然塌成 1）', () => {
+    // 注意：task.create 的 payload 没有 duration，工期要先建再改
+    let p = run(project, 'task.create', { name: 'A' })
+    const taskId = p.rootIds[0]
+    p = run(p, 'task.setDuration', { taskId, duration: 4 })
+
+    const next = run(p, 'task.setEffortMode', { taskId, effortMode: 'fixedEffort' })
+    expect(next.tasks[taskId].effortMode).toBe('fixedEffort')
+    expect(next.tasks[taskId].effort).toBe(4) // 无资源 → max(Σunits, 1) = 1，4 × 1 = 4
+  })
+
+  it('切到 fixedEffort 但已有 effort 时不覆盖', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    const taskId = p.rootIds[0]
+    p = run(p, 'task.setDuration', { taskId, duration: 4 })
+    p = run(p, 'task.setEffort', { taskId, effort: 9 })
+    const next = run(p, 'task.setEffortMode', { taskId, effortMode: 'fixedEffort' })
+    expect(next.tasks[taskId].effort).toBe(9)
+  })
+
+  it('task.setEffortMode / task.setEffort 对里程碑是 no-op —— 零工期的时间点不该有工作量', () => {
+    // 与同文件其它日期命令（setScheduling / moveTo / resize / setSchedulingOrder）
+    // 的 milestone 守卫保持一致：它们都挡住里程碑，这两条也必须挡。
+    let p = run(project, 'task.create', { name: 'M' })
+    const taskId = p.rootIds[0]
+    p = run(p, 'task.toggleMilestone', { taskId })
+
+    const afterMode = run(p, 'task.setEffortMode', { taskId, effortMode: 'fixedEffort' })
+    expect(afterMode.tasks[taskId].effortMode).toBe('fixedDuration') // 未被切成 fixedEffort
+    expect(afterMode.tasks[taskId].effort).toBeUndefined() // 也未被「工期 × Σunits」初始化
+
+    const afterEffort = run(p, 'task.setEffort', { taskId, effort: 5 })
+    expect(afterEffort.tasks[taskId].effort).toBeUndefined() // 未被写入
+  })
+
+  it('日历命令 calendar.setHoursPerDay 夹到 ≥1 的整数', () => {
+    const next = run(project, 'calendar.setHoursPerDay', { hoursPerDay: 6.4 })
+    expect(next.calendars.default.hoursPerDay).toBe(6)
+    expect(run(project, 'calendar.setHoursPerDay', { hoursPerDay: 0 }).calendars.default.hoursPerDay).toBe(1)
   })
 })

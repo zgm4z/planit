@@ -7,6 +7,7 @@ import type {
   Task,
   TaskId,
 } from '../model/types'
+import type { ResourceBounds } from './effort'
 import { snapToWorkday, taskFinish, taskStart, workdaysBetween } from '../calendar/workdays'
 import { buildGraph } from './graph'
 import { backwardBound, forwardBound } from './constraints'
@@ -25,10 +26,16 @@ export interface CpmInput {
    * backward —— 逆推终点。未设置时退回用正推算出的完成日
    */
   projectEnd?: DateStr
+  /**
+   * v0.5：任务级的资源可用期边界（按 taskId）。缺省 = 全部不受限。
+   * 见 effort.ts 的 resourceBounds —— 只有设了 availableFrom / availableUntil
+   * 的任务才会出现在这张表里，因此「无资源」的既有行为逐字节不变。
+   */
+  resourceBounds?: Record<TaskId, ResourceBounds>
 }
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
-  const { tasks, dependencies, calendar, direction, projectStart, projectEnd } = input
+  const { tasks, dependencies, calendar, direction, projectStart, projectEnd, resourceBounds } = input
 
   const graph = buildGraph(tasks, dependencies) // 可能抛出 CycleError
   const byId = new Map(tasks.map((task) => [task.id, task]))
@@ -44,6 +51,10 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
       const task = byId.get(id)!
       let start = constraintLowerBound(task, calendar, anchor)
 
+      // 资源可用期的开始下界（availableFrom）—— 与任务自身的约束取较晚者
+      const earliest = resourceBounds?.[id]?.earliestStart
+      if (earliest && earliest > start) start = earliest
+
       for (const dep of graph.incoming.get(id) ?? []) {
         const bound = forwardBound({
           dep,
@@ -57,6 +68,19 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 
       start = snapToWorkday(start, calendar)
       earlyStart.set(id, start)
+
+      // 可用期是任务级的**上下界**：availableFrom = 下界（最早能开始），
+      // availableUntil = 上界（最晚能结束）。二者**有意只各进一趟** ——
+      // 下界只进正推（见上方 earliestStart），上界只进逆推（见 backwardPass 的
+      // latestFinish）。这与既有的约束机制 constraintLowerBound /
+      // constraintUpperBound 完全同构：下界刻画最早起点、上界刻画最晚终点，
+      // 各归其位。切勿为了「两趟都不越界」把两条边界都塞进两趟。
+      //
+      // 刻意**不**在正推里夹上界：earlyFinish 是任务的真实完成日，甘特条宽度、
+      // 依赖连线端点、TaskBar 几何全基于它，夹到 availableUntil 会把一条 N 天的
+      // 任务谎报成更短。可用期不可行（availableUntil 早于自然完成日）时，逆推
+      // 会把上界体现成负浮时，由 detectConflicts 如实报冲突 —— 只如实报，不夹
+      // 边界调和。
       earlyFinish.set(id, taskFinish(start, task.duration, calendar))
     }
 
@@ -72,6 +96,10 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
       const task = byId.get(id)!
       let finish = constraintUpperBound(task, calendar, anchor)
 
+      // 资源可用期的结束上界（availableUntil）—— 与任务自身的约束取较早者
+      const latest = resourceBounds?.[id]?.latestFinish
+      if (latest && latest < finish) finish = latest
+
       for (const dep of graph.outgoing.get(id) ?? []) {
         const bound = backwardBound({
           dep,
@@ -85,6 +113,13 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 
       finish = snapToWorkday(finish, calendar)
       lateFinish.set(id, finish)
+
+      // 刻意**不**在逆推里夹下界 availableFrom（它与上界一样只各进一趟，见
+      // forwardPass 顶部的说明）：lateStart 由 lateFinish 忠实倒推，晚窗口
+      // [lateStart, lateFinish] 才始终有序。夹下界会让 lateStart 越过 lateFinish
+      // —— 晚窗口反转，任何按 lateStart→lateFinish 求宽度的消费方得到负跨度。
+      // 不可行（availableFrom 晚于 endDate 倒推出的开始日）时同样只以负浮时
+      // 如实报冲突，不在这里夹。
       lateStart.set(id, taskStart(finish, task.duration, calendar))
     }
 

@@ -19,9 +19,9 @@ describe('normalizeVisibleColumns', () => {
   })
 
   it('本版禁用（但认识）的 key 同样被丢掉', () => {
-    // assignees 认识但禁用；effort/bcws 同理。绝不能放进来 ——
-    // 菜单里它们的开关是 disabled，渲染出来就关不掉了（见偏差 5）。
-    expect(normalizeVisibleColumns(['title', 'assignees', 'effort', 'bcws'])).toEqual(['title'])
+    // bcws / baselineStart 是 v1.0 的基线与挣值列，认识但本版禁用。绝不能放进来 ——
+    // 菜单里它们的开关是 disabled，渲染出来就关不掉了。
+    expect(normalizeVisibleColumns(['title', 'bcws', 'baselineStart'])).toEqual(['title'])
   })
 
   it('去重并按注册表顺序排列（与输入顺序无关）', () => {
