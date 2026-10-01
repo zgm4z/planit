@@ -89,11 +89,8 @@
     "placeholder": {
       "baseline": "No baseline set",
       "baselineHint": "Baseline comparison will be available in v1.0.",
-      "assignmentsHint": "Resource features will be available in v0.5.",
       "allocationHint": "Resource leveling will be available in v0.6.",
       "expectedEffortHint": "Effort can be computed as a weighted average of minimum, maximum and expected values. These values are also used as possible variability in a Monte Carlo simulation. Expected effort will be available in v0.6 / v1.0.",
-      "resource": "Resource",
-      "units": "Units",
       "allocationOnChange": "When an allocation changes",
       "allocationNeeds": "Task progress requires",
       "min": "Minimum",
@@ -166,8 +163,7 @@
       "currency": "Currency",
       "currencyHint": "Project-level currency and formats will be available in v1.0",
       "unitConversion": "Unit conversion",
-      "hoursPerDay": "1 workday = {{hours}} hours",
-      "unitConversionHint": "Editing will be available in v0.5"
+      "hoursPerDay": "1 workday = {{hours}} hours"
     }
   },
   "resource": {

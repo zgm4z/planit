@@ -89,11 +89,8 @@
     "placeholder": {
       "baseline": "基準は未設定",
       "baselineHint": "基準との比較は v1.0 で提供されます。",
-      "assignmentsHint": "リソース機能は v0.5 で提供されます。",
       "allocationHint": "リソース平準化は v0.6 で提供されます。",
       "expectedEffortHint": "工数は最小値・最大値・期待値の加重平均として計算できます。これらの値は Monte Carlo シミュレーションの変動要素としても使われます。見込み工数は v0.6 / v1.0 で提供されます。",
-      "resource": "リソース",
-      "units": "単位",
       "allocationOnChange": "リソース配分が変更されたとき",
       "allocationNeeds": "タスクの進捗に必要なもの",
       "min": "最小値",
@@ -166,8 +163,7 @@
       "currency": "通貨",
       "currencyHint": "プロジェクト単位の通貨と書式は v1.0 で提供されます",
       "unitConversion": "工数単位の換算",
-      "hoursPerDay": "1 稼働日 = {{hours}} 時間",
-      "unitConversionHint": "編集は v0.5 で提供されます"
+      "hoursPerDay": "1 稼働日 = {{hours}} 時間"
     }
   },
   "resource": {

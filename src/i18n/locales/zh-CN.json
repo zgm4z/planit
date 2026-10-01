@@ -92,11 +92,8 @@
     "placeholder": {
       "baseline": "未设置基线",
       "baselineHint": "基线对比将在 v1.0 提供。",
-      "assignmentsHint": "资源功能将在 v0.5 提供。",
       "allocationHint": "资源平衡将在 v0.6 提供。",
       "expectedEffortHint": "付出可被计算为最小值、最大值和期望值的加权平均值。这些值也被用作 Monte Carlo 模拟中可能的可变性。预计工作量将在 v0.6 / v1.0 提供。",
-      "resource": "资源",
-      "units": "单元",
       "allocationOnChange": "当资源分配更改时",
       "allocationNeeds": "任务进度需要",
       "min": "最小值",
@@ -169,8 +166,7 @@
       "currency": "货币",
       "currencyHint": "项目级货币与格式将在 v1.0 提供",
       "unitConversion": "投入单位转换",
-      "hoursPerDay": "1 工作日 = {{hours}} 小时",
-      "unitConversionHint": "编辑将在 v0.5 提供"
+      "hoursPerDay": "1 工作日 = {{hours}} 小时"
     }
   },
   "resource": {
