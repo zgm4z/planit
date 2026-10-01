@@ -3,7 +3,7 @@ import { Alert, Button, Card, Center, Stack, Text, UnstyledButton, Group } from 
 import { IconPlus, IconAlertCircle } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
-import { createProject } from '../domain/model/factories'
+import { createProject, seedIdCounterFromIds } from '../domain/model/factories'
 import { listProjects, loadProject, saveProject, type ProjectSummary } from '../persist/indexeddb'
 import { useProjectStore } from '../store/projectStore'
 import { LanguageSwitcher } from './LanguageSwitcher'
@@ -21,6 +21,15 @@ export function ProjectList() {
   }, [])
 
   async function handleCreate(): Promise<void> {
+    // 页面刷新后 id 计数器已归零。先播种已有项目的 id，
+    // 否则新项目会拿到与既有项目相同的 id，并在 IndexedDB 里静默覆盖它
+    try {
+      const existing = await listProjects()
+      seedIdCounterFromIds(existing.map((summary) => summary.id))
+    } catch {
+      // 读不到列表时不阻塞新建 —— 最坏是 id 冲突，但不该因此让用户建不了项目
+    }
+
     // 项目名走 i18n —— 用户看到什么语言，新建的计划就叫什么
     const project = createProject(t('projectList.untitled'))
     try {

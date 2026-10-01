@@ -29,27 +29,44 @@ export function __resetIdCounterForTests(): void {
 }
 
 /**
- * 从已载入的项目中恢复 id 计数器。
+ * 从一组已有的 id 中恢复计数器。
+ *
+ * 页面重载后模块级计数器会归零。**任何会生成新 id 的入口都必须先播种**，
+ * 否则新 id 会与既有数据冲突 —— Project.tasks 是 keyed Record，
+ * 而 IndexedDB 的 keyPath 是 project.id，重复 key 都会静默覆盖而非报错。
+ */
+export function seedIdCounterFromIds(ids: readonly string[]): void {
+  let max = 0
+
+  const scan = (id: string): void => {
+    const suffix = id.split('_').pop()
+    if (!suffix) return
+    const value = Number.parseInt(suffix, 36)
+    if (!Number.isNaN(value) && value > max) max = value
+  }
+
+  for (const id of ids) scan(id)
+
+  // 用 Math.max 而非直接赋值 —— 同一会话里计数器只能前进不能回退，
+  // 否则会重新发出已经用过的 id
+  counter = Math.max(counter, max)
+}
+
+/**
+ * 从已载入的项目中恢复 id 计数器（含它内部的任务、依赖、资源 id）。
  *
  * 页面重载后模块级计数器会归零。若不重新播种，新建的 id 会与项目中
  * 已存在的 id 重复，而 Project.tasks / dependencies 等都是 keyed Record
  * —— 重复的 key 会静默覆盖原有数据。
  */
 export function seedIdCounterFromProject(project: Project): void {
-  let max = 0
-
-  const scan = (id: string): void => {
-    const value = Number.parseInt(id.split('_').pop() ?? '', 36)
-    if (!Number.isNaN(value) && value > max) max = value
-  }
-
-  scan(project.id)
-  for (const id of Object.keys(project.tasks)) scan(id)
-  for (const id of Object.keys(project.dependencies)) scan(id)
-  for (const id of Object.keys(project.resources)) scan(id)
-  for (const id of Object.keys(project.assignments)) scan(id)
-
-  counter = Math.max(counter, max)
+  seedIdCounterFromIds([
+    project.id,
+    ...Object.keys(project.tasks),
+    ...Object.keys(project.dependencies),
+    ...Object.keys(project.resources),
+    ...Object.keys(project.assignments),
+  ])
 }
 
 export function createCalendar(id: CalendarId = DEFAULT_CALENDAR_ID): Calendar {

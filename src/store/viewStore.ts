@@ -41,3 +41,13 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   setDayWidth: (dayWidth) => set({ dayWidth: Math.max(2, dayWidth) }),
 }))
+
+/** 仅供测试使用：把视图状态复位到初始值 */
+export function __resetViewStoreForTests(): void {
+  useViewStore.setState({
+    zoom: 'day',
+    selectedTaskId: null,
+    collapsedIds: new Set(),
+    dayWidth: ZOOM_DAY_WIDTH.day,
+  })
+}
