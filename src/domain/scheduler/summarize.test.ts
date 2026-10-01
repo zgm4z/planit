@@ -65,6 +65,25 @@ describe('summarizeParents', () => {
     expect(r.P.isCritical).toBe(true)
   })
 
+  it('freeSlack 取子任务最小值（两个子任务都非零且不相等）', () => {
+    const tasks: Record<string, Task> = {
+      P: task('P', { childIds: ['c1', 'c2'] }),
+      c1: task('c1', { parentId: 'P' }),
+      c2: task('c2', { parentId: 'P' }),
+    }
+    // 两个子任务的 freeSlack 都非零且不相等，于是：
+    //   min → 2（正确）；取第一个 → 5；取 0（硬编码）→ 0；取 max → 5。
+    // totalSlack 同样设为不等值，顺带区分 freeSlack 与 totalSlack 两个口径。
+    const leaf = {
+      c1: sch({ freeSlack: 5, totalSlack: 7 }),
+      c2: sch({ freeSlack: 2, totalSlack: 3 }),
+    }
+    const r = summarizeParents(tasks, leaf, ['P'])
+
+    expect(r.P.freeSlack).toBe(2)
+    expect(r.P.totalSlack).toBe(3)
+  })
+
   it('多层嵌套递归汇总', () => {
     const tasks: Record<string, Task> = {
       Root: task('Root', { childIds: ['Mid'] }),

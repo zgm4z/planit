@@ -458,6 +458,51 @@ describe('runCpm — 自由宽延', () => {
     expect(r.B.freeSlack).toBe(r.B.totalSlack)
   })
 
+  it('判别用例：自由宽延可以远小于总宽延', () => {
+    //   A(1d) ──FS──> B(1d) ──FS──> C(1d)
+    //   X(6d) ──FS───────────────> C(1d)
+    //   Z(1d)   孤立任务（无依赖、无后继）
+    //
+    // 手算（起点 2026-03-02 周一）：
+    //   A 03-02..03-02，B 03-03..03-03，X 03-02..03-09
+    //   C = max(addWorkdays(B.finish 03-03, 1)=03-04, addWorkdays(X.finish 03-09, 1)=03-10)
+    //     = 03-10 → C 03-10..03-10，项目完成 03-10；Z 03-02..03-02
+    //   逆推锚 03-10：C.late 03-10；B.lateFinish = 03-09 → B.lateStart 03-09；
+    //                 A.lateFinish = 03-06 → A.lateStart 03-06；
+    //                 Z.lateFinish = 03-10 → Z.lateStart 03-10
+    //   A.totalSlack = workdaysBetween(03-02, 03-06) = 4
+    //   A.freeSlack ：A→B 的 forwardBound = addWorkdays(03-02, 1) = 03-03，
+    //                 B.earlyStart = 03-03 → workdaysBetween(03-03, 03-03) = 0
+    //   B.totalSlack = workdaysBetween(03-03, 03-09) = 4
+    //   B.freeSlack ：B→C 的 forwardBound = addWorkdays(03-03, 1) = 03-04，
+    //                 C.earlyStart = 03-10 → workdaysBetween(03-04, 03-10) = 4
+    //   Z.totalSlack = workdaysBetween(03-02, 03-10) = 6
+    //   Z.freeSlack ：无后继 → 直接取 totalSlack = 6
+    //
+    // A 的总宽延有 4 天（整条 A→B 链能整体后移 4 天），但自由宽延是 0 ——
+    // B 紧跟在 A 完成后的下一个工作日开工，A 一天都推不得。
+    // 这条断言是整套 freeSlack 测试里唯一能区分「按边松弛算」与
+    // 「直接返回 totalSlack」的用例：后者会让 A.freeSlack 也变成 4。
+    //
+    // Z 则堵上「无后继」那一支 —— 既有用例里无后继的 D/B 总宽延都是 0，
+    // 无法区分 `return totalSlack` 与错误的 `return 0`，这里用非零值区分。
+    const r = runCpm({
+      tasks: [mk('A', 1), mk('B', 1), mk('X', 6), mk('C', 1), mk('Z', 1)],
+      dependencies: [createDependency('A', 'B'), createDependency('B', 'C'), createDependency('X', 'C')],
+      calendar: createCalendar(),
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+
+    expect(r.C.earlyStart).toBe('2026-03-10')
+    expect(r.A.totalSlack).toBe(4)
+    expect(r.A.freeSlack).toBe(0)
+    expect(r.B.totalSlack).toBe(4)
+    expect(r.B.freeSlack).toBe(4)
+    expect(r.Z.totalSlack).toBe(6)
+    expect(r.Z.freeSlack).toBe(6)
+  })
+
   it('后继被别的依赖推后时，前置任务获得对应的自由宽延', () => {
     // A(1d) ──FS 0──> B(1d)
     // C(3d) ──FS 0──> B(1d)     ← C 把 B 顶到 03-05
