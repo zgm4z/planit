@@ -6,6 +6,7 @@ import { DependencyLayer } from './DependencyLayer'
 import { GanttRows } from './GanttRows'
 import { Inspector } from './Inspector'
 import { OutlineTree } from './OutlineTree'
+import { GANTT_OUTLINE_COLUMNS } from './outlineColumns'
 import { TimeRuler } from './TimeRuler'
 import { dragCommitCommands } from './barDrag'
 import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
@@ -190,6 +191,8 @@ export function ProjectView() {
                 project={project}
                 rows={rows}
                 virtualItems={virtualItems}
+                schedules={schedulesResult.schedules}
+                columns={GANTT_OUTLINE_COLUMNS}
                 selectedTaskId={selectedTaskId}
                 onSelect={selectTask}
                 onToggleCollapse={toggleCollapsed}
