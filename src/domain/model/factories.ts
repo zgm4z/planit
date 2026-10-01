@@ -28,6 +28,32 @@ export function resetIdCounter(): void {
   counter = 0
 }
 
+/**
+ * 从已载入的项目中恢复 id 计数器。
+ *
+ * 页面重载后模块级计数器会归零。若不重新播种，新建的 id 会与项目中
+ * 已存在的 id 重复，而 Project.tasks / dependencies 等都是 keyed Record
+ * —— 重复的 key 会静默覆盖原有数据。
+ */
+export function seedIdCounterFromProject(project: Project): void {
+  let max = 0
+
+  const scan = (id: string): void => {
+    const suffix = id.split('_').pop()
+    if (!suffix) return
+    const value = Number.parseInt(suffix, 36)
+    if (Number.isFinite(value) && value > max) max = value
+  }
+
+  scan(project.id)
+  for (const id of Object.keys(project.tasks)) scan(id)
+  for (const id of Object.keys(project.dependencies)) scan(id)
+  for (const id of Object.keys(project.resources)) scan(id)
+  for (const id of Object.keys(project.assignments)) scan(id)
+
+  counter = Math.max(counter, max)
+}
+
 export function createCalendar(id: CalendarId = DEFAULT_CALENDAR_ID): Calendar {
   return {
     id,
@@ -67,6 +93,10 @@ export interface CreateTaskInput {
   isMilestone?: boolean
 }
 
+/**
+ * 注意：当 `isMilestone` 为真时，会忽略传入的 `duration` 并强制为 0
+ * （里程碑是零工期的时间点），`duration` 参数在此情况下不生效。
+ */
 export function createTask(input: CreateTaskInput): Task {
   const isMilestone = input.isMilestone ?? false
   return {

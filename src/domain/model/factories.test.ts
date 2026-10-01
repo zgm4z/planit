@@ -4,6 +4,8 @@ import {
   createProject,
   createTask,
   createDependency,
+  resetIdCounter,
+  seedIdCounterFromProject,
   DEFAULT_CALENDAR_ID,
 } from './factories'
 
@@ -61,5 +63,28 @@ describe('createDependency', () => {
     expect(d.toTaskId).toBe('b')
     expect(d.type).toBe('FS')
     expect(d.lag).toBe(0)
+  })
+})
+
+describe('seedIdCounterFromProject', () => {
+  it('从已载入项目播种计数器后，新建 id 不会与既有 id 冲突', () => {
+    resetIdCounter()
+    const first = createProject('原始', '2026-03-02')
+    const t1 = createTask({ name: 'A' })
+    first.tasks[t1.id] = t1
+    const t2 = createTask({ name: 'B' })
+    first.tasks[t2.id] = t2
+
+    // 模拟页面重载：计数器归零
+    resetIdCounter()
+    seedIdCounterFromProject(first)
+
+    // 连续新建多个任务：只建一个是抓不住 bug 的 —— 计数器归零后第一个
+    // 新 id 恰好是尚未占用的 task_1，直到第二个才会撞上既有的 task_2。
+    for (const name of ['C', 'D', 'E', 'F', 'G']) {
+      const t = createTask({ name })
+      expect(first.tasks[t.id]).toBeUndefined()
+      first.tasks[t.id] = t
+    }
   })
 })

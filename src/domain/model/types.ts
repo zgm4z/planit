@@ -2,6 +2,7 @@ export type TaskId = string
 export type ResourceId = string
 export type CalendarId = string
 export type DependencyId = string
+export type AssignmentId = string
 
 /** ISO 日历日，格式 YYYY-MM-DD，按本地时区解释 */
 export type DateStr = string
@@ -10,7 +11,7 @@ export type DateStr = string
 
 export type CalendarException =
   | { kind: 'holiday' }
-  | { kind: 'custom'; start: string; end: string }
+  | { kind: 'custom'; start: DateStr; end: DateStr }
 
 export interface Calendar {
   id: CalendarId
@@ -86,7 +87,7 @@ export interface Resource {
 }
 
 export interface Assignment {
-  id: string
+  id: AssignmentId
   taskId: TaskId
   resourceId: ResourceId
   /** 0–1 投入比例 */
@@ -108,7 +109,7 @@ export interface Project {
   rootIds: TaskId[]
   dependencies: Record<DependencyId, Dependency>
   resources: Record<ResourceId, Resource>
-  assignments: Record<string, Assignment>
+  assignments: Record<AssignmentId, Assignment>
   createdAt: string
   updatedAt: string
 }
