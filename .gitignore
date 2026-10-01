@@ -12,3 +12,6 @@ dist/
 test-results/
 playwright-report/
 blob-report/
+
+# scripts/importOmniPlan.py 的产出（含用户业务数据，不入库）
+*.planit.json
