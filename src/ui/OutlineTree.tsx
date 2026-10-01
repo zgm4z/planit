@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { ComputedSchedule, Project, Task, TaskCosts, TaskId } from '../domain/model/types'
+import type {
+  BaselineComparison,
+  ComputedSchedule,
+  EarnedValue,
+  Project,
+  Task,
+  TaskCosts,
+  TaskId,
+} from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
 import {
   cellFlex,
@@ -22,6 +30,9 @@ interface OutlineTreeProps {
   /** v0.5：引擎派生的投入与成本 —— UI 只读，不重算 */
   efforts: Record<TaskId, number>
   costs: Record<TaskId, TaskCosts>
+  /** v1.0：引擎派生的挣值与基线差异 —— UI 只读，不重算 */
+  earnedValues: Record<TaskId, EarnedValue>
+  baselineDiffs: Record<TaskId, BaselineComparison>
   /** 要渲染的列，**调用方保证已按注册表顺序排好** */
   columns: OutlineColumn[]
   selectedTaskId: TaskId | null
@@ -40,6 +51,8 @@ export function OutlineTree({
   schedules,
   efforts,
   costs,
+  earnedValues,
+  baselineDiffs,
   columns,
   selectedTaskId,
   onSelect,
@@ -89,7 +102,15 @@ export function OutlineTree({
                   <NoteCell key={task.id} task={task} />
                 ) : (
                   <CellText
-                    value={getOutlineCellValue(column.key, { task, schedule, project, efforts, costs })}
+                    value={getOutlineCellValue(column.key, {
+                      task,
+                      schedule,
+                      project,
+                      efforts,
+                      costs,
+                      earnedValues,
+                      baselineDiffs,
+                    })}
                   />
                 )}
               </div>

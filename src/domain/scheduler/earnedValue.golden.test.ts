@@ -189,6 +189,68 @@ describe('摘要与里程碑', () => {
     expect(result.baselineDiffs[parent.id]).toBeUndefined()
   })
 
+  it('摘要 PV 的混合 null 语义：任一子任务 PV 为 null → 摘要 PV 为 null', () => {
+    // 手算样例：摘要（阶段）+ 两个叶子
+    //   A：4 工作日（03-02..03-05）、成本 1000、progress 50 → EV 500
+    //   B：2 工作日（03-02..03-03）、成本 800、progress 25 → EV 200
+    // 基线快照收录谁由用例决定 —— 用来模拟「保存基线之后又新增了一个叶子」。
+    const build = (): { project: Project; parent: Task; a: Task; b: Task } => {
+      const project = createProject('混合 PV', START)
+      const parent = createTask({ name: '阶段', duration: 1 })
+      const a = createTask({ name: 'A', duration: 4, parentId: parent.id })
+      const b = createTask({ name: 'B', duration: 2, parentId: parent.id })
+      project.tasks[parent.id] = { ...parent, childIds: [a.id, b.id] }
+      project.tasks[a.id] = { ...a, progress: 50 }
+      project.tasks[b.id] = { ...b, progress: 25 }
+      project.rootIds.push(parent.id)
+
+      const ra = createResource({ name: 'RA' })
+      project.resources[ra.id] = { ...ra, cost: { usage: 1000, currency: 'CNY' } }
+      project.assignments.asg_a = createAssignment({ taskId: a.id, resourceId: ra.id, units: 1 })
+      const rb = createResource({ name: 'RB' })
+      project.resources[rb.id] = { ...rb, cost: { usage: 800, currency: 'CNY' } }
+      project.assignments.asg_b = createAssignment({ taskId: b.id, resourceId: rb.id, units: 1 })
+      return { project, parent, a, b }
+    }
+    const setBaseline = (project: Project, entries: Baseline['entries']): void => {
+      project.baselines = [{ id: 'bl_1', name: 'B', createdAt: 'now', entries }]
+      project.activeBaselineId = 'bl_1'
+    }
+
+    // 正向对照（防「摘要 PV 恒为 null」的假实现）：两个叶子都在基线里 → 之和
+    {
+      const { project, parent, a, b } = build()
+      setBaseline(project, {
+        [a.id]: { name: 'A', start: '2026-03-02', finish: '2026-03-05' },
+        [b.id]: { name: 'B', start: '2026-03-02', finish: '2026-03-03' },
+      })
+      project.statusDate = '2026-03-04'
+      const ev = solve(project).earnedValues
+      expect(ev[a.id].pv).toBe(750) // 1000 × 3/4（截至 03-04 应完成 3 天）
+      expect(ev[b.id].pv).toBe(800) // 基线 2 天、基准日 ≥ 结束日 → 全部计划完成
+      expect(ev[parent.id].pv).toBe(1550) // 750 + 800
+      expect(ev[parent.id].ev).toBe(700) // 500 + 200
+      expect(ev[parent.id].sv).toBe(-850) // 700 − 1550
+    }
+
+    // 缺口路径：基线**只收录 A**，B 是保存基线之后新增的叶子
+    {
+      const { project, parent, a, b } = build()
+      setBaseline(project, { [a.id]: { name: 'A', start: '2026-03-02', finish: '2026-03-05' } })
+      project.statusDate = '2026-03-04'
+      const ev = solve(project).earnedValues
+      expect(ev[a.id].pv).toBe(750) // A 有基线条目 → 照常可算
+      expect(ev[b.id].pv).toBeNull() // B 不在快照里 → 算不出来
+      // 摘要：B 算不出来 → 整个摘要也算不出来。**不是**只累加 A 的 750 ——
+      // 那会把 B 的 EV 混进 SV，给出一个由部分 PV 拼成、看起来完整的 SV。
+      expect(ev[parent.id].pv).toBeNull()
+      expect(ev[parent.id].sv).toBeNull()
+      // BAC / EV 不依赖基线，照常汇总
+      expect(ev[parent.id].bac).toBe(1800)
+      expect(ev[parent.id].ev).toBe(700)
+    }
+  })
+
   it('里程碑（零工期）：PV 在基准日 ≥ 基线日时为 BAC，早期为 0', () => {
     const project = createProject('里程碑', START)
     const milestone = createTask({ name: 'M', kind: 'milestone' })

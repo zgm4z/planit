@@ -1,4 +1,14 @@
-import type { ComputedSchedule, DateStr, Project, Task, TaskCosts, TaskId, TaskKind } from '../domain/model/types'
+import type {
+  BaselineComparison,
+  ComputedSchedule,
+  DateStr,
+  EarnedValue,
+  Project,
+  Task,
+  TaskCosts,
+  TaskId,
+  TaskKind,
+} from '../domain/model/types'
 
 /**
  * 列的**标识**：可序列化，进 localStorage 的就是这一层。
@@ -20,24 +30,24 @@ export type OutlineColumnKey =
   | 'totalSlack'
   | 'freeSlack'
   // v0.5 解禁：这 5 列有了真实数据来源（项目的 assignments 反查、引擎的 efforts / costs）
-  // 与 v1.0 的基线与挣值列区分开 —— 后 11 个仍是「显示但禁用」。
   | 'assignees'
   | 'effort'
   | 'taskCost'
   | 'resourceCost'
   | 'totalCost'
-  // 显示但禁用（依赖 v1.0 的基线与挣值功能）—— 11 个
+  // v1.0 解禁：以下 8 列有了真实数据来源（基线快照的差异、引擎的 costs 与进度）
   | 'baselineStart'
   | 'baselineFinish'
   | 'startVariance'
   | 'finishVariance'
   | 'bcws'
   | 'bcwp'
+  | 'sv'
+  | 'bac'
+  // 显示但禁用（依赖「实际成本录入」，本版无数据源）—— 3 个
   | 'acwp'
   | 'cv'
-  | 'sv'
   | 'eac'
-  | 'bac'
 
 /** 列的**渲染描述**。**不进 localStorage** —— 那里只存 `OutlineColumnKey`。 */
 export interface OutlineColumn {
@@ -53,15 +63,23 @@ export interface OutlineColumn {
   flex?: boolean
 }
 
-/** 依赖 v1.0 的基线与挣值功能的列 */
-const BASELINE_REASON = 'outline.disabledReason.baseline'
+/**
+ * 依赖「实际成本录入」的列（本版无数据源，**尚未排期**）—— spec 缺陷 D2 / 计划偏差 2。
+ *
+ * 为什么写「尚未排期」而不是版本号：v1.0 是路线图的**最后一版**，这些条目再也
+ * 指不出「某个版本」。写一个不存在的版本号（如 v1.1）是在许一个不会兑现的承诺 ——
+ * 这条「指不出真实版本就写尚未排期」的规则由 v0.6 确立。
+ */
+const ACTUAL_COST_REASON = 'outline.disabledReason.actualCost'
 
 /**
  * **完整的列注册表**。数组顺序即渲染顺序（表头、单元格、菜单都读它）。
  *
- * 「分批原则」（ROADMAP「通用约定」）：每个条目三选一 —— 可用 / 显示但禁用 + 注明版本 /
- * 不出现。跨项目依赖（「在以下项目之前开始」等）属第三类：架构上不可能，因此
- * **不在这里**，也不在菜单里。
+ * 「分批原则」（ROADMAP「通用约定」）：每个条目三选一 —— 可用（**有真实数据来源**）/
+ * 显示但禁用 + 注明原因 / 不出现。跨项目依赖（「在以下项目之前开始」等）属第三类：
+ * 架构上不可能，因此**不在这里**，也不在菜单里。
+ *
+ * 禁用原因不写版本号而写「尚未排期」：v1.0 是最后一版（见 ACTUAL_COST_REASON 注释）。
  *
  * 禁用列也必须给 width / labelKey —— 菜单里要显示它们的名字，只是点不动。
  */
@@ -85,17 +103,19 @@ export const OUTLINE_COLUMNS: readonly OutlineColumn[] = [
   { key: 'resourceCost', width: 100, labelKey: 'outline.columns.resourceCost', enabled: true },
   { key: 'totalCost', width: 100, labelKey: 'outline.columns.totalCost', enabled: true },
 
-  { key: 'baselineStart', width: 110, labelKey: 'outline.columns.baselineStart', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'baselineFinish', width: 110, labelKey: 'outline.columns.baselineFinish', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'startVariance', width: 100, labelKey: 'outline.columns.startVariance', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'finishVariance', width: 100, labelKey: 'outline.columns.finishVariance', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'bcws', width: 90, labelKey: 'outline.columns.bcws', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'bcwp', width: 90, labelKey: 'outline.columns.bcwp', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'acwp', width: 90, labelKey: 'outline.columns.acwp', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'cv', width: 80, labelKey: 'outline.columns.cv', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'sv', width: 80, labelKey: 'outline.columns.sv', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'eac', width: 80, labelKey: 'outline.columns.eac', enabled: false, disabledReasonKey: BASELINE_REASON },
-  { key: 'bac', width: 80, labelKey: 'outline.columns.bac', enabled: false, disabledReasonKey: BASELINE_REASON },
+  // v1.0：基线 4 列 + 可算的挣值 4 列解禁（真实数据源：基线快照的差异 / 引擎的 costs 与进度）
+  { key: 'baselineStart', width: 110, labelKey: 'outline.columns.baselineStart', enabled: true },
+  { key: 'baselineFinish', width: 110, labelKey: 'outline.columns.baselineFinish', enabled: true },
+  { key: 'startVariance', width: 100, labelKey: 'outline.columns.startVariance', enabled: true },
+  { key: 'finishVariance', width: 100, labelKey: 'outline.columns.finishVariance', enabled: true },
+  { key: 'bcws', width: 90, labelKey: 'outline.columns.bcws', enabled: true },
+  { key: 'bcwp', width: 90, labelKey: 'outline.columns.bcwp', enabled: true },
+  { key: 'sv', width: 80, labelKey: 'outline.columns.sv', enabled: true },
+  { key: 'bac', width: 80, labelKey: 'outline.columns.bac', enabled: true },
+  // 依赖**实际成本**录入（本版无数据源）→ 显示但禁用 + 注明「尚未排期」。见计划偏差 2。
+  { key: 'acwp', width: 90, labelKey: 'outline.columns.acwp', enabled: false, disabledReasonKey: ACTUAL_COST_REASON },
+  { key: 'cv', width: 80, labelKey: 'outline.columns.cv', enabled: false, disabledReasonKey: ACTUAL_COST_REASON },
+  { key: 'eac', width: 80, labelKey: 'outline.columns.eac', enabled: false, disabledReasonKey: ACTUAL_COST_REASON },
 ]
 
 /**
@@ -201,6 +221,10 @@ export interface ColumnCellContext {
   efforts?: Record<TaskId, number>
   /** v0.5：引擎派生的成本拆解。UI 只读，不重算 */
   costs?: Record<TaskId, TaskCosts>
+  /** v1.0：引擎派生的挣值（BAC/EV/PV/SV）。UI 只读，不重算 —— 见计划偏差 2 / 4 */
+  earnedValues?: Record<TaskId, EarnedValue>
+  /** v1.0：引擎派生的相对活动基线的差异（工作日）。UI 只读，不重算 */
+  baselineDiffs?: Record<TaskId, BaselineComparison>
 }
 
 const EMPTY: CellValue = { type: 'empty' }
@@ -210,6 +234,16 @@ function costCell(ctx: ColumnCellContext, taskId: TaskId, field: keyof TaskCosts
   const costs = ctx.costs?.[taskId]
   if (!costs || costs[field] === 0) return EMPTY
   return { type: 'cost', amount: costs[field] }
+}
+
+/**
+ * 挣值列取值。与成本列的关键区别：**只有 null / undefined 才算空**。
+ * `BAC = 0` / `EV = 0` 是**真实数据**（照常显示 0）；`PV` / `SV = null` 才是
+ * 「算不出来」（缺基准日或缺活动基线）—— 见计划偏差 4。把二者混为一谈是本版
+ * 最易写错处：把 null 当 0 会让一整列显示 0，看上去像「一切按计划进行」。
+ */
+function evCell(value: number | null | undefined): CellValue {
+  return value === null || value === undefined ? EMPTY : { type: 'cost', amount: value }
 }
 
 /**
@@ -239,7 +273,7 @@ const TASK_KIND_GLYPH: Record<TaskKind, string> = {
  * 都有取值口径」这条不变式能整表断言；实际渲染时标题单元格走 OutlineTree 的专用
  * 渲染（缩进 + 折叠箭头），不读这个分支。
  *
- * 只有**可用**列有 case；禁用列（v0.5 起只剩 v1.0 的基线与挣值列）
+ * 只有**可用**列有 case；禁用列（本版起只剩依赖实际成本录入的 acwp / cv / eac）
  * 一律落进 default 返回空。它们永远不会被渲染：菜单里点不动，
  * 且载入配置时被 `isEnabledOutlineColumnKey` 挡在门外。
  */
@@ -306,8 +340,37 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
       return costCell(ctx, task.id, 'resource')
     case 'totalCost':
       return costCell(ctx, task.id, 'total')
+    // 判定一律用 `=== undefined`（而不是真值）：与下面两个方差列同口径。DateStr
+    // 永不为空串，二者当前等价，但同一函数里混用两种口径迟早被后人「统一」错方向。
+    case 'baselineStart': {
+      const diff = ctx.baselineDiffs?.[task.id]
+      return diff?.baselineStart === undefined ? EMPTY : { type: 'text', text: diff.baselineStart }
+    }
+    case 'baselineFinish': {
+      const diff = ctx.baselineDiffs?.[task.id]
+      return diff?.baselineFinish === undefined ? EMPTY : { type: 'text', text: diff.baselineFinish }
+    }
+    // 差异是**工作日**（正数 = 延后），与 sv（货币）不同量纲 —— spec 缺陷 D4。
+    // 摘要行不产生 diff 键（基线快照只含叶子）→ 这里自然落到 EMPTY，与 duration /
+    // progress 对摘要行的惯例一致，无需特判。
+    case 'startVariance': {
+      const diff = ctx.baselineDiffs?.[task.id]
+      return diff?.startVariance === undefined ? EMPTY : { type: 'days', count: diff.startVariance }
+    }
+    case 'finishVariance': {
+      const diff = ctx.baselineDiffs?.[task.id]
+      return diff?.finishVariance === undefined ? EMPTY : { type: 'days', count: diff.finishVariance }
+    }
+    case 'bcws':
+      return evCell(ctx.earnedValues?.[task.id]?.pv)
+    case 'bcwp':
+      return evCell(ctx.earnedValues?.[task.id]?.ev)
+    case 'sv':
+      return evCell(ctx.earnedValues?.[task.id]?.sv)
+    case 'bac':
+      return evCell(ctx.earnedValues?.[task.id]?.bac)
     default:
-      // 全部禁用列（基线 / 挣值，v1.0）：本版没有数据来源
+      // 全部禁用列（v1.0 起只剩依赖实际成本录入的 acwp / cv / eac）：本版没有数据来源
       return EMPTY
   }
 }

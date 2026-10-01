@@ -54,7 +54,13 @@ const ZERO_EV: EarnedValue = { bac: 0, ev: 0, pv: null, sv: null }
  *
  * 缺活动基线 / 缺基准日时 PV 与 SV 取 **null**（不是 0）—— 0 会被读成
  * 「完全按计划」，那是误导（计划偏差 4）。
- * 摘要任务 = 子任务汇总；PV 为 null 当且仅当**所有**子任务的 PV 都是 null。
+ * 摘要任务 = 子任务汇总；PV 为 null 当且仅当**任一**子任务的 PV 是 null。
+ *
+ * 为什么是「任一」而不是「全部」（本版评审修正）：基线保存后**新增一个叶子任务**
+ * 是基线工作流的正常操作 —— 新叶子在快照里没有条目，其 PV 为 null，而老叶子有值。
+ * 若跳过 null 只累加有值的部分，摘要就会给出一个由**部分** PV 拼成、看起来完整的
+ * SV，把「未纳入基线的任务」的 EV 也算进差异，**SV 被高估**。这与「缺活动基线 /
+ * 缺基准日就 null」同源：算不出来就 null，不假装。
  */
 export function collectEarnedValues(
   project: Project,
@@ -85,12 +91,17 @@ export function collectEarnedValues(
     let bac = 0
     let ev = 0
     let pv: number | null = null
+    // 任一子任务 PV 为 null（该子任务未纳入基线快照 —— 如保存基线后新增的叶子 ——
+    // 或缺基准日）→ 摘要 PV 同样为 null。只累加有值的部分会高估 SV（见函数头注释）。
+    let pvIncomplete = false
     for (const childId of task.childIds) {
       const child = visit(childId)
       bac += child.bac
       ev += child.ev
-      if (child.pv !== null) pv = (pv ?? 0) + child.pv
+      if (child.pv === null) pvIncomplete = true
+      else pv = (pv ?? 0) + child.pv
     }
+    if (pvIncomplete) pv = null
 
     const merged: EarnedValue = { bac, ev, pv, sv: pv === null ? null : ev - pv }
     result[id] = merged
