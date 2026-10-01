@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 import type { VirtualItem } from '@tanstack/react-virtual'
@@ -103,10 +103,22 @@ describe('OutlineTree', () => {
     expect(screen.getByTestId(`outline-cell-progress-${childId}`)).toBeInTheDocument()
   })
 
-  it('kind 列按任务类型出图标：分组 ▾ / 里程碑 ◆ / 任务 ▪', () => {
+  it('kind 列按任务类型出图标：分组 ▤ / 里程碑 ◆ / 任务 ▪', () => {
     renderTree()
-    expect(screen.getByTestId(`outline-cell-kind-${parentId}`)).toHaveTextContent('▾')
+    // 分组**不是** ▾ —— 那是 title 列折叠按钮的字形，两者重复正是缺陷 1
+    expect(screen.getByTestId(`outline-cell-kind-${parentId}`)).toHaveTextContent('▤')
     expect(screen.getByTestId(`outline-cell-kind-${childId}`)).toHaveTextContent('▪')
+  })
+
+  it('摘要行只出一个三角，且那个三角在可点的折叠按钮里（缺陷 1 回归）', () => {
+    renderTree()
+
+    const row = screen.getByTestId(`outline-row-${parentId}`)
+    // kind 列的分组图标若仍是 ▾，会和 title 列的折叠按钮并排凑出两个三角
+    const triangles = within(row).queryAllByText(/[▾▸]/)
+    expect(triangles).toHaveLength(1)
+    // 留下的那个必须是可点的折叠按钮（e2e 依赖「行内唯一的 button」）
+    expect(triangles[0].closest('button')).not.toBeNull()
   })
 
   it('title 单元格带折叠按钮，点击回调带任务 id', async () => {

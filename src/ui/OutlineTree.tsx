@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { ComputedSchedule, Project, Task, TaskId } from '../domain/model/types'
+import type { ComputedSchedule, Project, Task, TaskId, TaskKind } from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
 import {
   getOutlineCellValue,
@@ -75,6 +75,8 @@ export function OutlineTree({
               >
                 {column.key === 'title' ? (
                   <TitleCell row={row} task={task} onToggleCollapse={onToggleCollapse} />
+                ) : column.key === 'kind' ? (
+                  <KindCell task={task} />
                 ) : column.key === 'note' ? (
                   <NoteCell task={task} />
                 ) : (
@@ -123,6 +125,36 @@ function TitleCell({
       <span className={`${styles.outlineName} ${row.hasChildren ? styles.outlineNameSummary : ''}`}>
         {task.name}
       </span>
+    </span>
+  )
+}
+
+/**
+ * 类型列的图标：分组 ▤ / 里程碑 ◆ / 任务 ▪。
+ *
+ * **分组为什么不是三角（▾）**：spec §4.1 说 kind 列的分组图标是 `▾`，同时又说
+ * title 列「保留缩进与折叠箭头」—— 两条叠加会让摘要行并排出现两个一模一样的三角，
+ * 用户分不清哪个可点（缺陷 1）。约定一行只留一个三角，且必须是**可交互**的那个
+ * （title 列里可点的折叠按钮）。因此 kind 列的分组改用非三角的类型标记 `▤`。
+ * 改这里之前先确认新字形**不是三角/箭头**，否则缺陷 1 复发。
+ *
+ * 这是**渲染处的映射**，不是那份取值口径 —— `outlineColumns.ts` 的
+ * `TASK_KIND_GLYPH` 仍把分组写成 `▾`（它是「取值」层，本版不改）。
+ */
+const KIND_GLYPH: Record<TaskKind, string> = {
+  group: '▤',
+  milestone: '◆',
+  task: '▪',
+}
+
+/**
+ * 类型单元格：一个类型图标。里程碑套 `milestoneGlyph` 找回强调色与字号
+ * （Task 3 把图标挪进 kind 列时丢了那个 class，样式表里一度成为死 CSS）。
+ */
+function KindCell({ task }: { task: Task }) {
+  return (
+    <span className={task.kind === 'milestone' ? styles.milestoneGlyph : undefined}>
+      {KIND_GLYPH[task.kind]}
     </span>
   )
 }
