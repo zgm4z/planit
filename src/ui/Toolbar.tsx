@@ -4,6 +4,8 @@ import {
   IconArrowBackUp,
   IconArrowForwardUp,
   IconArrowLeft,
+  IconIndentIncrease,
+  IconIndentDecrease,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,6 +30,7 @@ export function Toolbar() {
 
   const zoom = useViewStore((state) => state.zoom)
   const setZoom = useViewStore((state) => state.setZoom)
+  const selectedTaskId = useViewStore((state) => state.selectedTaskId)
   const scheduleError = useScheduleStore((state) => state.error)
 
   return (
@@ -67,6 +70,46 @@ export function Toolbar() {
           }
         >
           <IconPlus size={16} />
+        </ActionIcon>
+      </Tooltip>
+
+      {/* 缩进 / 反缩进：作用于当前选中的任务。两条命令都没有 coalesceKey，
+          因此每次点击天然各成一条撤销记录，不需要额外的合并屏障。 */}
+      <Tooltip label={t('toolbar.indentHint')}>
+        <ActionIcon
+          variant="subtle"
+          disabled={!selectedTaskId}
+          aria-label={t('toolbar.indent')}
+          data-testid="indent"
+          onClick={() =>
+            selectedTaskId &&
+            dispatch({
+              type: 'task.indent',
+              label: 'commands.task.indent',
+              payload: { taskId: selectedTaskId },
+            })
+          }
+        >
+          <IconIndentIncrease size={16} />
+        </ActionIcon>
+      </Tooltip>
+
+      <Tooltip label={t('toolbar.outdentHint')}>
+        <ActionIcon
+          variant="subtle"
+          disabled={!selectedTaskId}
+          aria-label={t('toolbar.outdent')}
+          data-testid="outdent"
+          onClick={() =>
+            selectedTaskId &&
+            dispatch({
+              type: 'task.outdent',
+              label: 'commands.task.outdent',
+              payload: { taskId: selectedTaskId },
+            })
+          }
+        >
+          <IconIndentDecrease size={16} />
         </ActionIcon>
       </Tooltip>
 

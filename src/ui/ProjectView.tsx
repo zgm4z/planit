@@ -10,6 +10,8 @@ import { TimeRuler } from './TimeRuler'
 import { dragCommitCommands } from './barDrag'
 import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
 import { Toolbar } from './Toolbar'
+import { StatusBar } from './StatusBar'
+import { CalendarSettings } from './CalendarSettings'
 import { useBarDrag } from './useBarDrag'
 import { useDependencyLink } from './useDependencyLink'
 import { useSharedVirtualizer, ROW_HEIGHT } from './useSharedVirtualizer'
@@ -241,8 +243,17 @@ export function ProjectView() {
           </div>
         </div>
 
-        <Inspector />
+        {/* 右侧栏分成上下两段：Inspector 自负滚动，日历设置钉在底部。
+            宽度由 Inspector 自身的 w 决定，外层容器不要再设宽 —— 否则包两遍。 */}
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flexShrink: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <Inspector />
+          </div>
+          <CalendarSettings />
+        </div>
       </div>
+
+      <StatusBar />
 
       {/* 拖拽中的幽灵线：固定定位，坐标为视口坐标。
           必须显式给 width/height：`<svg>` 是替换元素，光靠 inset:0 不会撑满，
