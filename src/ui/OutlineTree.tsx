@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Project, TaskId } from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
@@ -21,6 +22,8 @@ export function OutlineTree({
   onSelect,
   onToggleCollapse,
 }: OutlineTreeProps) {
+  const { t } = useTranslation()
+
   return (
     <div className={styles.virtualLayer} style={{ height: rows.length * ROW_HEIGHT }}>
       {virtualItems.map((item) => {
@@ -48,7 +51,7 @@ export function OutlineTree({
                 <button
                   type="button"
                   className={styles.outlineToggle}
-                  aria-label={row.collapsed ? 'expand' : 'collapse'}
+                  aria-label={t(row.collapsed ? 'outline.expand' : 'outline.collapse')}
                   onClick={(event) => {
                     event.stopPropagation()
                     onToggleCollapse(row.taskId)

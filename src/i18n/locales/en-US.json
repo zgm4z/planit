@@ -15,14 +15,15 @@
     "outdent": "Outdent",
     "outdentHint": "Move up one level",
     "undo": "Undo",
+    "undoWithLabel": "Undo: {{label}}",
     "redo": "Redo",
     "zoom": { "day": "Day", "week": "Week", "month": "Month" },
-    "calendar": "Working calendar",
     "language": "Language"
   },
-  "outline": { "columnTitle": "Task" },
+  "outline": { "columnTitle": "Task", "expand": "Expand subtasks", "collapse": "Collapse subtasks" },
   "gantt": {
-    "dragHint": "{{start}} → {{finish}} · {{days}} workdays"
+    "dragHint": "{{start}} → {{finish}} · {{days}} workdays",
+    "startLink": "Start link"
   },
   "inspector": {
     "title": "Task details",
@@ -40,8 +41,6 @@
     "addPredecessor": "Add predecessor",
     "selectPredecessor": "Choose a task…",
     "lag": "Lag",
-    "incoming": "Predecessor",
-    "outgoing": "Successor",
     "deletedTask": "(deleted)"
   },
   "scheduling": {

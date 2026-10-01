@@ -131,7 +131,15 @@ export function Toolbar() {
           ]}
         />
 
-        <Tooltip label={nextUndoLabel ? `${t('toolbar.undo')}：${t(nextUndoLabel)}` : t('toolbar.undo')}>
+        <Tooltip
+          label={
+            nextUndoLabel
+              ? // 分隔符（全角/半角冒号）跟着语言走，不能硬编码「：」——
+                // 那样英文界面会渲染成 "Undo：Change duration"
+                t('toolbar.undoWithLabel', { label: t(nextUndoLabel) })
+              : t('toolbar.undo')
+          }
+        >
           <ActionIcon
             variant="subtle"
             disabled={undoDepth === 0}

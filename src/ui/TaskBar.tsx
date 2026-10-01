@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { Calendar, ComputedSchedule, Task } from '../domain/model/types'
-import { addWorkdays } from '../domain/calendar/workdays'
+import { taskFinish } from '../domain/calendar/workdays'
 import {
   BAR_HEIGHT,
   MILESTONE_SIZE,
@@ -46,9 +46,10 @@ export function TaskBar({
   const displayDuration = override?.duration ?? task.duration
 
   // 拖拽期间工期可能刚被改过，结束日期必须按新工期重算，
-  // 不能沿用引擎算出的旧 earlyFinish（resizeEnd 时开始日期没变，但工期变了）
+  // 不能沿用引擎算出的旧 earlyFinish（resizeEnd 时开始日期没变，但工期变了）。
+  // 走 domain 的 taskFinish —— 「开始日 + 工期 → 结束日」只能有一个实现。
   const displayFinish = override
-    ? addWorkdays(displayStart, Math.max(0, displayDuration - 1), calendar)
+    ? taskFinish(displayStart, displayDuration, calendar)
     : schedule.earlyFinish
 
   if (task.isMilestone) {
@@ -121,9 +122,17 @@ export function TaskBar({
 
       {/* 连接柄：从它拖出依赖连线（Task 17 接线）。
           整体放在任务条**外侧**（右缘右侧 1px 起）—— 原先它压在右把手上，
-          只给把手留下约 3px 的可点区，用户几乎抓不到右把手。 */}
+          只给把手留下约 3px 的可点区，用户几乎抓不到右把手。
+
+          role/tabIndex：光有 aria-label 的裸 <div> 不参与可访问性树，
+          读屏软件读不到这个控件。加 role="button" + tabIndex 让它可被识别与聚焦。
+          键盘激活路径（Enter/Space 建边）尚未实现 —— 连线需要一个落点，
+          属于独立于本次清理的交互设计，需要时另开任务。 */}
       <div
-        aria-label="drag-to-link"
+        role="button"
+        tabIndex={0}
+        aria-label={t('gantt.startLink')}
+        data-testid={`link-handle-${task.id}`}
         style={{
           position: 'absolute',
           right: -11,

@@ -15,14 +15,15 @@
     "outdent": "アウトデント",
     "outdentHint": "1 階層上に移動",
     "undo": "元に戻す",
+    "undoWithLabel": "元に戻す：{{label}}",
     "redo": "やり直す",
     "zoom": { "day": "日", "week": "週", "month": "月" },
-    "calendar": "稼働カレンダー",
     "language": "言語"
   },
-  "outline": { "columnTitle": "タスク" },
+  "outline": { "columnTitle": "タスク", "expand": "サブタスクを展開", "collapse": "サブタスクを折りたたむ" },
   "gantt": {
-    "dragHint": "{{start}} → {{finish}} · {{days}} 稼働日"
+    "dragHint": "{{start}} → {{finish}} · {{days}} 稼働日",
+    "startLink": "リンク開始"
   },
   "inspector": {
     "title": "タスクの詳細",
@@ -40,8 +41,6 @@
     "addPredecessor": "先行タスクを追加",
     "selectPredecessor": "タスクを選択…",
     "lag": "ラグ",
-    "incoming": "先行",
-    "outgoing": "後続",
     "deletedTask": "（削除済み）"
   },
   "scheduling": {

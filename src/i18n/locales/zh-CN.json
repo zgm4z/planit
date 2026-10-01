@@ -18,16 +18,19 @@
     "outdent": "反缩进",
     "outdentHint": "反缩进为上一层级的任务",
     "undo": "撤销",
+    "undoWithLabel": "撤销：{{label}}",
     "redo": "重做",
     "zoom": { "day": "日", "week": "周", "month": "月" },
-    "calendar": "工作日历",
     "language": "语言"
   },
   "outline": {
-    "columnTitle": "任务"
+    "columnTitle": "任务",
+    "expand": "展开子任务",
+    "collapse": "折叠子任务"
   },
   "gantt": {
-    "dragHint": "{{start}} → {{finish}} · {{days}} 个工作日"
+    "dragHint": "{{start}} → {{finish}} · {{days}} 个工作日",
+    "startLink": "开始连线"
   },
   "inspector": {
     "title": "任务详情",
@@ -45,8 +48,6 @@
     "addPredecessor": "添加前置任务",
     "selectPredecessor": "选择前置任务…",
     "lag": "延迟",
-    "incoming": "前置",
-    "outgoing": "后续",
     "deletedTask": "(已删除)"
   },
   "scheduling": {
