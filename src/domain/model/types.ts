@@ -71,9 +71,16 @@ export interface Task {
    * 「允许拆分」仍保持禁用。所以它的消费者最早在 v0.6 之后。
    */
   allowSplitting: boolean
-  /** 占位：平衡优先级。数值越大越优先，v0.6 消费 */
+  /**
+   * 资源平衡优先级。**数值越大越优先**（越晚被平衡算法推迟）。
+   * v0.2 埋的占位字段，v0.6 由 `scheduler/leveling.ts` 消费。
+   */
   priority: number
-  /** 占位：平衡允许延迟的工作日数，v0.6 消费 */
+  /**
+   * 资源平衡时**至少**应推迟的工作日数（下界）。引擎必须遵守 ——
+   * 但它会被夹到该任务的剩余浮时上限：超过浮时就不可能既遵守它又不违反依赖。
+   * v0.2 埋的占位字段（当时注释写作「允许延迟」，与本版算法方向相反，已订正）。
+   */
   delay: number
   /** 人·工作日，第二阶段使用 */
   effort?: number
@@ -212,6 +219,25 @@ export interface ResourceSummary {
   cost: number
 }
 
+/** 一处资源超载：某资源在某日负载 > 100%（spec §2 的「超载最严重的资源与日期」） */
+export interface ResourceOverload {
+  resourceId: ResourceId
+  date: DateStr
+  /** 该日负载（Σ assignmentUnits）。> 1 即超载 */
+  load: number
+}
+
+/** v0.6：资源平衡的派生结果。**不进 Project、不落盘**（与 ComputedSchedule 同类） */
+export interface LevelingResult {
+  /**
+   * 每个叶子被推迟的工作日数（含用户设的 `Task.delay`）。0 = 未被推。
+   * 摘要任务不在此表 —— 平衡只作用于叶子。
+   */
+  delays: Record<TaskId, number>
+  /** 平衡后**仍无法消除**的超载（浮时耗尽 / 无可推候选）。空数组 = 完全平衡 */
+  unresolved: ResourceOverload[]
+}
+
 export interface ScheduleResult {
   schedules: Record<TaskId, ComputedSchedule>
   conflicts: ConflictInfo[]
@@ -225,4 +251,9 @@ export interface ScheduleResult {
   costs: Record<TaskId, TaskCosts>
   /** v0.5：每个资源的派生总计（含零分配的资源） */
   resourceTotals: Record<ResourceId, ResourceSummary>
+  /**
+   * v0.6：资源平衡的派生结果（推量 + 平衡后仍存在的超载）。
+   * **UI 只读这里** —— 负载与超载的判定在 `scheduler/leveling.ts`，不在 UI 重算。
+   */
+  leveling: LevelingResult
 }

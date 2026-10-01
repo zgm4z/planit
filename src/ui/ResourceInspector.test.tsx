@@ -135,3 +135,38 @@ describe('资源面板 —— 一个真实分配下的总计', () => {
     expect(screen.getByText(/总时数：16/)).toBeInTheDocument()
   })
 })
+
+describe('资源面板 —— v0.6 超载可视化', () => {
+  it('该资源无超载时显示「无超载」，且不出现超载提示', () => {
+    renderPanel()
+    expect(screen.getByText('无超载')).toBeInTheDocument()
+    // 区分性断言：无超载时红色提示必须缺席 —— 只断言「无超载」存在是恒真的
+    expect(screen.queryByTestId('resource-overload')).not.toBeInTheDocument()
+  })
+
+  it('无法平衡的超载（浮时耗尽）→ 显示红色超载提示与具体天数', () => {
+    // 造一个无浮时的相撞场景：A、B 共用当前资源、各 2 个工作日、无依赖
+    // → 两天各负载 2；两任务都无浮时可推，平衡不了 → unresolved 含 2 个单元
+    const base = useProjectStore.getState().project!
+    const a = createTask({ name: 'A', duration: 2 })
+    const b = createTask({ name: 'B', duration: 2 })
+    const project = {
+      ...base,
+      tasks: { [a.id]: a, [b.id]: b },
+      rootIds: [a.id, b.id],
+      assignments: {
+        x1: createAssignment({ taskId: a.id, resourceId, units: 1 }),
+        x2: createAssignment({ taskId: b.id, resourceId, units: 1 }),
+      },
+    }
+    useProjectStore.setState({ project })
+    useScheduleStore.setState({ result: solve(project), error: null })
+
+    renderPanel()
+    expect(screen.getByTestId('resource-overload')).toBeInTheDocument()
+    // 断言具体信息（天数），而非仅仅「元素存在」
+    expect(screen.getByText(/超载：2 天/)).toBeInTheDocument()
+    // 与「无超载」分支互斥
+    expect(screen.queryByText('无超载')).not.toBeInTheDocument()
+  })
+})

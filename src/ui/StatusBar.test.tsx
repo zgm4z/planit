@@ -59,7 +59,14 @@ describe('StatusBar', () => {
       lastError: null,
     })
     useScheduleStore.setState({
-      result: { schedules: {}, conflicts: [], efforts: {}, costs: {}, resourceTotals: {} },
+      result: {
+        schedules: {},
+        conflicts: [],
+        efforts: {},
+        costs: {},
+        resourceTotals: {},
+        leveling: { delays: {}, unresolved: [] },
+      },
       error: null,
     })
 

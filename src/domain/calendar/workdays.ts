@@ -86,3 +86,21 @@ export function taskStart(finish: DateStr, duration: number, cal: Calendar): Dat
   if (duration <= 0) return snapToWorkday(finish, cal)
   return addWorkdays(finish, -(duration - 1), cal)
 }
+
+/**
+ * `[start, finish]` 区间内的全部工作日（**含首尾**），升序。
+ * `start` 落在非工作日时先吸附到下一个工作日（与 `snapToWorkday` 同口径）。
+ * `start > finish` 时返回空数组。
+ *
+ * 与 `workdaysBetween` 的分工：后者只**计数**（左闭右开），本函数给**列表** ——
+ * 负载要逐个日期累加，需要列表。日期迭代只此一处，别在调度器里再写一遍。
+ */
+export function workdaysInRange(start: DateStr, finish: DateStr, cal: Calendar): DateStr[] {
+  const out: DateStr[] = []
+  let cursor = snapToWorkday(start, cal)
+  while (cursor <= finish) {
+    out.push(cursor)
+    cursor = nextWorkday(cursor, cal)
+  }
+  return out
+}

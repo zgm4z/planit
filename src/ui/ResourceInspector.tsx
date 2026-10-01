@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActionIcon, Button, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { ActionIcon, Alert, Button, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
@@ -54,6 +54,8 @@ export function ResourceInspector() {
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
   const resourceTotals = useScheduleStore((state) => state.result.resourceTotals)
+  // v0.6：平衡后仍存在的超载（浮时耗尽 / 无可推候选）。数据源唯一：引擎的 leveling.unresolved
+  const unresolved = useScheduleStore((state) => state.result.leveling.unresolved)
 
   const resources = Object.values(project.resources)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -121,6 +123,8 @@ export function ResourceInspector() {
   }
 
   const totals = resourceTotals[selected.id] ?? { assignments: 0, hours: 0, cost: 0 }
+  // 选中资源的超载单元（引擎已按 resourceId+date 归集）。UI 不重算负载，只过滤展示
+  const overloads = unresolved.filter((overload) => overload.resourceId === selected.id)
 
   return (
     <Stack gap="sm">
@@ -260,6 +264,18 @@ export function ResourceInspector() {
       <Text fz="xs" c="dimmed">
         {t('resource.totalCost', { amount: Math.round(totals.cost * 100) / 100, currency: selected.cost.currency })}
       </Text>
+
+      {/* v0.6 偏差 7：超载复用资源面板呈现。unresolved 是「平衡后仍超载」的如实上报，
+          不是加载失败 —— 故只在真有超载时提示，无超载时明说「无超载」而非留白 */}
+      {overloads.length > 0 ? (
+        <Alert color="red" p="xs" data-testid="resource-overload">
+          {t('resource.overload', { count: overloads.length })}
+        </Alert>
+      ) : (
+        <Text fz="xs" c="dimmed">
+          {t('resource.noOverload')}
+        </Text>
+      )}
 
       <AssignmentSection scope={{ kind: 'resource', id: selected.id }} />
     </Stack>

@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { createProject, createTask, createDependency } from '../model/factories'
+import {
+  createProject,
+  createTask,
+  createDependency,
+  createAssignment,
+  createResource,
+} from '../model/factories'
 import type { Project } from '../model/types'
-import { solve } from './index'
+import { solve, runCpm } from './index'
 
 /** 把任务挂进项目：处理 rootIds 与父子指针的一致性 */
 function addTask(project: Project, task: ReturnType<typeof createTask>, parentId: string | null = null): void {
@@ -61,5 +67,128 @@ describe('solve', () => {
     const { schedules, conflicts } = solve(project)
     expect(schedules).toEqual({})
     expect(conflicts).toEqual([])
+  })
+})
+
+describe('v0.6：solve() 接入资源平衡', () => {
+  function shared(): { project: Project; a: string; b: string; c: string } {
+    const project = createProject('平衡集成', '2026-03-02')
+    const a = createTask({ name: 'A', duration: 2 })
+    const b = createTask({ name: 'B', duration: 2 })
+    const c = createTask({ name: 'C', duration: 6 })
+    for (const task of [a, b, c]) {
+      project.tasks[task.id] = task
+      project.rootIds.push(task.id)
+    }
+    const resource = createResource({ name: 'R' })
+    project.resources[resource.id] = resource
+    for (const task of [a, b]) {
+      const assignment = createAssignment({ taskId: task.id, resourceId: resource.id, units: 1 })
+      project.assignments[assignment.id] = assignment
+    }
+    return { project, a: a.id, b: b.id, c: c.id }
+  }
+
+  it('有超载时 scheduled* 被推到平衡后的日期', () => {
+    const { project, a, b } = shared()
+    const result = solve(project)
+
+    expect(result.schedules[a].scheduledStart).toBe('2026-03-04') // 被推 2 天
+    expect(result.schedules[b].scheduledStart).toBe('2026-03-02')
+    expect(result.leveling.delays[a]).toBe(2)
+    expect(result.leveling.unresolved).toEqual([])
+  })
+
+  it('leveling 不改变 early/late/slack（spec §3）', () => {
+    const { project, a } = shared()
+    // 对照：把同一任务里被推的 A 抠掉资源（无超载），取它的 CPM 量
+    const result = solve(project)
+    const schedule = result.schedules[a]
+
+    // early 是「无平衡」的经典 CPM 输出，必须还是 03-02..03-03
+    expect(schedule.earlyStart).toBe('2026-03-02')
+    expect(schedule.earlyFinish).toBe('2026-03-03')
+    // 被推的是 scheduled*，不是 early*
+    expect(schedule.scheduledStart).not.toBe(schedule.earlyStart)
+    // 有浮时（项目完成日由 C 撑到 03-09）→ slack > 0 且为 4
+    expect(schedule.totalSlack).toBe(4)
+  })
+
+  it('无资源争用 → scheduled* 与 early* 相同、leveling 全 0', () => {
+    const project = createProject('无争用', '2026-03-02')
+    const t = createTask({ name: 'T', duration: 3 })
+    project.tasks[t.id] = t
+    project.rootIds.push(t.id)
+
+    const result = solve(project)
+    expect(result.schedules[t.id].scheduledStart).toBe(result.schedules[t.id].earlyStart)
+    expect(result.leveling.delays[t.id]).toBe(0)
+    expect(result.leveling.unresolved).toEqual([])
+  })
+
+  // 这条是「能区分」的断言：光断言 early/late 有值恒真。这里把 solve（leveled）
+  // 与直接跑 CPM（未平衡）逐字段对照 —— scheduled* 必须变、其余必须一模一样。
+  it('leveling 只改 scheduled*：early/late/slack 逐字段与未平衡的 CPM 完全相同', () => {
+    const { project, a } = shared()
+    const result = solve(project)
+
+    // 未平衡的基准：leveling 是 solve 在 CPM 之后另加的一步，这里直接跑那一步。
+    const reference = runCpm({
+      tasks: Object.values(project.tasks),
+      dependencies: Object.values(project.dependencies),
+      calendar: project.calendars[project.calendarId],
+      direction: project.schedulingDirection,
+      projectStart: project.startDate,
+      projectEnd: project.endDate,
+      resourceBounds: {},
+    })
+
+    const leveled = result.schedules[a]
+    const base = reference[a]
+
+    // scheduled* 真的被推了（不是恒真的「有值」断言）
+    expect(leveled.scheduledStart).toBe('2026-03-04')
+    expect(base.scheduledStart).toBe('2026-03-02')
+    expect(leveled.scheduledStart).not.toBe(base.scheduledStart)
+
+    // 其余 CPM 字段逐字段不变
+    expect(leveled.earlyStart).toBe(base.earlyStart)
+    expect(leveled.earlyFinish).toBe(base.earlyFinish)
+    expect(leveled.lateStart).toBe(base.lateStart)
+    expect(leveled.lateFinish).toBe(base.lateFinish)
+    expect(leveled.totalSlack).toBe(base.totalSlack)
+    expect(leveled.freeSlack).toBe(base.freeSlack)
+    expect(leveled.isCritical).toBe(base.isCritical)
+  })
+
+  // 钉住第 ⑦ 步的**顺序**：摘要任务的 scheduled* 必须从「已 leveling 过的叶子」汇总。
+  // P 是只含一个孩子 A 的摘要；A 被平衡推走后，P.scheduledStart 必须跟着走 ——
+  // 若 summarizeParents 在 leveling **之前**跑，P 会停在 A 的旧值 03-02。
+  it('摘要任务的 scheduled* 从已 leveling 的叶子汇总（顺序）', () => {
+    const project = createProject('摘要顺序', '2026-03-02')
+    const parent = createTask({ name: 'P' })
+    addTask(project, parent)
+    const a = createTask({ name: 'A', duration: 2 }) // priority 0 → 优先被推
+    const b = createTask({ name: 'B', duration: 2 })
+    b.priority = 10
+    addTask(project, a, parent.id)
+    addTask(project, b)
+    const c = createTask({ name: 'C', duration: 6 }) // 撑起项目完成日 → 给 A/B 浮时
+    addTask(project, c)
+
+    const resource = createResource({ name: 'R' })
+    project.resources[resource.id] = resource
+    for (const task of [a, b]) {
+      const assignment = createAssignment({ taskId: task.id, resourceId: resource.id, units: 1 })
+      project.assignments[assignment.id] = assignment
+    }
+
+    const result = solve(project)
+
+    expect(result.schedules[a.id].scheduledStart).toBe('2026-03-04') // A 被推 2 天
+    expect(result.schedules[parent.id].scheduledStart).toBe('2026-03-04') // 摘要跟着走
+    expect(result.schedules[parent.id].scheduledStart).toBe(
+      result.schedules[a.id].scheduledStart,
+    )
   })
 })
