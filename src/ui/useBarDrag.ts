@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Calendar, ComputedSchedule, Project, TaskId } from '../domain/model/types'
-import { solve } from '../domain/scheduler'
+import type { Calendar, Project, TaskId } from '../domain/model/types'
 import { addDays } from '../domain/calendar/workdays'
 import {
+  buildShadowTasks,
   computeDragPreview,
   daysBetweenPixels,
   dragAnchorDate,
   type DragMode,
   type DragPreview,
+  type ShadowTask,
 } from './barDrag'
 
 /** 小于这个像素位移视为点击，不产生任何数据变更 */
@@ -16,6 +17,8 @@ const CLICK_THRESHOLD_PX = 3
 interface DragState {
   taskId: TaskId
   mode: DragMode
+  /** 启动拖拽的那根指针；其他指针的 move 一律忽略 */
+  pointerId: number
   startClientX: number
   originStartDate: string
   originDuration: number
@@ -31,14 +34,19 @@ interface UseBarDragOptions {
   onCommit: (taskId: TaskId, mode: DragMode, preview: DragPreview) => void
 }
 
+export interface DragShadow {
+  /** 被拖的任务 */
+  taskId: TaskId
+  /** 每个任务的影子排期（**含被拖任务**） */
+  tasks: Record<TaskId, ShadowTask>
+}
+
 export interface BarDragApi {
-  /** 当前拖拽的影子排期，仅在拖拽过程中非空；松手提交后立即清空 */
-  preview: ({ taskId: TaskId } & DragPreview) | null
   /**
-   * 拖拽中被连带重排的**其他**任务（下游链路）的影子排期，非拖拽期间为 null。
-   * 不含被拖任务本身 —— 那根条的影子由 `preview` 表达。
+   * 渲染用的影子排期，**含被拖任务本身**；仅在拖拽过程中非空。
+   * 它是「假设项目解出来的排期」，因此与松手后真正落盘的结果逐字段一致。
    */
-  downstreamPreview: Record<TaskId, ComputedSchedule> | null
+  shadow: DragShadow | null
   begin: (
     event: React.PointerEvent,
     taskId: TaskId,
@@ -49,21 +57,20 @@ export interface BarDragApi {
 }
 
 /**
- * 任务条拖拽：拖拽期间只更新影子预览（`preview` + `downstreamPreview`），
- * 松手才通过 `onCommit` 提交命令。位移小于 3px 视为点击，不产生任何命令 ——
- * 因此**拖拽过程中撤销栈长度必须保持不变**。
+ * 任务条拖拽：拖拽期间只更新影子预览（`shadow`），松手才通过 `onCommit`
+ * 提交命令。位移小于 3px 视为点击，不产生任何命令 —— 因此**拖拽过程中
+ * 撤销栈长度必须保持不变**。
  *
- * 下游链路的重排是**假设排期**：把被拖任务按影子档期塞进一份临时 project，
- * 跑一次纯函数 `solve`，得到「如果现在松手，别人会落在哪」。它只用于渲染
- * 半透明影子，不进 store、不进撤销栈。
+ * 影子是**假设排期**：把被拖任务按该模式真正会提交的变更塞进一份临时 project，
+ * 跑一次纯函数 `solve`。它只用于渲染，不进 store、不进撤销栈。
+ *
+ * 注意影子的几何**不**直接来自 `preview`：`preview` 只是日期算术，对
+ * `finishOn` 之类的约束并不等于最终结果（详见 buildShadowTasks 的注释）。
  */
 export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDragOptions): BarDragApi {
   const dragRef = useRef<DragState | null>(null)
   const previewRef = useRef<({ taskId: TaskId } & DragPreview) | null>(null)
-  const [preview, setPreview] = useState<({ taskId: TaskId } & DragPreview) | null>(null)
-  const [downstreamPreview, setDownstreamPreview] = useState<Record<TaskId, ComputedSchedule> | null>(
-    null,
-  )
+  const [shadow, setShadow] = useState<DragShadow | null>(null)
 
   // onCommit 每次渲染都是新函数，用 ref 兜住，避免把它塞进 begin 的依赖数组
   const onCommitRef = useRef(onCommit)
@@ -76,15 +83,15 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
   // 假设排期必须节流：1000 个任务时每次 pointermove 都 solve 会卡死主线程。
   // 每次 move 只登记「待重算」，由 rAF 保证每帧最多算一次。
   const rafRef = useRef<number | null>(null)
-  const pendingRef = useRef<{ taskId: TaskId; preview: DragPreview } | null>(null)
+  const pendingRef = useRef<{ taskId: TaskId; mode: DragMode; preview: DragPreview } | null>(null)
 
-  const cancelDownstream = useCallback((): void => {
+  const cancelShadow = useCallback((): void => {
     pendingRef.current = null
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
-    setDownstreamPreview(null)
+    setShadow(null)
   }, [])
 
   // 卸载时取消挂起的帧，避免对已卸载组件 setState
@@ -95,54 +102,40 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
     [],
   )
 
-  const scheduleDownstream = useCallback((taskId: TaskId, next: DragPreview): void => {
-    pendingRef.current = { taskId, preview: next }
-    if (rafRef.current !== null) return
+  const scheduleShadow = useCallback(
+    (taskId: TaskId, mode: DragMode, next: DragPreview): void => {
+      pendingRef.current = { taskId, mode, preview: next }
+      if (rafRef.current !== null) return
 
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null
 
-      const pending = pendingRef.current
-      if (!pending) return
+        const pending = pendingRef.current
+        if (!pending) return
 
-      try {
-        const current = projectRef.current
-        const dragged = current?.tasks[pending.taskId]
-        if (!current || !dragged) {
-          setDownstreamPreview(null)
-          return
+        try {
+          const current = projectRef.current
+          if (!current?.tasks[pending.taskId]) {
+            setShadow(null)
+            return
+          }
+
+          // 假设项目必须与「松手后真正落盘的 project」一致，否则影子会骗人。
+          // 按 mode 构造的逻辑集中在 buildHypothetical，与 dragCommitCommands 配对；
+          // buildShadowTasks 再把「被拖条 + 下游条」一起解出来。
+          setShadow({
+            taskId: pending.taskId,
+            tasks: buildShadowTasks(current, pending.taskId, pending.mode, pending.preview),
+          })
+        } catch {
+          // 假设排期失败（临时 project 数据异常、成环等）时退化为**不显示**影子。
+          // 绝不能因为一次预览计算失败而让整个拖拽崩掉或卡住。
+          setShadow(null)
         }
-
-        const hypothetical: Project = {
-          ...current,
-          tasks: {
-            ...current.tasks,
-            [pending.taskId]: {
-              ...dragged,
-              duration: pending.preview.duration,
-              scheduling: {
-                mode: 'constraint',
-                type: 'startOn',
-                date: pending.preview.startDate,
-              },
-            },
-          },
-        }
-
-        const { schedules } = solve(hypothetical)
-
-        const others: Record<TaskId, ComputedSchedule> = {}
-        for (const [id, schedule] of Object.entries(schedules)) {
-          if (id !== pending.taskId) others[id] = schedule
-        }
-        setDownstreamPreview(others)
-      } catch {
-        // 假设排期失败（临时 project 数据异常、成环等）时退化为**不显示**
-        // 下游影子。绝不能因为一次预览计算失败而让整个拖拽崩掉或卡住。
-        setDownstreamPreview(null)
-      }
-    })
-  }, [])
+      })
+    },
+    [],
+  )
 
   const begin = useCallback(
     (
@@ -162,15 +155,17 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
       dragRef.current = {
         taskId,
         mode,
+        pointerId: event.pointerId,
         startClientX: event.clientX,
         originStartDate,
         originDuration,
         moved: false,
       }
 
-      const setPreviewBoth = (next: ({ taskId: TaskId } & DragPreview) | null): void => {
+      // preview 只作为「松手时判断是否真的产生了变更」的依据，不再驱动渲染
+      // （渲染一律走 shadow）。用 ref 即可，无需 state。
+      const setLatestPreview = (next: ({ taskId: TaskId } & DragPreview) | null): void => {
         previewRef.current = next
-        setPreview(next)
       }
 
       // 三条收尾路径可能先后触发（pointerup 之后浏览器隐式释放捕获，再补一个
@@ -190,6 +185,8 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
       const handleMove = (moveEvent: PointerEvent): void => {
         const state = dragRef.current
         if (!state) return
+        // 多指触摸时，只有启动拖拽的那根指针能驱动它
+        if (moveEvent.pointerId !== state.pointerId) return
 
         const deltaPx = moveEvent.clientX - state.startClientX
         if (!state.moved && Math.abs(deltaPx) < CLICK_THRESHOLD_PX) return
@@ -209,8 +206,8 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
           ...computeDragPreview(state.mode, origin, dropDate, calendar),
         }
 
-        setPreviewBoth(next)
-        scheduleDownstream(state.taskId, next)
+        setLatestPreview(next)
+        scheduleShadow(state.taskId, state.mode, next)
       }
 
       const handleUp = (): void => {
@@ -222,7 +219,7 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
 
         dragRef.current = null
         stop()
-        cancelDownstream()
+        cancelShadow()
 
         // 只有真正拖动过、且影子排期与起点**确实不同**才提交：
         // - 单击（未越过阈值）绝不污染撤销栈
@@ -236,7 +233,7 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
         ) {
           onCommitRef.current(state.taskId, state.mode, latest)
         }
-        setPreviewBoth(null)
+        setLatestPreview(null)
       }
 
       // 指针被系统取消（触摸打断、浏览器抢占手势），或捕获丢失（在浏览器
@@ -247,8 +244,8 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
         finished = true
         dragRef.current = null
         stop()
-        cancelDownstream()
-        setPreviewBoth(null)
+        cancelShadow()
+        setLatestPreview(null)
       }
 
       window.addEventListener('pointermove', handleMove)
@@ -266,8 +263,8 @@ export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDrag
         }
       }
     },
-    [calendar, dayWidth, scheduleDownstream, cancelDownstream],
+    [calendar, dayWidth, scheduleShadow, cancelShadow],
   )
 
-  return { preview, downstreamPreview, begin }
+  return { shadow, begin }
 }

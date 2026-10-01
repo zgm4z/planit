@@ -6,6 +6,7 @@ import { DependencyLayer } from './DependencyLayer'
 import { GanttRows } from './GanttRows'
 import { OutlineTree } from './OutlineTree'
 import { TimeRuler } from './TimeRuler'
+import { dragCommitCommands } from './barDrag'
 import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
 import { Toolbar } from './Toolbar'
 import { useBarDrag } from './useBarDrag'
@@ -142,35 +143,11 @@ export function ProjectView() {
     calendar,
     dayWidth,
     onCommit: (taskId, mode, preview) => {
-      if (mode === 'move') {
-        dispatch({
-          type: 'task.moveTo',
-          label: 'commands.task.moveTo',
-          payload: { taskId, startDate: preview.startDate },
-        })
-        return
+      // 命令序列来自 dragCommitCommands —— 与 buildHypothetical（影子预览）共用
+      // 同一份定义，保证「影子显示的结果」就是「松手后落盘的结果」。
+      for (const command of dragCommitCommands(mode, taskId, preview)) {
+        dispatch(command)
       }
-
-      // resizeStart 同时改变开始日期与工期。必须用**一条** task.resize 提交 ——
-      // 拆成 setDuration + moveTo 会在撤销栈里留下两条记录，按一次 Ctrl+Z
-      // 只退回半步（日期回来了、工期还留着）。
-      if (mode === 'resizeStart') {
-        dispatch({
-          type: 'task.resize',
-          label: 'commands.task.resize',
-          payload: { taskId, startDate: preview.startDate, duration: preview.duration },
-        })
-        return
-      }
-
-      // resizeEnd 只改工期。
-      // **不加 coalesceKey**：hook 已保证「一次 mouseup 只 dispatch 一次」，
-      // 合并只会把两次独立的手势并成一条撤销记录（一次 Ctrl+Z 撤两步）。
-      dispatch({
-        type: 'task.setDuration',
-        label: 'commands.task.setDuration',
-        payload: { taskId, duration: preview.duration },
-      })
     },
   })
 
@@ -241,8 +218,7 @@ export function ProjectView() {
                 schedules={schedulesResult.schedules}
                 conflictIds={conflictIds}
                 scale={scale}
-                dragOverride={drag.preview}
-                dragSchedules={drag.downstreamPreview}
+                dragShadow={drag.shadow}
                 onBarPointerDown={(event, taskId, mode) => {
                   // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，
                   // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。

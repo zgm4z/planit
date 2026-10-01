@@ -3,6 +3,7 @@ import type { Calendar, ComputedSchedule, Project, TaskId } from '../domain/mode
 import { TaskBar, type BarDragMode } from './TaskBar'
 import type { TimelineScale } from './timeline'
 import type { FlatRow } from './flattenRows'
+import type { DragShadow } from './useBarDrag'
 import { ROW_HEIGHT } from './useSharedVirtualizer'
 import styles from './styles/GanttPane.module.scss'
 
@@ -14,10 +15,11 @@ interface GanttRowsProps {
   schedules: Record<TaskId, ComputedSchedule>
   conflictIds: ReadonlySet<TaskId>
   scale: TimelineScale
-  /** 拖拽期间的影子排期 */
-  dragOverride: { taskId: TaskId; startDate: string; duration: number } | null
-  /** 拖拽中被连带重排的下游任务影子排期（不含被拖任务） */
-  dragSchedules: Record<TaskId, ComputedSchedule> | null
+  /**
+   * 拖拽期间的影子排期（**含被拖任务**），来自「假设项目」的解。
+   * 非拖拽期间为 null。
+   */
+  dragShadow: DragShadow | null
   onBarPointerDown: (event: React.PointerEvent, taskId: TaskId, mode: BarDragMode) => void
   onStartLink: (event: React.PointerEvent, taskId: TaskId, x: number, y: number) => void
 }
@@ -31,8 +33,7 @@ export function GanttRows({
   schedules,
   conflictIds,
   scale,
-  dragOverride,
-  dragSchedules,
+  dragShadow,
   onBarPointerDown,
   onStartLink,
 }: GanttRowsProps) {
@@ -48,24 +49,19 @@ export function GanttRows({
         // 摘要任务不画条：其日期由子任务汇总，画出来会与子任务条重叠
         if (!task || !schedule || task.childIds.length > 0) return null
 
-        const isDragged = dragOverride?.taskId === task.id
+        // 影子来自「假设项目解出来的排期」，被拖的那根条也走同一个来源 ——
+        // 这样影子与松手后真正落盘的结果天然一致（含 finishOn 这类约束）。
+        const shadow = dragShadow?.tasks[task.id]
 
-        // 被拖的那根条：几何取自拖拽预览（它才认得抓的是左缘、右缘还是中段）
-        const draggedOverride = isDragged
-          ? { startDate: dragOverride.startDate, duration: dragOverride.duration }
-          : undefined
-
-        // 下游影子：只有当这条任务在「假设排期」里**确实挪动了**才画成影子。
-        // 全量标影子会把没受影响的条也一起变灰，反而看不清重排的影响面。
-        const downstream = dragSchedules?.[task.id]
-        const downstreamOverride =
-          downstream !== undefined &&
-          (downstream.earlyStart !== schedule.earlyStart ||
-            downstream.earlyFinish !== schedule.earlyFinish)
-            ? { startDate: downstream.earlyStart, duration: task.duration }
+        // 只有**确实挪动了**的条才画成影子：全量标影子会把没受影响的条也变灰，
+        // 反而看不清重排的影响面。
+        const override =
+          shadow !== undefined &&
+          (shadow.startDate !== schedule.earlyStart || shadow.duration !== task.duration)
+            ? shadow
             : undefined
 
-        const override = draggedOverride ?? downstreamOverride
+        const isDragged = dragShadow?.taskId === task.id
 
         return (
           <div
@@ -86,7 +82,7 @@ export function GanttRows({
               hasConflict={conflictIds.has(task.id)}
               override={override}
               ghost={override !== undefined}
-              showHint={isDragged}
+              showHint={isDragged && override !== undefined}
               onBarPointerDown={(event, mode) => onBarPointerDown(event, task.id, mode)}
               onStartLink={(event, x, y) => onStartLink(event, task.id, x, y)}
             />

@@ -49,6 +49,8 @@ export function useDependencyLink(onLink: (fromTaskId: TaskId, toTaskId: TaskId)
       }
 
       const handleMove = (moveEvent: PointerEvent): void => {
+        // 多指触摸时，只有启动连线的这根指针能拖动幽灵线
+        if (moveEvent.pointerId !== pointerId) return
         setDraft((current) =>
           current ? { ...current, toX: moveEvent.clientX, toY: moveEvent.clientY } : null,
         )
@@ -56,6 +58,7 @@ export function useDependencyLink(onLink: (fromTaskId: TaskId, toTaskId: TaskId)
 
       const handleUp = (upEvent: PointerEvent): void => {
         if (finished) return
+        if (upEvent.pointerId !== pointerId) return
         finished = true
         stop()
 
