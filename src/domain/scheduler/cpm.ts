@@ -7,6 +7,7 @@ import type {
   Task,
   TaskId,
 } from '../model/types'
+import type { ResourceBounds } from './effort'
 import { snapToWorkday, taskFinish, taskStart, workdaysBetween } from '../calendar/workdays'
 import { buildGraph } from './graph'
 import { backwardBound, forwardBound } from './constraints'
@@ -25,6 +26,12 @@ export interface CpmInput {
    * backward —— 逆推终点。未设置时退回用正推算出的完成日
    */
   projectEnd?: DateStr
+  /**
+   * v0.5：任务级的资源可用期边界（按 taskId）。缺省 = 全部不受限。
+   * 见 effort.ts 的 resourceBounds —— 只有设了 availableFrom / availableUntil
+   * 的任务才会出现在这张表里，因此「无资源」的既有行为逐字节不变。
+   */
+  resourceBounds?: Record<TaskId, ResourceBounds>
 }
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {

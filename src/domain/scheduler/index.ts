@@ -1,6 +1,9 @@
 import type { Project, ScheduleResult, Task, TaskId } from '../model/types'
+import type { ResourceBounds } from './effort'
 import { runCpm } from './cpm'
 import { detectConflicts, summarizeParents } from './summarize'
+import { collectCosts, collectEfforts, effectiveDuration, resourceBounds } from './effort'
+import { sumUnits } from '../model/units'
 
 export { CycleError } from './graph'
 export { runCpm } from './cpm'
@@ -9,32 +12,52 @@ export { summarizeParents, detectConflicts } from './summarize'
 /**
  * 排期求解的唯一入口。纯函数，不依赖任何 React 或 store。
  *
- * 管线：收集叶子任务 → CPM 正推/逆推 → 摘要汇总 → 冲突检测
+ * 管线（spec §3.3）：
+ *   ① 有效工期计算   ← v0.5 填充（v0.1 时是恒等变换）
+ *   ② 拓扑排序 + 环检测 ┐
+ *   ③ 正推 / ④ 逆推 / ⑤ 浮时 ├ 都在 runCpm 里
+ *   ⑥ 摘要汇总 + 冲突检测 ┘
  *
- * 第一阶段不含资源与分配，因此没有独立的「有效工期计算」步骤 ——
- * 任务的 duration 直接作为 CPM 的输入。第二阶段接入资源后，
- * 工作量驱动的工期反解会插在第一步与第二步之间。
+ * `fixedEffort` 任务的工期**必须**在 ① 算出来 —— 工期是 CPM 正推的输入。
+ * 资源可用期在此翻译成任务级排期边界（见 ResourceBounds）。
  */
 export function solve(project: Project): ScheduleResult {
   const leaves = collectLeaves(project)
   const calendar = project.calendars[project.calendarId]
 
+  // ① 有效工期计算：把 effort × 分配 × 资源 解成 CPM 需要的 duration 输入，
+  //    同时算出每个任务的资源可用期边界。
+  const units = new Map<TaskId, number>()
+  const durations = new Map<TaskId, number>()
+  const bounds: Record<TaskId, ResourceBounds> = {}
+
+  for (const leaf of leaves) {
+    const unit = sumUnits(project, leaf.id)
+    units.set(leaf.id, unit)
+    durations.set(leaf.id, effectiveDuration(leaf, unit))
+
+    const bound = resourceBounds(project, leaf.id)
+    if (bound.earliestStart !== undefined || bound.latestFinish !== undefined) {
+      bounds[leaf.id] = bound
+    }
+  }
+
   const leafSchedules = runCpm({
-    tasks: leaves,
+    tasks: leaves.map((leaf) => ({ ...leaf, duration: durations.get(leaf.id)! })),
     dependencies: Object.values(project.dependencies),
     calendar,
     direction: project.schedulingDirection,
     projectStart: project.startDate,
     projectEnd: project.endDate,
+    resourceBounds: bounds,
   })
 
   const schedules = summarizeParents(project.tasks, leafSchedules, project.rootIds)
   const conflicts = detectConflicts(project.tasks, schedules, project.rootIds)
+  const efforts = collectEfforts(project, leaves, units, durations)
+  const { costs, resourceTotals } = collectCosts(project, leaves, durations, calendar)
 
-  // v0.5 的投入 / 成本派生量由「有效工期计算」产出（见 plan Task 2）——
-  // 在资源尚未参与排期之前先给空值，让 ScheduleResult 的契约保持完整。
-  // 这里**刻意不**就地算 Σunits × 工期：那是同一条规则的第二份实现。
-  return { schedules, conflicts, efforts: {}, costs: {}, resourceTotals: {} }
+  return { schedules, conflicts, efforts, costs, resourceTotals }
 }
 
 /** 深度优先收集全部叶子任务（childIds 为空者） */
