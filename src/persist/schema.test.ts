@@ -111,6 +111,14 @@ describe('parsePersistedProject — v1 → v2 迁移', () => {
     parsePersistedProject(raw)
     expect(JSON.stringify(raw)).toBe(snapshot)
   })
+
+  it('v1 任务意外带有 kind 时抛错，不静默覆盖', () => {
+    const raw = v1Save()
+    // 模拟「新形状 + 旧版本号」的中间态存档
+    ;(raw.project.tasks.t1 as unknown as Record<string, unknown>).kind = 'milestone'
+
+    expect(() => parsePersistedProject(raw)).toThrow(/kind/)
+  })
 })
 
 describe('parsePersistedProject — v2 直接载入', () => {

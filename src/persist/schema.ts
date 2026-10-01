@@ -12,15 +12,20 @@ export interface PersistedProject {
 }
 
 /**
- * 「存档里记录的版本」→「把它迁到当前版本的函数」。
+ * 历史版本 → 迁移函数。**每个条目必须直接产出当前版本的 Project**（单跳，
+ * 不是链式）—— 表里只登记历史版本，当前版本走上面的快路径、不在表里。
  *
- * 只登记**需要迁移的历史版本**，当前版本（SCHEMA_VERSION）永远不在表里 ——
- * 当前版本的存档由 parsePersistedProject 的快路径原样返回，绝不该被“迁移”。
- * （原先把 `[1, SCHEMA_VERSION]` 当作可读版本清单，那让当前版本也落进迁移
- * 分支里；虽然被上面的快路径挡住、到不了，但一旦有人改快路径就会误迁。）
- * 将来升到 v3 时在这里登记 `2: migrateV2ToV3`，并把 v1→v2→v3 串成链。
+ * 升到 v3 时别只加一条 `2: migrateV2ToV3` 就走：`MIGRATIONS[1]` 仍是
+ * `migrateV1ToV2`，而它内部写死的 `schemaVersion: SCHEMA_VERSION` 会读到 3，
+ * 于是产出「v2 形状 + 戳成 v3」的畸形结果。要么给每个历史版本各写一个
+ * 直达当前版本的迁移函数，要么把这里改成一个逐跳驱动的循环。
+ *
+ * 用 `Partial<Record<…>>` 是刻意的：让「键可能不存在」被类型系统表达出来，
+ * 下面 `if (migrate)` 的守卫因此不是恒真。
+ * 形参用 `never` 是为了让各迁移函数（入参类型各不相同）都能登记进来 ——
+ * 代价是这里丢了类型安全，加新条目时靠人工保证入参对得上。
  */
-const MIGRATIONS: Record<number, (project: never) => Project> = {
+const MIGRATIONS: Partial<Record<number, (project: never) => Project>> = {
   1: migrateV1ToV2,
 }
 

@@ -19,6 +19,15 @@ type V1Project = Omit<Project, 'schedulingDirection' | 'tasks'> & {
  * 其次有子任务即 group，否则 task。
  */
 export function migrateTaskV1ToV2(task: V1Task): Task {
+  // v1 的任务不该有 kind。带上它说明这份存档与版本号不符 —— 可能是手工改过，
+  // 也可能是跑过「新形状 + 旧版本号」的中间态构建（见 migrateV1ToV2 的说明）。
+  // 与其静默把已有的 kind 覆盖掉，不如报错。
+  if ('kind' in task) {
+    throw new Error(
+      `v1 存档的任务 ${task.id} 带有 kind 字段，形状与版本号（v1）不符，已拒绝迁移以免损坏数据`,
+    )
+  }
+
   const kind: TaskKind = task.isMilestone
     ? 'milestone'
     : task.childIds.length > 0

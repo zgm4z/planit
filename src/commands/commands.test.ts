@@ -384,8 +384,19 @@ describe('v0.2 新命令', () => {
 
   it('task.setPriority 改写 priority，且对摘要任务同样生效', () => {
     const { p, id } = oneTask()
-    const next = run(p, 'task.setPriority', { taskId: id, priority: 7 })
-    expect(next.tasks[id].priority).toBe(7)
+    expect(run(p, 'task.setPriority', { taskId: id, priority: 7 }).tasks[id].priority).toBe(7)
+
+    // 摘要任务也要生效 —— 这与 setSchedulingOrder / setDelay 对 group 的
+    // no-op 是相反的规定（备注和优先级对摘要同样有意义）。
+    let q = run(project, 'task.create', { name: 'A' })
+    q = run(q, 'task.create', { name: 'B' })
+    q = run(q, 'task.indent', { taskId: q.rootIds[1] })
+    const parent = q.rootIds[0]
+    expect(q.tasks[parent].kind).toBe('group')
+
+    const next = run(q, 'task.setPriority', { taskId: parent, priority: 7 })
+    expect(next.tasks[parent].priority).toBe(7)
+    expect(next).not.toEqual(q) // 确实产生了变更，不是被守卫吞掉的 no-op
   })
 
   it('task.setDelay 改写 delay，对摘要任务是 no-op', () => {
