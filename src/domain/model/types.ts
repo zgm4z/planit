@@ -41,6 +41,12 @@ export type EffortMode = 'fixedDuration' | 'fixedEffort'
 
 export type TaskKind = 'task' | 'milestone' | 'group'
 
+/** 任务在「依赖允许的时间窗」内取早还是取晚 */
+export type SchedulingOrder = 'asap' | 'alap'
+
+/** 整条链从起点正推（forward）还是从终点逆推（backward） */
+export type SchedulingDirection = 'forward' | 'backward'
+
 export interface Task {
   id: TaskId
   name: string
@@ -55,6 +61,16 @@ export interface Task {
   /** 0–100 */
   progress: number
   effortMode: EffortMode
+  /** 该任务在「依赖允许的时间窗」内尽量早做还是晚做。默认 asap */
+  schedulingOrder: SchedulingOrder
+  /** 备注。纯展示，引擎不消费 */
+  note: string
+  /** 占位：允许拆分。v0.5 消费 */
+  allowSplitting: boolean
+  /** 占位：平衡优先级。数值越大越优先，v0.6 消费 */
+  priority: number
+  /** 占位：平衡允许延迟的工作日数，v0.6 消费 */
+  delay: number
   /** 人·工作日，第二阶段使用 */
   effort?: number
 }
@@ -106,6 +122,14 @@ export interface Project {
   schemaVersion: number
   /** 项目基准开始日期，CPM 正推的起点 */
   startDate: DateStr
+  /** 整条链从起点正推（forward）还是从终点逆推（backward） */
+  schedulingDirection: SchedulingDirection
+  /**
+   * 项目结束锚点。语义随方向变化：
+   *   forward  —— 「最晚必须完成」的期限。未设置即无期限
+   *   backward —— 逆推终点。未设置时退回用正推算出的完成日
+   */
+  endDate?: DateStr
   calendarId: CalendarId
   calendars: Record<CalendarId, Calendar>
   tasks: Record<TaskId, Task>

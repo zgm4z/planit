@@ -13,6 +13,11 @@ function task(id: string, over: Partial<Task> = {}): Task {
     scheduling: { mode: 'auto' },
     progress: 0,
     effortMode: 'fixedDuration',
+    schedulingOrder: 'asap',
+    note: '',
+    allowSplitting: false,
+    priority: 0,
+    delay: 0,
     ...over,
   }
 }

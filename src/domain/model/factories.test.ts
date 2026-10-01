@@ -34,6 +34,12 @@ describe('createProject', () => {
   it('生成的 id 互不相同', () => {
     expect(createProject('A').id).not.toBe(createProject('B').id)
   })
+
+  it('默认前推，且不设结束锚点', () => {
+    const p = createProject('测试项目', '2026-03-02')
+    expect(p.schedulingDirection).toBe('forward')
+    expect(p.endDate).toBeUndefined()
+  })
 })
 
 describe('createTask', () => {
@@ -53,6 +59,15 @@ describe('createTask', () => {
     const t = createTask({ name: '发布', kind: 'milestone', duration: 5 })
     expect(t.kind).toBe('milestone')
     expect(t.duration).toBe(0)
+  })
+
+  it('新字段默认值：asap、空备注、不拆分、优先级 0、延迟 0', () => {
+    const t = createTask({ name: '写文档' })
+    expect(t.schedulingOrder).toBe('asap')
+    expect(t.note).toBe('')
+    expect(t.allowSplitting).toBe(false)
+    expect(t.priority).toBe(0)
+    expect(t.delay).toBe(0)
   })
 })
 

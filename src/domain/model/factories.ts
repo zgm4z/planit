@@ -90,6 +90,7 @@ export function createProject(
     name,
     schemaVersion: SCHEMA_VERSION,
     startDate,
+    schedulingDirection: 'forward',
     calendarId: DEFAULT_CALENDAR_ID,
     calendars: { [DEFAULT_CALENDAR_ID]: createCalendar() },
     tasks: {},
@@ -128,6 +129,11 @@ export function createTask(input: CreateTaskInput): Task {
     scheduling: { mode: 'auto' },
     progress: 0,
     effortMode: 'fixedDuration',
+    schedulingOrder: 'asap',
+    note: '',
+    allowSplitting: false,
+    priority: 0,
+    delay: 0,
   }
 }
 
