@@ -29,6 +29,20 @@ pnpm build      # 生产构建
 pnpm e2e        # 端到端验收（Playwright，需先 pnpm exec playwright install chromium）
 ```
 
+`scripts/` 是开发辅助脚本，不进构建产物：
+
+- `seedLargeProject.ts` —— 生成 1000 任务的压测项目（`perf.spec.ts` 用）。
+- `importOmniPlan.py` —— 把真实 OmniPlan 文档（`.oplx`）转成 planit 的
+  `Project` JSON（`schemaVersion` 与当前 `SCHEMA_VERSION` 一致），
+  用于拿真实数据实测排期引擎。纯标准库、无依赖：
+
+  ```bash
+  python3 scripts/importOmniPlan.py path/to/xxx.oplx -o out.json
+  ```
+
+  导入是**单向且有损**的：OmniPlan 的资源平衡结果 `leveled-start` 不会带过来，
+  planit 会用自己的 CPM 重算 —— 两边日期的差异正是实测要观察的东西。
+
 ## 架构
 
 ```
