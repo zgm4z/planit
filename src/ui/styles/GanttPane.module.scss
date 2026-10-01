@@ -57,7 +57,11 @@
 // 任务名列上面**。钉在左列右缘（= 甘特区左缘）才是对的位置。
 .rulerMonthLabel {
   position: sticky;
-  left: var(--planit-outline-width);
+  // 钉住的位置由 TimeRuler 的 `stickyLabelLeft` prop 经内联变量给；**缺省回退**到
+  // 甘特区左缘（= 大纲列宽）。甘特侧不传该 prop，因此这里与改动前**逐字相同**
+  // （e2e `gantt-ruler` 依赖它）。资源视图传 '0'：它没有 sticky 左列，
+  // 月名应钉在时间线自身左缘。
+  left: var(--ruler-label-left, var(--planit-outline-width));
   z-index: 1; // 压过后面的月份带，钉住时不与相邻月名叠字
   padding-left: 6px;
 }
@@ -97,12 +101,10 @@
   z-index: 1;
 }
 
+// 非工作日底纹。观感定义在 _tokens.scss 的 `nonwork-band` mixin —— 甘特与资源
+// 分配时间线**共用同一份**，此处只保留甘特侧的类名（e2e `workday-band` 依赖它）。
 .weekendBand {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  background: var(--planit-bg-subtle);
-  pointer-events: none;
+  @include nonwork-band;
 }
 
 .bar {

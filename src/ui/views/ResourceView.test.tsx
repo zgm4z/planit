@@ -158,6 +158,24 @@ describe('资源视图（视图 B）', () => {
     expect(screen.getByTestId(`resource-bar-${t2.id}`)).toBeInTheDocument()
   })
 
+  it('分配时间线带日期轴与日网格：日号刻度逐日落在时间线表头，画布是每天一列的网格', () => {
+    const project = fixture()
+    useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+    useScheduleStore.setState({ result: solve(project), error: null })
+    const alice = Object.values(project.resources).find((r) => r.name === '张三')!
+    useViewStore.setState({ selectedResourceId: alice.id })
+    renderView(project)
+
+    // 日期轴复用甘特的 TimeRuler（同一个组件 → 同一套 testid）—— 表头里应有日号刻度。
+    const ruler = screen.getByTestId('resource-timeline-ruler')
+    expect(within(ruler).getAllByTestId('ruler-day-tick').length).toBeGreaterThan(0)
+    // 月份带也在（两行标尺：月份 + 日号）
+    expect(within(ruler).getAllByTestId('ruler-month-band').length).toBeGreaterThan(0)
+
+    // 分配画布存在 —— day-grid（每天一列）与超载/分配条同处这一层。
+    expect(screen.getByTestId('resource-timeline-grid')).toBeInTheDocument()
+  })
+
   it('没有任何资源 → 空态文字 + 新建按钮（不是空白）', () => {
     const project = createProject('空资源', '2026-03-02')
     useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })

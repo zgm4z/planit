@@ -71,6 +71,10 @@
 
 .gantt {
   position: relative;
+  // 每自然日一条竖线，构成背景网格。定义在 _tokens.scss 的 `day-grid` mixin ——
+  // 资源分配时间线**共用同一份**（此前是 ProjectView.tsx 里的内联 backgroundImage，
+  // 与资源视图各写一遍就会静默漂移）。`--day-width` 由 .grid 内联提供，此处继承可见。
+  @include day-grid;
 }
 
 .virtualLayer {
@@ -321,7 +325,6 @@
   flex: 1 1 auto;
   min-width: 0;
   padding: var(--planit-sp-16);
-  overflow-x: auto;
 }
 
 .resourceTimelineTitle {
@@ -330,8 +333,35 @@
   color: var(--planit-text-muted);
 }
 
+// 时间线（刻度 + 画布）的横向滚动口。**只有它滚动** —— 标题留在外面不跟着滚走。
+// 它同时是 TimeRuler 月份标签 `position: sticky` 的锚点（sticky 找最近的滚动容器），
+// 所以资源侧给 TimeRuler 传 `stickyLabelLeft="0"`：月名钉在时间线自身左缘。
+.resourceTimelineScroll {
+  overflow-x: auto;
+}
+
 .resourceTimelineBody {
   position: relative;
+}
+
+// 日期轴表头：高度与甘特侧同一个令牌（--planit-ruler-height），下沿一条强描边
+// 与甘特标尺一致（§2.3「只有标尺下方 1px 分隔」）。里面就是**同一个** TimeRuler。
+.resourceTimelineRuler {
+  height: var(--planit-ruler-height);
+  border-bottom: 1px solid var(--planit-border-strong);
+}
+
+// 分配画布：把甘特的日网格与超载/分配条叠在一起。
+// 每自然日一条竖线（@include day-grid，与甘特共用同一份）—— 于是超载带按天分格、
+// 分配条的落点也能读出是第几天。`--day-width` 由组件内联给（与甘特同用一个令牌）。
+.resourceTimelineGrid {
+  position: relative;
+  @include day-grid;
+}
+
+// 非工作日底纹。与甘特 @include 同一个 nonwork-band mixin（同一份观感）。
+.resourceNonworkBand {
+  @include nonwork-band;
 }
 
 .resourceBar {

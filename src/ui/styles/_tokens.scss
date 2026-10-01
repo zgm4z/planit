@@ -44,6 +44,38 @@ $breakpoint-md: 900px;
   white-space: nowrap;
 }
 
+// ── 时间轴的两个共用件（甘特区与资源分配时间线**共用同一份实现**）───────
+//
+// 本项目栽过「同一概念两份实现」多次（deriveKind / computeProjectSummary / Σunits /
+// findActiveBaseline）。时间轴与它的一天一列是**同一种东西**，不该在资源视图里再画
+// 一套 —— 两处各写一遍，改一处另一处就会静默漂移。两个 mixin 因此放这里（与
+// `section-heading` 同款做法：被两个消费者共用的视觉规则只有一处定义）。
+
+// 日网格：每自然日一条竖线，把时间轴切成可读的列（§3.1 结构层）。
+//
+// 消费方须在自己的元素上提供 `--day-width`（甘特 grid 与资源时间线**同用这一个
+// 令牌**，它也是 e2e `readGanttMetrics` 读的那个）。线的位置落在每格的**右边界**
+// （相邻两天之间），与 TimeRuler 日号刻度的 `border-left` 对齐。
+@mixin day-grid {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(var(--day-width) - 1px),
+    var(--planit-border) calc(var(--day-width) - 1px),
+    var(--planit-border) var(--day-width)
+  );
+}
+
+// 非工作日底纹：把整列（周末 / 日历例外）压暗（§3.1 结构层）。
+// 位置与宽度由消费方内联给（各自算自己的列，见 shared/nonworkBands），本 mixin 只管观感。
+@mixin nonwork-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--planit-bg-subtle);
+  pointer-events: none;
+}
+
 // 运行时 CSS 变量（:root 块）**不在这里输出**。
 // 本文件被 vite.config.ts 的 additionalData 注入进每一个 .module.scss，
 // 若 :root 留在这里，dev 模式下每个 module 都会各输出一份。

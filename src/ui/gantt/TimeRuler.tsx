@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { addDays } from '../../domain/calendar/workdays'
 import type { TimelineScale } from './timeline'
 import styles from '../styles/GanttPane.module.scss'
@@ -5,6 +6,14 @@ import styles from '../styles/GanttPane.module.scss'
 interface TimeRulerProps {
   scale: TimelineScale
   totalDays: number
+  /**
+   * 月份标签 `position: sticky` 钉住时，钉在滚动口左侧的什么位置（任意 CSS 长度）。
+   *
+   * 缺省（不传）→ SCSS 回退到 `var(--planit-outline-width)`，即甘特区左缘 ——
+   * 甘特侧**不传**，行为逐字不变（e2e `gantt-ruler` 依赖它）。
+   * 资源视图的分配时间线没有 sticky 左列，传 `'0'` 让月名钉在时间线自身左缘。
+   */
+  stickyLabelLeft?: string
 }
 
 /** 上行的一个月份带：横跨该月内落在时间轴范围里的全部列 */
@@ -41,7 +50,7 @@ const MIN_MONTH_LABEL_WIDTH = 56
  *
  * 日号的疏密随缩放档位变化（逐日 / 每周 / 每月），避免缩小时生成上千个 DOM 节点。
  */
-export function TimeRuler({ scale, totalDays }: TimeRulerProps) {
+export function TimeRuler({ scale, totalDays, stickyLabelLeft }: TimeRulerProps) {
   const step = scale.dayWidth >= 24 ? 1 : scale.dayWidth >= 10 ? 7 : 30
 
   // ── 上行：月份带 ──
@@ -91,7 +100,17 @@ export function TimeRuler({ scale, totalDays }: TimeRulerProps) {
         })
 
   return (
-    <div className={styles.rulerInner} data-testid="gantt-ruler-ticks">
+    <div
+      className={styles.rulerInner}
+      data-testid="gantt-ruler-ticks"
+      // 只在显式传入时才覆盖：不传则 .rulerMonthLabel 的 var() 回退到甘特左缘，
+      // 甘特侧的 DOM 与计算样式与改动前完全一致。
+      style={
+        stickyLabelLeft
+          ? ({ '--ruler-label-left': stickyLabelLeft } as CSSProperties)
+          : undefined
+      }
+    >
       <div className={styles.rulerMonths}>
         {months.map((band) => (
           <div

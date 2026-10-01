@@ -28,13 +28,14 @@ import { StatusBar } from '../shell/StatusBar'
 import { useBarDrag } from '../gantt/useBarDrag'
 import { useDependencyLink } from '../gantt/useDependencyLink'
 import { useLayoutMode } from '../shared/useBreakpoints'
+import { nonworkBands } from '../shared/nonworkBands'
 import { useSharedVirtualizer, ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { createCalendar } from '../../domain/model/factories'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
 import { useTranslation } from 'react-i18next'
-import { addDays, formatDate, isWorkday } from '../../domain/calendar/workdays'
+import { formatDate } from '../../domain/calendar/workdays'
 import styles from '../styles/ProjectView.module.scss'
 import ganttStyles from '../styles/GanttPane.module.scss'
 
@@ -122,19 +123,14 @@ export function ProjectView() {
 
   // 非工作日底纹：时间轴按自然日铺开，日历判定为非工作日的整列压暗。
   //
-  // 不能用硬编码的 `workdayIndex(...) >= 5`（周一至周五）—— 那与用户可编辑的
-  // 日历脱节：取消勾选周五后任务会跳过周五，底纹却仍只盖周六周日，
-  // 界面自相矛盾。用 isWorkday(date, calendar) 的取反，则周规则与例外日期
-  // （被设为假日的某个周三）都会被正确标出。
-  const weekendBands = useMemo(() => {
-    const bands: { left: number; width: number }[] = []
-    for (let day = 0; day < totalDays; day += 1) {
-      if (!isWorkday(addDays(scale.startDate, day), calendar)) {
-        bands.push({ left: day * dayWidth, width: dayWidth })
-      }
-    }
-    return bands
-  }, [scale.startDate, totalDays, dayWidth, calendar])
+  // 算法在 shared/nonworkBands —— 甘特与资源分配时间线**共用同一份**（此前这段
+  // 循环内联在这里，资源视图若再抄一遍就会静默漂移）。判定走领域日历的取反，
+  // 而不是硬编码「周一至周五」，所以周规则与例外日期（被设为假日的某个周三）
+  // 都会被正确标出。
+  const weekendBands = useMemo(
+    () => nonworkBands(scale.startDate, totalDays, dayWidth, calendar),
+    [scale.startDate, totalDays, dayWidth, calendar],
+  )
 
   // 今日线：仅当今天落在时间轴范围内才渲染
   const todayX = useMemo(() => {
@@ -259,9 +255,6 @@ export function ProjectView() {
                 className={styles.gantt}
                 style={{
                   height: `${rows.length * ROW_HEIGHT}px`,
-                  // 每自然日一条竖线，构成背景网格
-                  backgroundImage:
-                    'repeating-linear-gradient(90deg, transparent 0, transparent calc(var(--day-width) - 1px), var(--planit-border) calc(var(--day-width) - 1px), var(--planit-border) var(--day-width))',
                 }}
                 data-testid="gantt-pane"
               >
