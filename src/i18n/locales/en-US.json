@@ -75,7 +75,8 @@
   "inspector": {
     "title": "Task details",
     "projectTitle": "Project details",
-    "tabs": { "task": "Task", "project": "Project" },
+    "resourceTitle": "Resource details",
+    "tabs": { "task": "Task", "project": "Project", "resource": "Resource" },
     "groups": {
       "info": "Task info",
       "schedule": "Scheduling",
@@ -89,7 +90,7 @@
       "baseline": "No baseline set",
       "baselineHint": "Baseline comparison will be available in v1.0.",
       "assignmentsHint": "Resource features will be available in v0.5.",
-      "allocationHint": "Resource allocation policy will be available in v0.5.",
+      "allocationHint": "Resource leveling will be available in v0.6.",
       "expectedEffortHint": "Effort can be computed as a weighted average of minimum, maximum and expected values. These values are also used as possible variability in a Monte Carlo simulation. Expected effort will be available in v0.6 / v1.0.",
       "resource": "Resource",
       "units": "Units",
@@ -163,11 +164,33 @@
       "taskCount": "{{count}} tasks",
       "format": "Format",
       "currency": "Currency",
-      "currencyHint": "Currency and formats will be available in v0.5",
+      "currencyHint": "Project-level currency and formats will be available in v1.0",
       "unitConversion": "Unit conversion",
       "hoursPerDay": "1 workday = {{hours}} hours",
       "unitConversionHint": "Editing will be available in v0.5"
     }
+  },
+  "resource": {
+    "select": "Select resource",
+    "empty": "No resources yet.",
+    "create": "New resource",
+    "name": "Name",
+    "email": "Email",
+    "kind": "Type",
+    "kind_staff": "Staff",
+    "kind_equipment": "Equipment",
+    "kind_material": "Material",
+    "kind_group": "Group",
+    "availability": "Availability (%)",
+    "efficiency": "Efficiency",
+    "availableFrom": "Available from",
+    "availableUntil": "Available until",
+    "usageCost": "Usage cost",
+    "hourlyCost": "Hourly cost",
+    "currency": "Currency",
+    "totalAssignments": "{{count}} assignments",
+    "totalHours": "{{count}} hours",
+    "totalCost": "Total cost: {{amount}} {{currency}}"
   },
   "scheduling": {
     "auto": "Automatic",
@@ -226,7 +249,17 @@
     "assignment.delete": "Remove assignment",
     "assignment.setUnits": "Set units",
     "task.setEffortMode": "Set effort mode",
-    "task.setEffort": "Set effort"
+    "task.setEffort": "Set effort",
+    "resource.create": "New resource",
+    "resource.rename": "Rename resource",
+    "resource.delete": "Delete resource",
+    "resource.setKind": "Set resource type",
+    "resource.setEmail": "Set email",
+    "resource.setAvailability": "Set availability",
+    "resource.setEfficiency": "Set efficiency",
+    "resource.setAvailablePeriod": "Set available period",
+    "resource.setCost": "Set cost",
+    "calendar.setHoursPerDay": "Set hours per day"
   },
   "conflicts": {
     "constraintViolatedByDependency": "Task is pinned to \"{{constraint}} {{date}}\", but a dependency requires it no earlier than {{earliest}}",

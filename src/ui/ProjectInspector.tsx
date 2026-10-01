@@ -1,4 +1,4 @@
-import { Divider, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Divider, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 
 import type { SchedulingDirection } from '../domain/model/types'
@@ -134,14 +134,20 @@ export function ProjectInspector() {
         {t('inspector.project.currencyHint')}
       </Text>
 
-      <TextInput
+      <NumberInput
         label={t('inspector.project.unitConversion')}
-        value={t('inspector.project.hoursPerDay', { hours: calendar.hoursPerDay })}
-        readOnly
+        min={1}
+        value={calendar.hoursPerDay}
+        onBlur={breakCoalescing}
+        onChange={(value) =>
+          dispatch({
+            type: 'calendar.setHoursPerDay',
+            label: 'commands.calendar.setHoursPerDay',
+            payload: { hoursPerDay: Number(value) || 1 },
+            coalesceKey: 'calendar.setHoursPerDay',
+          })
+        }
       />
-      <Text fz="xs" c="dimmed">
-        {t('inspector.project.unitConversionHint')}
-      </Text>
     </Stack>
   )
 }

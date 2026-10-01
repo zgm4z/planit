@@ -36,6 +36,7 @@ import { DEFAULT_OPEN_GROUPS, INSPECTOR_GROUPS, type InspectorGroupKey } from '.
 import { resolveScheduleDates } from './outlineColumns'
 import { AssignmentSection } from './AssignmentSection'
 import { ProjectInspector } from './ProjectInspector'
+import { ResourceInspector } from './ResourceInspector'
 
 const CONSTRAINT_TYPES: ConstraintType[] = [
   'startOn',
@@ -62,7 +63,7 @@ export function Inspector() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
-  const [tab, setTab] = useState<'task' | 'project'>('task')
+  const [tab, setTab] = useState<'task' | 'project' | 'resource'>('task')
 
   // 换任务时回到「任务」Tab（spec §2：选中任务时默认任务 Tab）
   useEffect(() => {
@@ -72,7 +73,8 @@ export function Inspector() {
   if (!project) return null
 
   const hasTask = Boolean(selectedTaskId && project.tasks[selectedTaskId])
-  const value: 'task' | 'project' = hasTask ? tab : 'project'
+  // 未选任务时默认「项目」Tab（右栏不塌陷），但允许手动切到「资源」Tab
+  const value: 'task' | 'project' | 'resource' = hasTask ? tab : tab === 'resource' ? 'resource' : 'project'
 
   return (
     <Box
@@ -82,7 +84,11 @@ export function Inspector() {
       data-testid="inspector"
     >
       <Text fz="xs" fw={650} c="dimmed" tt="uppercase" mb="sm">
-        {value === 'task' ? t('inspector.title') : t('inspector.projectTitle')}
+        {value === 'task'
+          ? t('inspector.title')
+          : value === 'resource'
+            ? t('inspector.resourceTitle')
+            : t('inspector.projectTitle')}
       </Text>
 
       {/* keepMounted={false}：Mantine 9 的 Tabs 默认常驻挂载非活动面板（keepMounted: true），
@@ -90,13 +96,20 @@ export function Inspector() {
           输入框，`getByLabelText('名称')` 会命中两个而抛错，且隐藏面板里的表单控件仍参与
           可访问性树。显式关掉挂载，让「面板不显示 = 不挂载」成立：既消除了重名 label，
           也满足既有单测「切到项目 Tab 后任务面板不在 DOM」的断言。 */}
-      <Tabs keepMounted={false} value={value} onChange={(next) => setTab(next as 'task' | 'project')}>
+      <Tabs
+        keepMounted={false}
+        value={value}
+        onChange={(next) => setTab(next as 'task' | 'project' | 'resource')}
+      >
         <Tabs.List mb="sm">
           <Tabs.Tab value="task" disabled={!hasTask} data-testid="inspector-tab-task">
             {t('inspector.tabs.task')}
           </Tabs.Tab>
           <Tabs.Tab value="project" data-testid="inspector-tab-project">
             {t('inspector.tabs.project')}
+          </Tabs.Tab>
+          <Tabs.Tab value="resource" data-testid="inspector-tab-resource">
+            {t('inspector.tabs.resource')}
           </Tabs.Tab>
         </Tabs.List>
 
@@ -106,6 +119,10 @@ export function Inspector() {
 
         <Tabs.Panel value="project" data-testid="inspector-project-panel">
           <ProjectInspector />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="resource" data-testid="inspector-resource-panel">
+          <ResourceInspector />
         </Tabs.Panel>
       </Tabs>
     </Box>
