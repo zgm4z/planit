@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createTask, createDependency } from '../model/factories'
-import type { Dependency, Task } from '../model/types'
+import type { ConstraintType, Dependency, Task } from '../model/types'
 import { runCpm } from './cpm'
 import { CycleError } from './graph'
 
@@ -200,5 +200,50 @@ describe('runCpm — 边界情况', () => {
         projectStart: '2026-03-02',
       }),
     ).toThrow(CycleError)
+  })
+})
+
+// ── 六种约束类型 ────────────────────────────────────────
+describe('runCpm — 六种约束类型的上下界', () => {
+  // 单个工期 2 天的任务，约束日期 2026-03-16，项目起点 2026-03-02（周一）
+  // 2 天工期的任务若结束于 03-16，则开始于 03-13
+  const cal = createCalendar()
+  const run = (type: ConstraintType) =>
+    runCpm({
+      tasks: [
+        { ...mk('A', 2), scheduling: { mode: 'constraint', type, date: '2026-03-16' } },
+      ],
+      dependencies: [],
+      calendar: cal,
+      projectStart: '2026-03-02',
+    })
+
+  it('startOn：钉住开始日期', () => {
+    expect(run('startOn').A.earlyStart).toBe('2026-03-16')
+    expect(run('startOn').A.earlyFinish).toBe('2026-03-17')
+  })
+
+  it('finishOn：钉住结束日期，开始由工期反推', () => {
+    expect(run('finishOn').A.earlyStart).toBe('2026-03-13')
+    expect(run('finishOn').A.earlyFinish).toBe('2026-03-16')
+  })
+
+  it('startNoEarlierThan：只设开始下界', () => {
+    expect(run('startNoEarlierThan').A.earlyStart).toBe('2026-03-16')
+  })
+
+  it('startNoLaterThan：只设开始上界，最早排期不受影响', () => {
+    expect(run('startNoLaterThan').A.earlyStart).toBe('2026-03-02')
+    expect(run('startNoLaterThan').A.lateStart).toBe('2026-03-16')
+  })
+
+  it('finishNoEarlierThan：只设结束下界', () => {
+    expect(run('finishNoEarlierThan').A.earlyStart).toBe('2026-03-13')
+    expect(run('finishNoEarlierThan').A.earlyFinish).toBe('2026-03-16')
+  })
+
+  it('finishNoLaterThan：只设结束上界，最早排期不受影响', () => {
+    expect(run('finishNoLaterThan').A.earlyStart).toBe('2026-03-02')
+    expect(run('finishNoLaterThan').A.lateFinish).toBe('2026-03-16')
   })
 })

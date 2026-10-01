@@ -101,9 +101,9 @@ function constraintLowerBound(task: Task, cal: Calendar, projectStart: DateStr):
     case 'startNoEarlierThan':
       return date
     case 'finishOn':
+    case 'finishNoEarlierThan':
       return taskStart(date, task.duration, cal)
     case 'startNoLaterThan':
-    case 'finishNoEarlierThan':
     case 'finishNoLaterThan':
       return projectStart
   }
