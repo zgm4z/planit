@@ -1,0 +1,99 @@
+// ── Inspector（右栏）的做工层 ──────────────────────────────
+// 设计规范 §1.1 / §1.3 / §2.1 / §6。
+//
+// 为什么需要它：Mantine 的 Accordion 默认把 7 个分组渲染成**一叠一模一样的
+// 圆角卡片** —— 20 多个同形方框连成一柱，没有任何扫描锚点（截图里最扎眼的问题）。
+// 这里把分组压成**排版式分区**：去掉卡片与边框，靠标题的字重 / 字号与极淡的
+// 分隔线分组，让 §2.1 的留白自己承担层次（不靠装饰，只靠秩序）。
+
+.panel {
+  // §1.3：一切数字等宽 —— 数值变化时不会左右跳动。
+  font-variant-numeric: tabular-nums;
+
+  // §6 统一 focus ring。Mantine 默认聚焦只改边框色，这里补上规范的 2px 外框。
+  // 用 `.panel input:focus`（0,2,1）盖过 Mantine 的 `.mantine-Input-input:focus`
+  //（0,2,0）—— 特异性更高，因此不必 !important。
+  :global(input:focus),
+  :global(input:focus-visible),
+  :global(textarea:focus),
+  :global(textarea:focus-visible) {
+    @include focus-ring;
+  }
+
+  // §2.1 组内 6px：标签到输入框。Mantine 默认 4px，这一改让「标签-控件」的绑定
+  // 比「控件-下一标签」的 16px 更紧 —— 眼睛因此把每一对读成一个字段，而不是两行。
+  :global(.mantine-InputWrapper-label) {
+    margin-bottom: var(--planit-sp-6);
+    // §1.2：标签是次要元数据（sm / 500 / muted），不与输入值争视线
+    font-size: var(--planit-fs-sm);
+    font-weight: 500;
+    color: var(--planit-text-muted);
+    // §1.4：中文不加字距
+    letter-spacing: 0;
+  }
+}
+
+// ── 分组（Accordion）──────────────────────────────────────
+
+.accordion {
+  // 组与组之间 24px（§2.1 区块间）。用外边距而不是 Stack gap，
+  // 因为 Accordion 把条目渲染在自己的容器里，没有可用的 gap 入口。
+  // 组内间距由每个分组自己的 Stack 负责（见 Inspector.tsx 的 GAP_* 常量）。
+}
+
+.accItem {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin-bottom: var(--planit-sp-24);
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+// 区块标题：§1.2 的「区块标题 = lg / 600 / --text-strong」。
+// 一条极细下沿是**扫描锚点**：它把「一叠同形方框」切成「若干有名字的块」。
+.accControl {
+  padding: 0 0 var(--planit-sp-8);
+  font-size: var(--planit-fs-lg);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--planit-text-strong);
+  border-bottom: 1px solid var(--planit-border);
+
+  &:hover {
+    background: transparent;
+  }
+}
+
+.accLabel {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+// 展开后的内容区：标签到首行 12px（§2.1 组内 4–8 偏上限，给标题留呼吸）
+.accPanel {
+  padding: var(--planit-sp-12) 0 0;
+}
+
+// ── 只读事实（数据）───────────────────────────────────────
+
+// 平排的规格表。与上方的「方块控件」对照 —— 方块 = 可改，平排 = 事实。
+.statList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-6);
+}
+
+.statValue {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  // 长数值（如带千分位的成本）不把标签挤走，也不换行
+  white-space: nowrap;
+}
+
+// 日期输入：等宽数字，YYYY-MM-DD 逐位对齐
+.dateInput {
+  font-variant-numeric: tabular-nums;
+}
