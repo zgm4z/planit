@@ -7,9 +7,12 @@ import type { Command } from '../commands/types'
 // 注：Immer 的 patch 能力已由 commands/registry 在模块加载时通过 enablePatches() 开启。
 // 只要命令经由 registry 的 execute 应用，这里就无需重复开启 —— 它同样是 applyPatches 能工作的前提。
 
-/** 撤销栈里的一条记录：命令本身 + 它能被撤销掉的逆 patch */
+/** 撤销栈里的一条记录：命令本身 + 它的正向/逆向 patch */
 export interface HistoryEntry {
   command: Command
+  /** redo 用：应用它即可重放这次变更（不重跑 handler，因为 handler 未必是纯函数） */
+  patches: Patch[]
+  /** undo 用：应用它即可回滚这次变更 */
   inversePatches: Patch[]
 }
 
@@ -46,7 +49,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
       set({
         project: next,
-        undoStack: mergeIntoStack(undoStack, { command, inversePatches }),
+        undoStack: mergeIntoStack(undoStack, { command, patches, inversePatches }),
         redoStack: [],
         lastError: null,
       })
@@ -60,11 +63,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!project || undoStack.length === 0) return
 
     const entry = undoStack[undoStack.length - 1]
-    set({
-      project: applyPatches(project, entry.inversePatches),
-      undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, entry],
-    })
+
+    try {
+      set({
+        project: applyPatches(project, entry.inversePatches),
+        undoStack: undoStack.slice(0, -1),
+        redoStack: [...redoStack, entry],
+      })
+    } catch (error) {
+      set({ lastError: error instanceof Error ? error.message : String(error) })
+    }
   },
 
   redo: () => {
@@ -72,14 +80,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!project || redoStack.length === 0) return
 
     const entry = redoStack[redoStack.length - 1]
-    // 重跑同一条命令 —— handler 是纯函数，结果与首次执行一致
-    const { project: next } = execute(project, entry.command)
 
-    set({
-      project: next,
-      undoStack: [...undoStack, entry],
-      redoStack: redoStack.slice(0, -1),
-    })
+    try {
+      set({
+        // 应用正向 patch 重放，而不是重跑 handler ——
+        // task.create 会生成新的自增 id，重跑会得到与首次不同的任务
+        project: applyPatches(project, entry.patches),
+        undoStack: [...undoStack, entry],
+        redoStack: redoStack.slice(0, -1),
+      })
+    } catch (error) {
+      set({ lastError: error instanceof Error ? error.message : String(error) })
+    }
   },
 
   loadProject: (project) => {
@@ -91,9 +103,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
 /**
  * 入栈。若栈顶命令与当前命令的 coalesceKey 相同，则合并为一条撤销记录：
- * 命令换成最新的那条（撤销菜单显示最近的操作名），
- * 逆 patch 则按「先撤最新、再撤更早」的顺序拼接 ——
- * 每条逆 patch 都是相对它被应用时的状态计算的，顺序错乱会导致撤销不干净。
+ * 命令换成最新的那条（撤销菜单显示最近的操作名），正/逆向 patch 分别拼接。
  */
 function mergeIntoStack(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
   const top = stack[stack.length - 1]
@@ -104,6 +114,9 @@ function mergeIntoStack(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntr
       ...stack.slice(0, -1),
       {
         command: entry.command,
+        // 正向 patch 按执行顺序拼接，逆向 patch 按「先撤最新、再撤更早」拼接。
+        // 每条 patch 都是相对它被应用时的状态计算的，顺序错乱会导致撤销/重放不干净。
+        patches: [...top.patches, ...entry.patches],
         inversePatches: [...entry.inversePatches, ...top.inversePatches],
       },
     ]
