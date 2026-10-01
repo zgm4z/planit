@@ -58,7 +58,10 @@ describe('StatusBar', () => {
       redoStack: [],
       lastError: null,
     })
-    useScheduleStore.setState({ result: { schedules: {}, conflicts: [] }, error: null })
+    useScheduleStore.setState({
+      result: { schedules: {}, conflicts: [], efforts: {}, costs: {}, resourceTotals: {} },
+      error: null,
+    })
 
     renderStatusBar()
     expect(screen.getByText(/暂无排期/)).toBeInTheDocument()

@@ -156,6 +156,124 @@ describe('parsePersistedProject — v2 直接载入', () => {
   })
 })
 
+/** 手工构造一份 v2 存档：资源是旧形状，且含一个 cost 型资源 */
+function v2Save() {
+  const now = '2026-03-01T00:00:00.000Z'
+  return {
+    schemaVersion: 2,
+    updatedAt: now,
+    project: {
+      id: 'proj_v2',
+      name: '带资源的项目',
+      schemaVersion: 2,
+      startDate: '2026-03-02',
+      schedulingDirection: 'forward',
+      calendarId: 'default',
+      calendars: {
+        default: {
+          id: 'default',
+          name: '标准日历',
+          workingDays: [true, true, true, true, true, false, false],
+          hoursPerDay: 8,
+          exceptions: {},
+        },
+      },
+      tasks: {},
+      rootIds: [],
+      dependencies: {},
+      resources: {
+        r1: {
+          id: 'r1', name: '张三', kind: 'staff', parentId: null,
+          availability: 0.5, cost: { rate: 120, per: 'hour', currency: 'CNY' },
+        },
+        r2: {
+          id: 'r2', name: '差旅费', kind: 'cost', parentId: null,
+          availability: 1, cost: { rate: 800, per: 'day', currency: 'CNY' },
+        },
+        r3: {
+          id: 'r3', name: '打印', kind: 'material', parentId: null,
+          availability: 1, cost: { rate: 5, per: 'unit', currency: 'CNY' },
+        },
+      },
+      assignments: {},
+      createdAt: now,
+      updatedAt: now,
+    },
+  }
+}
+
+describe('parsePersistedProject — v2 → v3 迁移', () => {
+  it('cost 型资源转成 material，且按 per 落到 hourly / usage', () => {
+    const project = parsePersistedProject(v2Save())
+
+    expect(project.resources.r1.kind).toBe('staff')
+    expect(project.resources.r1.cost).toEqual({ hourly: 120, currency: 'CNY' })
+
+    // cost → material（偏差 2）
+    expect(project.resources.r2.kind).toBe('material')
+    // per: 'day' → hourly = 800 / 8（hoursPerDay）
+    expect(project.resources.r2.cost).toEqual({ hourly: 100, currency: 'CNY' })
+
+    expect(project.resources.r3.kind).toBe('material')
+    expect(project.resources.r3.cost).toEqual({ usage: 5, currency: 'CNY' })
+  })
+
+  it('迁移后的资源没有非法的 4 值之外的 kind，且丢掉旧的 cost.per / cost.rate', () => {
+    const project = parsePersistedProject(v2Save())
+    for (const resource of Object.values(project.resources)) {
+      expect(['staff', 'equipment', 'material', 'group']).toContain(resource.kind)
+      expect(resource.cost).not.toHaveProperty('rate')
+      expect(resource.cost).not.toHaveProperty('per')
+    }
+  })
+
+  it('新字段缺省时不写入（email / availableFrom / availableUntil 保持 undefined）', () => {
+    const project = parsePersistedProject(v2Save())
+    expect(project.resources.r1.email).toBeUndefined()
+    expect(project.resources.r1.availableFrom).toBeUndefined()
+    expect(project.resources.r1.availableUntil).toBeUndefined()
+  })
+
+  it('迁移后 project.schemaVersion 更新为 3', () => {
+    expect(parsePersistedProject(v2Save()).schemaVersion).toBe(SCHEMA_VERSION)
+    expect(SCHEMA_VERSION).toBe(3)
+  })
+
+  it('v1 存档经 v2 → v3 两步迁移也能到当前版本（逐跳链式）', () => {
+    const project = parsePersistedProject(v1Save())
+    expect(project.schemaVersion).toBe(SCHEMA_VERSION)
+    expect(project.tasks.t2.kind).toBe('milestone')
+    expect(project.resources).toEqual({})
+  })
+
+  it('逐跳链真的逐跳：v1 里的资源也走完第二步变成 v3 形状（不是 v2 形状 + v3 版本号）', () => {
+    const raw = v1Save()
+    // 给 v1 存档塞一个 v2 形状（5 种 kind、rate/per）的资源。它必须**经第二步**
+    // 被折算成 v3 形状。若把「v1→v2 的产出直接戳上 v3 版本号」而跳过第二步，
+    // 这里会拿到 kind: 'cost' + cost.rate —— 这条就是为区分那种畸形结果而写的。
+    ;(raw.project.resources as Record<string, unknown>).r1 = {
+      id: 'r1', name: '差旅费', kind: 'cost', parentId: null,
+      availability: 1, cost: { rate: 80, per: 'day', currency: 'CNY' },
+    }
+
+    const project = parsePersistedProject(raw)
+
+    expect(project.schemaVersion).toBe(SCHEMA_VERSION)
+    expect(project.tasks.t2.kind).toBe('milestone')
+    expect(project.resources.r1.kind).toBe('material')
+    expect(project.resources.r1.cost).toEqual({ hourly: 10, currency: 'CNY' })
+  })
+
+  it('迁移是纯函数：同一份输入跑两次结果逐字段相同且不改动入参', () => {
+    const raw = v2Save()
+    const snapshot = JSON.stringify(raw)
+    const a = parsePersistedProject(raw)
+    const b = parsePersistedProject(v2Save())
+    expect(a).toEqual(b)
+    expect(JSON.stringify(raw)).toBe(snapshot)
+  })
+})
+
 describe('parsePersistedProject — 未知版本仍然抛错', () => {
   it('版本号既不是 1 也不是当前版本时抛错，绝不静默返回空项目', () => {
     const project = createProject('x', '2026-03-02')

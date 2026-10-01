@@ -31,7 +31,10 @@ export function solve(project: Project): ScheduleResult {
   const schedules = summarizeParents(project.tasks, leafSchedules, project.rootIds)
   const conflicts = detectConflicts(project.tasks, schedules, project.rootIds)
 
-  return { schedules, conflicts }
+  // v0.5 的投入 / 成本派生量由「有效工期计算」产出（见 plan Task 2）——
+  // 在资源尚未参与排期之前先给空值，让 ScheduleResult 的契约保持完整。
+  // 这里**刻意不**就地算 Σunits × 工期：那是同一条规则的第二份实现。
+  return { schedules, conflicts, efforts: {}, costs: {}, resourceTotals: {} }
 }
 
 /** 深度优先收集全部叶子任务（childIds 为空者） */

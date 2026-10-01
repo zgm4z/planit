@@ -92,19 +92,38 @@ export interface Dependency {
   lag: number
 }
 
-// ── 资源（终态模型，第一阶段不使用）─────────────────────
+// ── 资源 ────────────────────────────────────────────────
 
-export type ResourceKind = 'group' | 'staff' | 'equipment' | 'material' | 'cost'
+/**
+ * 资源类型收敛为 4 种。**没有 `'cost'`** —— v0.1 曾把它当一种类型，v0.5 反转：
+ * OmniPlan 用**两个成本字段**（usage / hourly）区分，而不是靠类型。`'cost'` 类型
+ * 会让引擎到处需要「如果是 cost 就跳过」的特判，两个字段能更准确地表达
+ * 「同一个人既有差旅费又有小时费率」。
+ */
+export type ResourceKind = 'staff' | 'equipment' | 'material' | 'group'
+
+export interface ResourceCost {
+  /** 一次性使用成本 */
+  usage?: number
+  /** 小时费率 */
+  hourly?: number
+  currency: string
+}
 
 export interface Resource {
   id: ResourceId
   name: string
   kind: ResourceKind
   parentId: ResourceId | null
+  email?: string
   calendarId?: CalendarId
   /** 0–1 可用率 */
   availability: number
-  cost: { rate: number; per: 'hour' | 'day' | 'unit'; currency: string }
+  /** 资源可用的起始日（临时工 / 租期）。缺省表示不早于任何日期即可用 */
+  availableFrom?: DateStr
+  /** 资源可用的结束日。缺省表示不晚于任何日期 */
+  availableUntil?: DateStr
+  cost: ResourceCost
   efficiency?: number
   note?: string
 }
@@ -176,7 +195,34 @@ export type ConflictParams =
 
 export type ConflictInfo = ConflictParams & { taskId: TaskId }
 
+/** 一个任务的成本拆解（货币在资源级，见 Resource.cost.currency） */
+export interface TaskCosts {
+  /** 一次性使用成本之和 */
+  task: number
+  /** 小时费率 × 工时之和 */
+  resource: number
+  /** task + resource */
+  total: number
+}
+
+/** 一个资源的派生的总计（资源面板的「总使用次数 / 总时数 / 总成本」） */
+export interface ResourceSummary {
+  assignments: number
+  hours: number
+  cost: number
+}
+
 export interface ScheduleResult {
   schedules: Record<TaskId, ComputedSchedule>
   conflicts: ConflictInfo[]
+  /**
+   * v0.5：每个任务的投入（人·工作日）。fixedEffort 取输入的 effort，
+   * fixedDuration = Σunits × 工期；摘要任务为子任务之和。**UI 只读这里** ——
+   * 不在 UI 里重算一遍 Σunits × duration（那是同一条规则的第二份实现）。
+   */
+  efforts: Record<TaskId, number>
+  /** v0.5：每个任务的成本拆解，摘要为子任务之和 */
+  costs: Record<TaskId, TaskCosts>
+  /** v0.5：每个资源的派生总计（含零分配的资源） */
+  resourceTotals: Record<ResourceId, ResourceSummary>
 }
