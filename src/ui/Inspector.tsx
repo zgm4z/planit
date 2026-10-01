@@ -5,8 +5,10 @@ import {
   ActionIcon,
   Alert,
   Box,
+  Checkbox,
   Group,
   NumberInput,
+  SegmentedControl,
   Select,
   Stack,
   Tabs,
@@ -20,6 +22,7 @@ import type {
   ComputedSchedule,
   ConstraintType,
   DependencyType,
+  SchedulingOrder,
   Task,
   TaskId,
 } from '../domain/model/types'
@@ -27,6 +30,7 @@ import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore } from '../store/viewStore'
 import { DEFAULT_OPEN_GROUPS, INSPECTOR_GROUPS, type InspectorGroupKey } from './inspectorGroups'
+import { resolveScheduleDates } from './outlineColumns'
 import { ProjectInspector } from './ProjectInspector'
 
 const CONSTRAINT_TYPES: ConstraintType[] = [
@@ -359,6 +363,14 @@ function DisabledField({ label, reason }: { label: string; reason: string }) {
   )
 }
 
+// 约束按「它钉住的是开始还是结束」分成两族 —— 决定哪个日期字段可编辑（偏差 3）
+const START_TYPES: readonly ConstraintType[] = ['startOn', 'startNoEarlierThan', 'startNoLaterThan']
+const FINISH_TYPES: readonly ConstraintType[] = [
+  'finishOn',
+  'finishNoEarlierThan',
+  'finishNoLaterThan',
+]
+
 function ScheduleGroup({
   task,
   schedule,
@@ -375,14 +387,29 @@ function ScheduleGroup({
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
-  const constraintValue = task.scheduling.mode === 'auto' ? 'auto' : task.scheduling.type
   const constraint = task.scheduling.mode === 'constraint' ? task.scheduling : null
+  // 排期日期一律取引擎输出（v0.2 已把「方向 × 顺序」烤进 scheduledStart/Finish），
+  // 不在 UI 里重新推方向 —— 那是引擎的职责。
+  const dates = schedule ? resolveScheduleDates(schedule) : null
+
+  // 一个任务只有**一条** Scheduling（{mode, type, date}），所以「对应族」的字段才可编辑：
+  // start* 族 → 开始可编辑；finish* 族 → 结束可编辑；另一个显示派生排期值、只读。
+  // 这样只有 Select 在设置 type，编辑日期不会偷换类型（偏差 2 + 3）。
+  const startType = constraint && START_TYPES.includes(constraint.type) ? constraint.type : null
+  const finishType = constraint && FINISH_TYPES.includes(constraint.type) ? constraint.type : null
+
+  const startEditable = !isSummary && startType !== null
+  const finishEditable = !isSummary && finishType !== null
+  const startValue = startType ? constraint!.date : (dates?.start ?? '')
+  const finishValue = finishType ? constraint!.date : (dates?.finish ?? '')
 
   return (
     <Stack gap="sm">
+      {/* 合并的排期方式 Select（偏差 2）：一个控件同时设 mode 与 type。
+          auto + 6 种 ConstraintType —— 它就是全 App 唯一在设置约束的控件。 */}
       <Select
         label={t('inspector.scheduling')}
-        value={constraintValue}
+        value={constraint ? constraint.type : 'auto'}
         // 摘要任务的日期由子任务汇总 —— task.setScheduling 对 group 本就是 no-op，
         // 这里禁用是为了不出现「点了没反应」的控件（分批原则）
         disabled={isSummary}
@@ -391,7 +418,7 @@ function ScheduleGroup({
           ...CONSTRAINT_TYPES.map((type) => ({ value: type, label: t(`scheduling.${type}`) })),
         ]}
         onChange={(value) => {
-          if (!value) return
+          if (!value || isSummary) return
           if (value === 'auto') {
             dispatch({
               type: 'task.setScheduling',
@@ -408,7 +435,8 @@ function ScheduleGroup({
               scheduling: {
                 mode: 'constraint',
                 type: value as ConstraintType,
-                date: schedule?.scheduledStart ?? project.startDate,
+                // 新约束的日期取「用户看到的开始日」，与下方字段同口径
+                date: dates?.start ?? project.startDate,
               },
             },
           })
@@ -416,25 +444,125 @@ function ScheduleGroup({
       />
 
       {constraint && (
-        <TextInput
-          type="date"
-          label={t('inspector.scheduling') + ' · ' + t(`scheduling.${constraint.type}`)}
-          value={constraint.date}
+        <Text fz="xs" c="dimmed">
+          {t('inspector.manualHint')}
+        </Text>
+      )}
+
+      <TextInput
+        type="date"
+        label={t('inspector.start')}
+        value={startValue}
+        disabled={!startEditable}
+        onBlur={breakCoalescing}
+        onChange={(event) => {
+          // 只改日期、不改类型：startType 来自当前约束，绝不在编辑时改写它
+          if (!startType) return
+          dispatch({
+            type: 'task.setScheduling',
+            label: 'commands.task.setScheduling',
+            payload: {
+              taskId,
+              scheduling: { mode: 'constraint', type: startType, date: event.target.value },
+            },
+            coalesceKey: `task.setScheduling:${taskId}`,
+          })
+        }}
+      />
+
+      <TextInput
+        type="date"
+        label={t('inspector.finish')}
+        value={finishValue}
+        disabled={!finishEditable}
+        onBlur={breakCoalescing}
+        onChange={(event) => {
+          if (!finishType) return
+          dispatch({
+            type: 'task.setScheduling',
+            label: 'commands.task.setScheduling',
+            payload: {
+              taskId,
+              scheduling: { mode: 'constraint', type: finishType, date: event.target.value },
+            },
+            coalesceKey: `task.setScheduling:${taskId}`,
+          })
+        }}
+      />
+
+      <Box>
+        <Text fz="xs" fw={500} mb={4}>
+          {t('inspector.order')}
+        </Text>
+        {/* 点击驱动 → 不传合并键（命令层注释里登记的约定） */}
+        <SegmentedControl
+          size="xs"
+          fullWidth
+          value={task.schedulingOrder}
           disabled={isSummary}
-          onBlur={breakCoalescing}
-          onChange={(event) =>
+          data-testid="task-order"
+          onChange={(value) =>
             dispatch({
-              type: 'task.setScheduling',
-              label: 'commands.task.setScheduling',
-              payload: {
-                taskId,
-                scheduling: { mode: 'constraint', type: constraint.type, date: event.target.value },
-              },
-              coalesceKey: `task.setScheduling:${taskId}`,
+              type: 'task.setSchedulingOrder',
+              label: 'commands.task.setSchedulingOrder',
+              payload: { taskId, order: value as SchedulingOrder },
             })
           }
+          data={[
+            { value: 'asap', label: <span data-testid="order-asap">{t('inspector.orderAsap')}</span> },
+            { value: 'alap', label: <span data-testid="order-alap">{t('inspector.orderAlap')}</span> },
+          ]}
         />
-      )}
+      </Box>
+
+      {/* 拆分排期尚未实现：渲染成禁用态并注明版本，而不是隐藏（分批原则） */}
+      <Stack gap={2}>
+        <Checkbox
+          label={t('inspector.allowSplitting')}
+          disabled
+          readOnly
+          checked={task.allowSplitting}
+        />
+        <Text fz="xs" c="dimmed">
+          {t('inspector.allowSplittingHint')}
+        </Text>
+      </Stack>
+
+      {/* 输入框驱动 → 必须带含 taskId 的合并键：否则「改 A 后改 B」会并成一条撤销 */}
+      <NumberInput
+        label={t('inspector.priority')}
+        value={task.priority}
+        onBlur={breakCoalescing}
+        onChange={(value) =>
+          dispatch({
+            type: 'task.setPriority',
+            label: 'commands.task.setPriority',
+            payload: { taskId, priority: Number(value) || 0 },
+            coalesceKey: `task.setPriority:${taskId}`,
+          })
+        }
+      />
+      <Text fz="xs" c="dimmed">
+        {t('inspector.priorityHint')}
+      </Text>
+
+      <NumberInput
+        label={t('inspector.delay')}
+        min={0}
+        value={task.delay}
+        onBlur={breakCoalescing}
+        onChange={(value) =>
+          dispatch({
+            type: 'task.setDelay',
+            label: 'commands.task.setDelay',
+            payload: { taskId, delay: Number(value) || 0 },
+            coalesceKey: `task.setDelay:${taskId}`,
+          })
+        }
+      />
+      <Text fz="xs" c="dimmed">
+        {t('inspector.delayHint')}
+      </Text>
 
       {schedule && (
         <Text fz="xs" c="dimmed">

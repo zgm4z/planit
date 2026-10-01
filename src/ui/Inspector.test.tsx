@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -300,10 +300,13 @@ describe('任务信息组', () => {
   })
 })
 
-describe('日程安排组（Task 2 误删的既有用例）', () => {
+describe('日程安排组', () => {
   it('排期方式切到固定开始日期会写入约束', async () => {
     const user = userEvent.setup()
     renderInspector()
+
+    // 初始读出的应是「自动排期」（合并 Select 的 auto 项）
+    expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('自动排期')
 
     await chooseOption(user, '排期方式', '固定开始日期')
 
@@ -369,8 +372,173 @@ describe('日程安排组（Task 2 误删的既有用例）', () => {
     renderInspector()
 
     expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('固定结束日期')
-    // 约束日期字段的 label 是「排期方式 · <类型>」（Task 2 起的结构）
-    expect(screen.getByLabelText('排期方式 · 固定结束日期')).toHaveValue('2026-03-05')
+    // Task 4 把「约束日期」并入开始/结束两个字段：finishOn 属「结束」族，
+    // 约束的日期就显示在「结束」输入框里（断言强度不变，只是换了控件位置）。
+    expect(screen.getByLabelText('结束')).toHaveValue('2026-03-05')
+  })
+
+  it('下拉列出全部 6 种 ConstraintType（一个控件即可设置任一约束）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await user.click(screen.getByRole('combobox', { name: '排期方式' }))
+    const options = [
+      '固定开始日期',
+      '固定结束日期',
+      '开始不早于',
+      '开始不晚于',
+      '结束不早于',
+      '结束不晚于',
+    ]
+    for (const label of options) {
+      expect(screen.getByRole('option', { name: label, hidden: true })).toBeInTheDocument()
+    }
+  })
+
+  it('自动模式下开始 / 结束都只读', () => {
+    renderInspector()
+    expect(screen.getByLabelText('开始')).toBeDisabled()
+    expect(screen.getByLabelText('结束')).toBeDisabled()
+  })
+
+  it('endOn 约束下「结束」可编辑、「开始」仍只读（偏差 3：族决定可编辑性）', () => {
+    const project = useProjectStore.getState().project!
+    useProjectStore.setState({
+      project: {
+        ...project,
+        tasks: {
+          ...project.tasks,
+          [taskId]: {
+            ...project.tasks[taskId],
+            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+          },
+        },
+      },
+    })
+    renderInspector()
+
+    // finishOn 属于「结束」族 → 结束可编辑、开始只读
+    expect(screen.getByLabelText('结束')).not.toBeDisabled()
+    expect(screen.getByLabelText('开始')).toBeDisabled()
+  })
+
+  it('startOn 约束下「开始」可编辑、「结束」仍只读（族是 start 侧）', () => {
+    const project = useProjectStore.getState().project!
+    useProjectStore.setState({
+      project: {
+        ...project,
+        tasks: {
+          ...project.tasks,
+          [taskId]: {
+            ...project.tasks[taskId],
+            scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-05' },
+          },
+        },
+      },
+    })
+    renderInspector()
+
+    expect(screen.getByLabelText('开始')).not.toBeDisabled()
+    expect(screen.getByLabelText('结束')).toBeDisabled()
+  })
+
+  it('编辑「结束」写回 finishOn 约束的日期（不偷换类型）', () => {
+    const project = useProjectStore.getState().project!
+    useProjectStore.setState({
+      project: {
+        ...project,
+        tasks: {
+          ...project.tasks,
+          [taskId]: {
+            ...project.tasks[taskId],
+            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+          },
+        },
+      },
+    })
+    renderInspector()
+
+    // date 输入框用 fireEvent.change（userEvent 对 type="date" 的逐字符输入不稳定）
+    fireEvent.change(screen.getByLabelText('结束'), { target: { value: '2026-03-09' } })
+
+    // 类型仍是 finishOn —— 编辑日期不允许把 Select 上的类型悄悄换成 startOn
+    expect(currentTask().scheduling).toEqual({
+      mode: 'constraint',
+      type: 'finishOn',
+      date: '2026-03-09',
+    })
+  })
+
+  it('「安排：尽晚」写回 schedulingOrder=alap，切回尽快写回 asap', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    // 用有浮时可言的叶子任务（写文档无依赖、父下有兄弟），而不是孤立的单任务 ——
+    // 命令是否真的落到 store 上，是这一层要钉死的东西（引擎是否据此挪动由 e2e 验收）。
+    await user.click(screen.getByTestId('order-alap'))
+    expect(currentTask().schedulingOrder).toBe('alap')
+
+    await user.click(screen.getByTestId('order-asap'))
+    expect(currentTask().schedulingOrder).toBe('asap')
+  })
+
+  it('优先级连改合并成一条撤销；失焦后另起一条', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+    const input = screen.getByLabelText('优先级')
+
+    await user.clear(input)
+    await user.type(input, '3')
+    expect(useProjectStore.getState().undoStack).toHaveLength(1)
+
+    fireEvent.blur(input)
+    await user.clear(input)
+    await user.type(input, '7')
+    expect(useProjectStore.getState().undoStack).toHaveLength(2)
+    expect(currentTask().priority).toBe(7)
+  })
+
+  it('合并键带 taskId：改 A 的优先级不会并进 B 的记录（即使没有失焦打断）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    const input = screen.getByLabelText('优先级')
+    await user.clear(input)
+    await user.type(input, '3')
+    expect(useProjectStore.getState().undoStack).toHaveLength(1)
+
+    // 刻意直接 setState（而不走 viewStore.selectTask）—— selectTask 会 breakCoalescing，
+    // 那样就测不出「合并键是否带 taskId」这条契约。这里不给屏障：唯一能阻止两条记录
+    // 合并的东西，就是 coalesceKey 里的 taskId。
+    act(() => useViewStore.setState({ selectedTaskId: siblingId }))
+
+    const next = screen.getByLabelText('优先级')
+    await user.clear(next)
+    await user.type(next, '9')
+
+    expect(useProjectStore.getState().undoStack).toHaveLength(2)
+    expect(useProjectStore.getState().project!.tasks[taskId].priority).toBe(3)
+    expect(useProjectStore.getState().project!.tasks[siblingId].priority).toBe(9)
+  })
+
+  it('延迟写回 delay，且允许拆分是禁用态并注明版本', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    const input = screen.getByLabelText('延迟')
+    await user.clear(input)
+    await user.type(input, '2')
+    expect(currentTask().delay).toBe(2)
+
+    expect(screen.getByLabelText('允许拆分')).toBeDisabled()
+    expect(screen.getByText(/拆分排期尚未实现/)).toBeInTheDocument()
+  })
+
+  it('手动模式下显示手动安排提示', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+    await chooseOption(user, '排期方式', '固定开始日期')
+    expect(screen.getByText(/此任务已手动安排/)).toBeInTheDocument()
   })
 })
 
