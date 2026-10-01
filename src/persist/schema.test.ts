@@ -112,6 +112,19 @@ describe('parsePersistedProject — v1 → v2 迁移', () => {
     expect(JSON.stringify(raw)).toBe(snapshot)
   })
 
+  it('v1 里「里程碑 ∧ 有子任务」的畸形任务迁成 group，不违反不变式 2', () => {
+    const raw = v1Save()
+    // v0.1 的 task.create 没有「父任务不能是里程碑」的守卫，所以这个形状
+    // 在旧版是可生成的。迁移必须以结构事实为准 —— 子任务优先。
+    ;(raw.project.tasks.t2 as Record<string, unknown>).childIds = ['t4']
+    ;(raw.project.tasks.t4 as Record<string, unknown>).parentId = 't2'
+
+    const project = parsePersistedProject(raw)
+
+    expect(project.tasks.t2.kind).toBe('group')
+    expect(project.tasks.t2.childIds.length).toBeGreaterThan(0)
+  })
+
   it('v1 任务意外带有 kind 时抛错，不静默覆盖', () => {
     const raw = v1Save()
     // 模拟「新形状 + 旧版本号」的中间态存档

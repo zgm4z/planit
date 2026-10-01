@@ -385,6 +385,31 @@ describe('runCpm — 排期方向', () => {
     expect(r.D.isCritical).toBe(false)
   })
 
+  it('backward + alap：排期取逆推值（真值表的第四格）', () => {
+    const tasks = [mk('A', 3), mk('B', 2), mk('C', 5), mk('D', 1)].map((t) => ({
+      ...t,
+      schedulingOrder: 'alap' as const,
+    }))
+    const r = runCpm({
+      tasks,
+      dependencies: [
+        createDependency('A', 'B'),
+        createDependency('A', 'C'),
+        createDependency('B', 'D'),
+        createDependency('C', 'D'),
+      ],
+      calendar: createCalendar(),
+      direction: 'backward',
+      projectStart: '2026-03-02',
+      projectEnd: '2026-03-20',
+    })
+
+    for (const id of ['A', 'B', 'C', 'D']) {
+      expect(r[id].scheduledStart).toBe(r[id].lateStart)
+      expect(r[id].scheduledFinish).toBe(r[id].lateFinish)
+    }
+  })
+
   it('alap 不会把关键任务推早', () => {
     const tasks = [mk('A', 3), mk('C', 5), mk('D', 1)].map((t) => ({
       ...t,

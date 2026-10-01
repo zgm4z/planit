@@ -1,5 +1,6 @@
-import type { Project, Task, TaskKind } from '../domain/model/types'
+import type { Project, Task } from '../domain/model/types'
 import { SCHEMA_VERSION } from '../domain/model/factories'
+import { deriveKind } from '../domain/model/kind'
 
 /** v1 存档里的任务形状：有 isMilestone，没有 kind 与四个占位字段 */
 type V1Task = Omit<
@@ -15,8 +16,8 @@ type V1Project = Omit<Project, 'schedulingDirection' | 'tasks'> & {
 /**
  * v1 的任务补上 kind。纯函数，不改动入参。
  *
- * 推导规则与命令层的 reconcileKind 一致：里程碑优先，
- * 其次有子任务即 group，否则 task。
+ * 推导规则与命令层的 reconcileKind 共用同一份 `deriveKind`：**子任务优先**，
+ * 没有子任务时才看 isMilestone。
  */
 export function migrateTaskV1ToV2(task: V1Task): Task {
   // v1 的任务不该有 kind。带上它说明这份存档与版本号不符 —— 可能是手工改过，
@@ -28,11 +29,7 @@ export function migrateTaskV1ToV2(task: V1Task): Task {
     )
   }
 
-  const kind: TaskKind = task.isMilestone
-    ? 'milestone'
-    : task.childIds.length > 0
-      ? 'group'
-      : 'task'
+  const kind = deriveKind({ childIds: task.childIds, isMilestone: task.isMilestone })
 
   const { isMilestone: _drop, ...rest } = task
   return {

@@ -101,7 +101,7 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.setDuration': (draft, payload: TaskSetDurationPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务由汇总决定
+    if (task.kind === 'group') return // 摘要任务由汇总决定
     if (task.kind === 'milestone') return // 里程碑恒为 0
     task.duration = Math.max(0, Math.floor(payload.duration))
   },
@@ -127,14 +127,14 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.setScheduling': (draft, payload: TaskSetSchedulingPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务日期只读
+    if (task.kind === 'group') return // 摘要任务日期只读
     task.scheduling = payload.scheduling
   },
 
   'task.moveTo': (draft, payload: TaskMoveToPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return
+    if (task.kind === 'group') return
     task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
   },
 
@@ -145,7 +145,7 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.resize': (draft, payload: TaskResizePayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务日期只读
+    if (task.kind === 'group') return // 摘要任务日期只读
     if (task.kind === 'milestone') return // 里程碑恒为 0 工期
 
     task.duration = Math.max(1, Math.floor(payload.duration))
