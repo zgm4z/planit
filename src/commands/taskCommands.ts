@@ -1,5 +1,11 @@
 import type { Draft } from 'immer'
-import type { DateStr, Project, Scheduling, TaskId } from '../domain/model/types'
+import type {
+  DateStr,
+  Project,
+  Scheduling,
+  SchedulingOrder,
+  TaskId,
+} from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
 import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
@@ -13,6 +19,11 @@ export interface TaskToggleMilestonePayload { taskId: TaskId }
 export interface TaskSetSchedulingPayload { taskId: TaskId; scheduling: Scheduling }
 export interface TaskMoveToPayload { taskId: TaskId; startDate: DateStr }
 export interface TaskResizePayload { taskId: TaskId; startDate: DateStr; duration: number }
+export interface TaskSetSchedulingOrderPayload { taskId: TaskId; order: SchedulingOrder }
+export interface TaskSetNotePayload { taskId: TaskId; note: string }
+export interface TaskSetPriorityPayload { taskId: TaskId; priority: number }
+export interface TaskSetDelayPayload { taskId: TaskId; delay: number }
+export interface TaskSetAllowSplittingPayload { taskId: TaskId; allowSplitting: boolean }
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
@@ -139,5 +150,45 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
 
     task.duration = Math.max(1, Math.floor(payload.duration))
     task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
+  },
+
+  // ── v0.2 新增 ─────────────────────────────────────────
+  // 合并键约定（v0.4 的 Inspector 按此传参，命令层不登记）：
+  //   setNote / setPriority / setDelay 是输入框驱动 → 传 `task.setX:<taskId>`
+  //     必须带任务 id：否则「改 A 的备注 → 改 B 的备注」会因相邻且 key 相同
+  //     并进同一条撤销记录，一次 Ctrl+Z 连 A 一起退回。
+  //   setSchedulingOrder / setAllowSplitting 是点击驱动 → 不传
+  'task.setSchedulingOrder': (draft, payload: TaskSetSchedulingOrderPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.kind === 'group') return // 摘要任务的日期由子任务汇总
+    task.schedulingOrder = payload.order
+  },
+
+  // 备注与优先级对摘要任务同样有意义 —— 不动它们。
+  'task.setNote': (draft, payload: TaskSetNotePayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    task.note = payload.note
+  },
+
+  'task.setPriority': (draft, payload: TaskSetPriorityPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    task.priority = Math.round(payload.priority)
+  },
+
+  'task.setDelay': (draft, payload: TaskSetDelayPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.kind === 'group') return // 同 setSchedulingOrder：摘要不单独挪
+    // 负延迟是 lag 的职责，这里只接受非负工作日
+    task.delay = Math.max(0, Math.round(payload.delay))
+  },
+
+  'task.setAllowSplitting': (draft, payload: TaskSetAllowSplittingPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    task.allowSplitting = payload.allowSplitting
   },
 }

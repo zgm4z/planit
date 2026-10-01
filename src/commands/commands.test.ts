@@ -349,3 +349,75 @@ describe('task.kind 不变式', () => {
     expect(p.tasks[p.rootIds[1]].parentId).toBeNull()
   })
 })
+
+describe('v0.2 新命令', () => {
+  function oneTask(): { p: Project; id: string } {
+    const p = run(project, 'task.create', { name: 'A' })
+    return { p, id: p.rootIds[0] }
+  }
+
+  it('task.setSchedulingOrder 改写 schedulingOrder', () => {
+    const { p, id } = oneTask()
+    const next = run(p, 'task.setSchedulingOrder', { taskId: id, order: 'alap' })
+    expect(next.tasks[id].schedulingOrder).toBe('alap')
+  })
+
+  it('task.setSchedulingOrder 对摘要任务是 no-op', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+
+    const next = run(p, 'task.setSchedulingOrder', { taskId: parent, order: 'alap' })
+    expect(next).toEqual(p)
+  })
+
+  it('task.setNote 改写 note，且对摘要任务同样生效', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+
+    const next = run(p, 'task.setNote', { taskId: parent, note: '阶段说明' })
+    expect(next.tasks[parent].note).toBe('阶段说明')
+  })
+
+  it('task.setPriority 改写 priority，且对摘要任务同样生效', () => {
+    const { p, id } = oneTask()
+    const next = run(p, 'task.setPriority', { taskId: id, priority: 7 })
+    expect(next.tasks[id].priority).toBe(7)
+  })
+
+  it('task.setDelay 改写 delay，对摘要任务是 no-op', () => {
+    const { p, id } = oneTask()
+    expect(run(p, 'task.setDelay', { taskId: id, delay: 3 }).tasks[id].delay).toBe(3)
+
+    let q = run(project, 'task.create', { name: 'A' })
+    q = run(q, 'task.create', { name: 'B' })
+    q = run(q, 'task.indent', { taskId: q.rootIds[1] })
+    const parent = q.rootIds[0]
+    expect(run(q, 'task.setDelay', { taskId: parent, delay: 3 })).toEqual(q)
+  })
+
+  it('task.setAllowSplitting 改写 allowSplitting', () => {
+    const { p, id } = oneTask()
+    const next = run(p, 'task.setAllowSplitting', { taskId: id, allowSplitting: true })
+    expect(next.tasks[id].allowSplitting).toBe(true)
+  })
+
+  it('project.setDirection 改写方向', () => {
+    const next = run(project, 'project.setDirection', { direction: 'backward' })
+    expect(next.schedulingDirection).toBe('backward')
+  })
+
+  it('project.setStartDate / setEndDate 改写锚点，endDate 可清空', () => {
+    const a = run(project, 'project.setStartDate', { startDate: '2026-04-01' })
+    expect(a.startDate).toBe('2026-04-01')
+
+    const b = run(a, 'project.setEndDate', { endDate: '2026-06-30' })
+    expect(b.endDate).toBe('2026-06-30')
+
+    const c = run(b, 'project.setEndDate', { endDate: undefined })
+    expect(c.endDate).toBeUndefined()
+  })
+})
