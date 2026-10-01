@@ -12,12 +12,14 @@ import { useTranslation } from 'react-i18next'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore, type ZoomLevel } from '../store/viewStore'
+import { canIndent, canOutdent } from './outlineActions'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
 export function Toolbar() {
   const { t } = useTranslation()
 
-  const projectName = useProjectStore((state) => state.project?.name ?? '')
+  const project = useProjectStore((state) => state.project)
+  const projectName = project?.name ?? ''
   const dispatch = useProjectStore((state) => state.dispatch)
   const undo = useProjectStore((state) => state.undo)
   const redo = useProjectStore((state) => state.redo)
@@ -32,6 +34,10 @@ export function Toolbar() {
   const setZoom = useViewStore((state) => state.setZoom)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
   const scheduleError = useScheduleStore((state) => state.error)
+
+  // 可用性判断与命令层守卫一致：不可达的操作直接禁用，而不是让用户点了没反应
+  const indentEnabled = project ? canIndent(project, selectedTaskId) : false
+  const outdentEnabled = project ? canOutdent(project, selectedTaskId) : false
 
   return (
     <Group
@@ -78,7 +84,7 @@ export function Toolbar() {
       <Tooltip label={t('toolbar.indentHint')}>
         <ActionIcon
           variant="subtle"
-          disabled={!selectedTaskId}
+          disabled={!indentEnabled}
           aria-label={t('toolbar.indent')}
           data-testid="indent"
           onClick={() =>
@@ -97,7 +103,7 @@ export function Toolbar() {
       <Tooltip label={t('toolbar.outdentHint')}>
         <ActionIcon
           variant="subtle"
-          disabled={!selectedTaskId}
+          disabled={!outdentEnabled}
           aria-label={t('toolbar.outdent')}
           data-testid="outdent"
           onClick={() =>

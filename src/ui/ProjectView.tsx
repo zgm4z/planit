@@ -20,7 +20,7 @@ import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore } from '../store/viewStore'
 import { useTranslation } from 'react-i18next'
-import { addDays, formatDate, workdayIndex } from '../domain/calendar/workdays'
+import { addDays, formatDate, isWorkday } from '../domain/calendar/workdays'
 import styles from './styles/ProjectView.module.scss'
 import ganttStyles from './styles/GanttPane.module.scss'
 
@@ -69,16 +69,30 @@ export function ProjectView() {
   // 否则晚于 60 天的任务条与刻度会溢出列宽（横向滚动条也覆盖不到）
   const ganttWidth = totalDays * dayWidth
 
-  // 周末底纹：时间轴按自然日铺开，非工作日整列压暗
+  // 日历必须在下方的底纹之前取得：底纹要用**用户可编辑的日历**判断哪天不上班。
+  // calendar 与 scale 一样要在 hook 里无条件取得。ProjectView 实际只在 store 里
+  // 有 project 时挂载（见 App.tsx），`?? createCalendar()` 只是让类型收窄、
+  // 并保证 hook 调用次数恒定。
+  const calendar = useMemo(
+    () => project?.calendars[project.calendarId] ?? createCalendar(),
+    [project],
+  )
+
+  // 非工作日底纹：时间轴按自然日铺开，日历判定为非工作日的整列压暗。
+  //
+  // 不能用硬编码的 `workdayIndex(...) >= 5`（周一至周五）—— 那与用户可编辑的
+  // 日历脱节：取消勾选周五后任务会跳过周五，底纹却仍只盖周六周日，
+  // 界面自相矛盾。用 isWorkday(date, calendar) 的取反，则周规则与例外日期
+  // （被设为假日的某个周三）都会被正确标出。
   const weekendBands = useMemo(() => {
     const bands: { left: number; width: number }[] = []
     for (let day = 0; day < totalDays; day += 1) {
-      if (workdayIndex(addDays(scale.startDate, day)) >= 5) {
+      if (!isWorkday(addDays(scale.startDate, day), calendar)) {
         bands.push({ left: day * dayWidth, width: dayWidth })
       }
     }
     return bands
-  }, [scale.startDate, totalDays, dayWidth])
+  }, [scale.startDate, totalDays, dayWidth, calendar])
 
   // 今日线：仅当今天落在时间轴范围内才渲染
   const todayX = useMemo(() => {
@@ -130,14 +144,6 @@ export function ProjectView() {
   )
 
   const link = useDependencyLink(handleLink)
-
-  // 日历与 scale 一样要在 hook 里无条件取得。ProjectView 实际只在 store 里
-  // 有 project 时挂载（见 App.tsx），`?? createCalendar()` 只是让类型收窄、
-  // 并保证 hook 调用次数恒定。
-  const calendar = useMemo(
-    () => project?.calendars[project.calendarId] ?? createCalendar(),
-    [project],
-  )
 
   // 拖拽期间只更新影子预览；松手才 dispatch 命令 ——
   // 因此拖拽过程中 undoStack 长度必须保持不变。
@@ -205,6 +211,7 @@ export function ProjectView() {
                   key={band.left}
                   className={ganttStyles.weekendBand}
                   style={{ left: band.left, width: band.width }}
+                  data-testid="workday-band"
                   aria-hidden
                 />
               ))}
@@ -244,8 +251,19 @@ export function ProjectView() {
         </div>
 
         {/* 右侧栏分成上下两段：Inspector 自负滚动，日历设置钉在底部。
-            宽度由 Inspector 自身的 w 决定，外层容器不要再设宽 —— 否则包两遍。 */}
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flexShrink: 0 }}>
+            宽度与左边框由**这个容器**统一持有（唯一来源）—— Inspector 与
+            CalendarSettings 都只填 100%，否则改宽度时要同时改三处，
+            漏改一处就会静默错位。 */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            width: 'var(--planit-inspector-width)',
+            minHeight: 0,
+            flexShrink: 0,
+            borderLeft: '1px solid var(--planit-border)',
+          }}
+        >
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <Inspector />
           </div>

@@ -86,12 +86,13 @@ export function Inspector() {
 
   return (
     <Box
-      w="var(--planit-inspector-width)"
+      // 宽度与左边框由 ProjectView 的右侧栏容器统一持有（唯一来源），
+      // 这里只负责填满它 —— 不要在这里再设 var(--planit-inspector-width)。
+      w="100%"
       p="md"
       style={{
         overflowY: 'auto',
         flexShrink: 0,
-        borderLeft: '1px solid var(--planit-border)',
       }}
       data-testid="inspector"
     >

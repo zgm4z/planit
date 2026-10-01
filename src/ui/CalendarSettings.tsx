@@ -29,7 +29,13 @@ export function CalendarSettings() {
   }
 
   return (
-    <Box p="md" style={{ borderTop: '1px solid var(--planit-border)' }} data-testid="calendar-settings">
+    <Box
+      // 宽度由 ProjectView 的右侧栏容器统一持有（唯一来源），这里只填满它。
+      w="100%"
+      p="md"
+      style={{ borderTop: '1px solid var(--planit-border)', flexShrink: 0 }}
+      data-testid="calendar-settings"
+    >
       <Text fz="xs" fw={650} c="dimmed" tt="uppercase" mb="xs">
         {t('calendar.title')}
       </Text>
