@@ -25,6 +25,11 @@
   display: grid;
   grid-template-columns: var(--planit-outline-width) var(--gantt-width);
   grid-template-rows: var(--planit-ruler-height) auto;
+  // 让 grid 盒子宽到能容纳全部列，而不是只有 scrollport 那么宽。
+  // 否则 position: sticky; left: 0 的左列没有水平移动空间 ——
+  // 它的 containing block（第一列 grid area）不随水平滚动移动，
+  // sticky 退化成 static，任务名列会跟着内容一起滚出屏幕。
+  width: max-content;
   min-height: 100%;
 }
 

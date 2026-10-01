@@ -52,7 +52,7 @@ export function ProjectView() {
               {/* 时间刻度尺在 Task 16 实现 */}
             </div>
 
-            <div className={styles.outline}>
+            <div className={styles.outline} data-testid="outline-column">
               <OutlineTree
                 project={project}
                 rows={rows}
