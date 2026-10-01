@@ -18,6 +18,21 @@ $breakpoint-md: 900px;
   outline-offset: 1px;
 }
 
+// §1.2 的**区块标题体例**：lg / 600 / --text-strong + 一条下沿。
+//
+// 它是右栏的扫描锚点 —— 把「一叠同形方框」切成「若干有名字的块」。放在 mixin 里
+// 是因为它有**两个消费者**：任务面板（Accordion.Control，见 Inspector.module.scss 的
+// .accControl）与资源面板（静态 Section，见 .sectionHeading）。规范只有一条体例，
+// 就必须只有一处实现 —— 两处各抄一遍 lg/600/下沿，改一处另一处静默漂移。
+@mixin section-heading {
+  padding: 0 0 var(--planit-sp-8);
+  font-size: var(--planit-fs-lg);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--planit-text-strong);
+  border-bottom: 1px solid var(--planit-border);
+}
+
 // §1.3：一切数字用等宽数字，避免表格列在数值变化时左右跳动。
 @mixin tabular-nums {
   font-variant-numeric: tabular-nums;

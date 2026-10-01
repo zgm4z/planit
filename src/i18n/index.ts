@@ -25,6 +25,13 @@ export const SUPPORTED_LANGUAGES = [
 
 export const LANGUAGE_STORAGE_KEY = 'planit.language'
 
+/**
+ * 默认语言。工具栏的溢出指示器用它判断「被收进菜单的控件是否处于非默认状态」——
+ * 语言不是默认中文时，指示器要点亮（见 Toolbar 的 OverflowMenu）。
+ * 与 fallbackLng 同一个值，避免两处各写一份 'zh-CN' 而漂移。
+ */
+export const DEFAULT_LANGUAGE = 'zh-CN'
+
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -34,7 +41,7 @@ void i18n
       'en-US': { translation: enUS },
       'ja-JP': { translation: jaJP },
     },
-    fallbackLng: 'zh-CN',
+    fallbackLng: DEFAULT_LANGUAGE,
     supportedLngs: SUPPORTED_LANGUAGES.map((lang) => lang.code),
     // 只认完整的语言标签（zh-CN 而非 zh-Hans-CN），避免检测器产生我们没有的变体
     load: 'currentOnly',

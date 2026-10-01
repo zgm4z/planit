@@ -52,18 +52,41 @@
   }
 }
 
-// 区块标题：§1.2 的「区块标题 = lg / 600 / --text-strong」。
-// 一条极细下沿是**扫描锚点**：它把「一叠同形方框」切成「若干有名字的块」。
+// 区块标题：体例住在 mixin 里（_tokens.scss 的 section-heading），此处只是它的
+// 一个消费者（Accordion.Control 形态）。资源面板的静态 Section 是另一个消费者。
 .accControl {
-  padding: 0 0 var(--planit-sp-8);
-  font-size: var(--planit-fs-lg);
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--planit-text-strong);
-  border-bottom: 1px solid var(--planit-border);
+  @include section-heading;
 
   &:hover {
     background: transparent;
+  }
+}
+
+// ── 静态区块（资源面板）──────────────────────────────────
+// 与任务面板的 Accordion 分组**共用同一个 section-heading mixin**：标题逐字一致
+// （lg / 600 / 一条下沿），视觉上读作同一套信息架构；差别只在资源面板**不可折叠**。
+
+// 标题 → 内容 12px，与 .accPanel 的 padding-top 同值 —— 两处分组的手感一致。
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-12);
+}
+
+// 用原生 <h3>（不是 Mantine Text）承载：区块标题本就是标题层级的一节，语义正确；
+// 且避开 Mantine Text 的默认字号（同为单类选择器，谁后注入谁赢，太脆）。
+.sectionHeading {
+  @include section-heading;
+  margin: 0;
+}
+
+// 删除动作：静止时中性、悬停才转危险色（§4.2 第 2 条「红色不给删除按钮的常态」）。
+// 它贴在面板最底部，与上方字段拉开一段距离，不与任何输入控件相邻 —— 不会看错。
+.dangerAction {
+  color: var(--planit-text-muted);
+
+  &:hover {
+    color: var(--planit-critical);
   }
 }
 

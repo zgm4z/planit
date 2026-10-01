@@ -191,6 +191,12 @@
     "empty": "还没有资源。",
     "create": "新建资源",
     "delete": "删除资源",
+    "groups": {
+      "info": "基本信息",
+      "availability": "可用性",
+      "cost": "成本",
+      "assignments": "分配"
+    },
     "name": "名称",
     "email": "电子邮件",
     "kind": "类型",
@@ -205,9 +211,9 @@
     "usageCost": "使用成本",
     "hourlyCost": "小时成本",
     "currency": "货币",
-    "totalAssignments": "总使用次数：{{count}}",
-    "totalHours": "总时数：{{count}}",
-    "totalCost": "总成本：{{amount}} {{currency}}",
+    "totalAssignments": "总使用次数",
+    "totalHours": "总时数",
+    "totalCost": "总成本",
     "overload": "超载：{{count}} 天",
     "noOverload": "无超载"
   },

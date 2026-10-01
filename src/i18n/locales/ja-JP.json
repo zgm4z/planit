@@ -188,6 +188,12 @@
     "empty": "リソースがまだありません。",
     "create": "新規リソース",
     "delete": "リソースを削除",
+    "groups": {
+      "info": "基本情報",
+      "availability": "可用性",
+      "cost": "コスト",
+      "assignments": "割り当て"
+    },
     "name": "名前",
     "email": "メール",
     "kind": "種類",
@@ -202,9 +208,9 @@
     "usageCost": "使用コスト",
     "hourlyCost": "時間コスト",
     "currency": "通貨",
-    "totalAssignments": "使用回数：{{count}}",
-    "totalHours": "総時間：{{count}}",
-    "totalCost": "総コスト：{{amount}} {{currency}}",
+    "totalAssignments": "使用回数",
+    "totalHours": "総時間",
+    "totalCost": "総コスト",
     "overload": "超過負荷：{{count}} 日",
     "noOverload": "超過負荷なし"
   },

@@ -57,6 +57,15 @@ describe('资源面板', () => {
     expect(screen.getByRole('combobox', { name: '类型' })).toBeInTheDocument()
   })
 
+  it('按信息架构渲染四个区块标题（基本信息 / 可用性 / 成本 / 分配）', () => {
+    renderPanel()
+    // 此前资源面板是「一根没有分组的柱子」—— 这条断言把信息架构钉住：
+    // 少了任何一个区块标题都会失败，防止退回平铺。
+    for (const heading of ['基本信息', '可用性', '成本', '分配']) {
+      expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+    }
+  })
+
   it('改名写回 store', async () => {
     const user = userEvent.setup()
     renderPanel()
@@ -84,8 +93,10 @@ describe('资源面板', () => {
 
   it('无分配时派生的总计为 0', () => {
     renderPanel()
-    expect(screen.getByText(/总使用次数：0/)).toBeInTheDocument()
-    expect(screen.getByText(/总成本：0/)).toBeInTheDocument()
+    // 派生的总计改走 StatRow（标签 / 值分列）—— 断言按 testid 定位那一行的事实值，
+    // 比「匹配一整句『总使用次数：0』」更精确（不依赖标签与值的拼接方式）。
+    expect(screen.getByTestId('resource-total-assignments')).toHaveTextContent('0')
+    expect(screen.getByTestId('resource-total-cost')).toHaveTextContent('0')
   })
 
   it('「新建资源」按钮 dispatch resource.create', async () => {
@@ -131,8 +142,8 @@ describe('资源面板 —— 一个真实分配下的总计', () => {
 
     renderPanel()
     // 工期 2 个工作日 × 8 小时 = 16 小时；1 条分配；成本 0（未设费率）
-    expect(screen.getByText(/总使用次数：1/)).toBeInTheDocument()
-    expect(screen.getByText(/总时数：16/)).toBeInTheDocument()
+    expect(screen.getByTestId('resource-total-assignments')).toHaveTextContent('1')
+    expect(screen.getByTestId('resource-total-hours')).toHaveTextContent('16')
   })
 })
 
