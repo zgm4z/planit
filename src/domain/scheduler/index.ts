@@ -1,6 +1,7 @@
-import type { Project, ScheduleResult, Task, TaskId } from '../model/types'
+import type { ComputedSchedule, Project, ScheduleResult, Task, TaskId } from '../model/types'
 import type { ResourceBounds } from './effort'
 import { runCpm } from './cpm'
+import { levelLeaves } from './leveling'
 import { detectConflicts, summarizeParents } from './summarize'
 import { collectCosts, collectEfforts, effectiveDuration, resourceBounds } from './effort'
 import { sumUnits } from '../model/units'
@@ -17,6 +18,7 @@ export { summarizeParents, detectConflicts } from './summarize'
  *   ② 拓扑排序 + 环检测 ┐
  *   ③ 正推 / ④ 逆推 / ⑤ 浮时 ├ 都在 runCpm 里
  *   ⑥ 摘要汇总 + 冲突检测 ┘
+ *   ⑦ 资源平衡        ← v0.6 填充（CPM 之后、摘要之前；只改 scheduled*）
  *
  * `fixedEffort` 任务的工期**必须**在 ① 算出来 —— 工期是 CPM 正推的输入。
  * 资源可用期在此翻译成任务级排期边界（见 ResourceBounds）。
@@ -52,12 +54,31 @@ export function solve(project: Project): ScheduleResult {
     resourceBounds: bounds,
   })
 
-  const schedules = summarizeParents(project.tasks, leafSchedules, project.rootIds)
+  // ⑦ 资源平衡（v0.6）：用 CPM 算出的浮时，把资源超载处的任务往后推。
+  //    必须在 ② 之后（要浮时）、在摘要汇总之前（产出的 scheduled* 要被汇总）。
+  //    只覆盖叶子的 scheduledStart/Finish —— early/late/slack 一律不动（spec §3）。
+  const { result: leveling, dates } = levelLeaves(
+    project,
+    leaves,
+    durations,
+    calendar,
+    leafSchedules,
+  )
+
+  const leveledLeaves: Record<TaskId, ComputedSchedule> = {}
+  for (const [id, schedule] of Object.entries(leafSchedules)) {
+    const span = dates[id]
+    leveledLeaves[id] = span
+      ? { ...schedule, scheduledStart: span.start, scheduledFinish: span.finish }
+      : schedule
+  }
+
+  const schedules = summarizeParents(project.tasks, leveledLeaves, project.rootIds)
   const conflicts = detectConflicts(project.tasks, schedules, project.rootIds)
   const efforts = collectEfforts(project, leaves, units, durations)
   const { costs, resourceTotals } = collectCosts(project, leaves, durations, calendar)
 
-  return { schedules, conflicts, efforts, costs, resourceTotals }
+  return { schedules, conflicts, efforts, costs, resourceTotals, leveling }
 }
 
 /** 深度优先收集全部叶子任务（childIds 为空者） */

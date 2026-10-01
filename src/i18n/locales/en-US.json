@@ -89,8 +89,8 @@
     "placeholder": {
       "baseline": "No baseline set",
       "baselineHint": "Baseline comparison will be available in v1.0.",
-      "allocationHint": "Resource leveling will be available in v0.6.",
-      "expectedEffortHint": "Effort can be computed as a weighted average of minimum, maximum and expected values. These values are also used as possible variability in a Monte Carlo simulation. Expected effort will be available in v0.6 / v1.0.",
+      "allocationHint": "Automatic adjustments when an allocation changes are not scheduled yet.",
+      "expectedEffortHint": "Effort can be computed as a weighted average of minimum, maximum and expected values, which also feed the variability used in Monte Carlo simulation. Expected effort is not scheduled yet.",
       "allocationOnChange": "When an allocation changes",
       "allocationNeeds": "Task progress requires",
       "min": "Minimum",
@@ -132,9 +132,9 @@
     "allowSplitting": "Allow splitting",
     "allowSplittingHint": "Split scheduling is not yet implemented (after v0.5)",
     "priority": "Priority",
-    "priorityHint": "Takes effect during resource leveling (v0.6)",
+    "priorityHint": "Takes effect during resource leveling (higher = more important)",
     "delay": "Delay",
-    "delayHint": "Workdays resource leveling may delay this task (v0.6)",
+    "delayHint": "At least this many workdays this task should be delayed during resource leveling.",
     "slack": "Slack: {{count}} workdays",
     "critical": "on critical path",
     "relations": {

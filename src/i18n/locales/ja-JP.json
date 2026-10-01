@@ -89,8 +89,8 @@
     "placeholder": {
       "baseline": "基準は未設定",
       "baselineHint": "基準との比較は v1.0 で提供されます。",
-      "allocationHint": "リソース平準化は v0.6 で提供されます。",
-      "expectedEffortHint": "工数は最小値・最大値・期待値の加重平均として計算できます。これらの値は Monte Carlo シミュレーションの変動要素としても使われます。見込み工数は v0.6 / v1.0 で提供されます。",
+      "allocationHint": "配分変更時の自動調整は未定です。",
+      "expectedEffortHint": "工数は最小値・最大値・期待値の加重平均として計算でき、Monte Carlo シミュレーションの変動性にも用いられます。期待工数は未定です。",
       "allocationOnChange": "リソース配分が変更されたとき",
       "allocationNeeds": "タスクの進捗に必要なもの",
       "min": "最小値",
@@ -132,9 +132,9 @@
     "allowSplitting": "分割を許可",
     "allowSplittingHint": "分割スケジューリングは未実装です（v0.5 以降）",
     "priority": "優先度",
-    "priorityHint": "リソース平準化時に有効になります（v0.6）",
+    "priorityHint": "リソース平準化時に有効（数値が大きいほど優先）",
     "delay": "遅延",
-    "delayHint": "リソース平準化で遅延できる稼働日数（v0.6）",
+    "delayHint": "リソース平準化時にこのタスクを遅延させる稼働日数（最低限）。",
     "slack": "余裕：{{count}} 稼働日",
     "critical": "クリティカルパス上",
     "relations": {

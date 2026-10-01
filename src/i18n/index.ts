@@ -1,3 +1,14 @@
+/**
+ * 文案原则（v0.6 确立，源自 `docs/superpowers/plans/2026-10-01-v0.6-resource-leveling.md` 偏差 8）：
+ *
+ * **面向用户的文案里，只有当某个功能确实落在路线图 `docs/superpowers/ROADMAP.md`
+ * 中某个真实存在的版本上时，才写那个版本号；否则一律写「尚未排期」。**
+ *
+ * 由来：v0.2 的占位文案把「资源平衡」写成「将在 v0.6 提供」、把「预计工作量」
+ * 写成「将在 v0.6 / v1.0 提供」。前者到 v0.6 落地后从未来时变成过期标注；后者
+ * 的 v1.0 其实并不确定覆盖它（v1.0 spec 自称该块「可能拆成 v1.1」）。给用户看
+ * 一个会过期的版本号，比老实说「尚未排期」更糟 —— 它会在版本发布后变成谎言。
+ */
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
