@@ -10,7 +10,10 @@ export { summarizeParents, detectConflicts } from './summarize'
  * 排期求解的唯一入口。纯函数，不依赖任何 React 或 store。
  *
  * 管线：收集叶子任务 → CPM 正推/逆推 → 摘要汇总 → 冲突检测
- * 资源与分配在第一阶段恒为空，因此「有效工期计算」这一步退化为恒等变换。
+ *
+ * 第一阶段不含资源与分配，因此没有独立的「有效工期计算」步骤 ——
+ * 任务的 duration 直接作为 CPM 的输入。第二阶段接入资源后，
+ * 工作量驱动的工期反解会插在第一步与第二步之间。
  */
 export function solve(project: Project): ScheduleResult {
   const leaves = collectLeaves(project)
