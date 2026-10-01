@@ -101,15 +101,6 @@ export const OUTLINE_COLUMNS: readonly OutlineColumn[] = OUTLINE_COLUMN_KEYS.map
   enabled: isEnabledOutlineColumnKey(key),
 }))
 
-/**
- * 响应式断点（spec §7，与 Mantine 的 `$breakpoint-md: 900px` 对齐）。
- *
- * `NARROW`：< 1100 —— 右栏改抽屉、左列 280、隐藏「备注 / ID / 优先级」、工具栏溢出。
- * `COMPACT`：< 900 —— 只剩「标题 / 开始 / 结束 / 工期」，左列 240。
- */
-export const NARROW_LAYOUT_WIDTH = 1100
-export const COMPACT_LAYOUT_WIDTH = 900
-
 /** < 1100 时按 §7 **强制隐藏**的低价值列（它们让位给标题列，不是等比压缩） */
 const NARROW_HIDDEN_COLUMNS: readonly OutlineColumnKey[] = ['note', 'id', 'priority']
 

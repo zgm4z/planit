@@ -16,7 +16,7 @@ import type { ResourceKind } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
-import { createResourceAndGetId } from './resourceActions'
+import { createResourceAndGetId } from '../shared/resourceActions'
 import { AssignmentSection } from './AssignmentSection'
 import {
   DateField,
