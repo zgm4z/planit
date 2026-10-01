@@ -60,7 +60,7 @@ export function ProjectView() {
   const totalDays = useMemo(() => {
     let lastDay = 60
     for (const schedule of Object.values(schedulesResult.schedules)) {
-      lastDay = Math.max(lastDay, scale.daysFromStart(schedule.earlyFinish) + 7)
+      lastDay = Math.max(lastDay, scale.daysFromStart(schedule.scheduledFinish) + 7)
     }
     return lastDay
   }, [schedulesResult.schedules, scale])
@@ -116,10 +116,10 @@ export function ProjectView() {
       const rowTop = index * ROW_HEIGHT
 
       if (task.kind === 'milestone') {
-        const rect = milestoneRect(scale, schedule.earlyStart)
+        const rect = milestoneRect(scale, schedule.scheduledStart)
         map.set(row.taskId, { ...rect, y: rect.y + rowTop })
       } else {
-        const bar = barRect(scale, schedule.earlyStart, schedule.earlyFinish)
+        const bar = barRect(scale, schedule.scheduledStart, schedule.scheduledFinish)
         map.set(row.taskId, {
           x: bar.x,
           y: rowTop + (ROW_HEIGHT - BAR_HEIGHT) / 2,
@@ -235,7 +235,7 @@ export function ProjectView() {
                   selectTask(taskId)
                   const schedule = schedulesResult.schedules[taskId]
                   if (!schedule) return
-                  drag.begin(event, taskId, mode, schedule.earlyStart, project.tasks[taskId].duration)
+                  drag.begin(event, taskId, mode, schedule.scheduledStart, project.tasks[taskId].duration)
                 }}
                 onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
               />

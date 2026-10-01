@@ -8,6 +8,9 @@ const sch = (o: Partial<ComputedSchedule>): ComputedSchedule => ({
   earlyFinish: '2026-03-04',
   lateStart: '2026-03-02',
   lateFinish: '2026-03-04',
+  // 默认（asap + forward）下 scheduled* === early*，与引擎的不变量一致
+  scheduledStart: '2026-03-02',
+  scheduledFinish: '2026-03-04',
   totalSlack: 0,
   isCritical: true,
   ...o,

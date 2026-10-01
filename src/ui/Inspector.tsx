@@ -192,7 +192,7 @@ export function Inspector() {
                     scheduling: {
                       mode: 'constraint',
                       type: value as ConstraintType,
-                      date: schedule?.earlyStart ?? project.startDate,
+                      date: schedule?.scheduledStart ?? project.startDate,
                     },
                   },
                 })
@@ -241,7 +241,7 @@ export function Inspector() {
         {schedule && (
           <Text fz="xs" c="dimmed">
             {t('inspector.earliest', {
-              date: `${schedule.earlyStart} → ${schedule.earlyFinish}`,
+              date: `${schedule.scheduledStart} → ${schedule.scheduledFinish}`,
             })}
             <br />
             {t('inspector.slack', { count: schedule.totalSlack })}

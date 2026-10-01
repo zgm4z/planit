@@ -57,7 +57,7 @@ export function GanttRows({
         // 反而看不清重排的影响面。
         const override =
           shadow !== undefined &&
-          (shadow.startDate !== schedule.earlyStart || shadow.duration !== task.duration)
+          (shadow.startDate !== schedule.scheduledStart || shadow.duration !== task.duration)
             ? shadow
             : undefined
 

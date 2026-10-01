@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createTask, createDependency } from '../model/factories'
-import type { ConstraintType, Dependency, Task } from '../model/types'
+import type { ConstraintType, Dependency, SchedulingDirection, Task } from '../model/types'
+import { workdaysBetween } from '../calendar/workdays'
 import { runCpm } from './cpm'
 import { CycleError } from './graph'
 
@@ -31,7 +32,13 @@ describe('runCpm — 黄金用例', () => {
     createDependency('B', 'D'),
     createDependency('C', 'D'),
   ]
-  const r = runCpm({ tasks, dependencies, calendar: cal, projectStart: '2026-03-02' })
+  const r = runCpm({
+    tasks,
+    dependencies,
+    calendar: cal,
+    direction: 'forward',
+    projectStart: '2026-03-02',
+  })
 
   it('正推得到各任务的最早排期', () => {
     expect(r.A.earlyStart).toBe('2026-03-02')
@@ -70,6 +77,7 @@ describe('runCpm — 依赖类型与 lag', () => {
       tasks: [mk('A', 3), mk('B', 2)],
       dependencies: deps,
       calendar: cal,
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
 
@@ -117,6 +125,7 @@ describe('runCpm — 调度约束', () => {
       tasks: [a, b],
       dependencies: [createDependency('A', 'B')],
       calendar: cal,
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
     expect(r.B.earlyStart).toBe('2026-03-16')
@@ -132,6 +141,7 @@ describe('runCpm — 调度约束', () => {
       tasks: [a, b],
       dependencies: [createDependency('A', 'B')],
       calendar: cal,
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
     // 下界 03-03 弱于依赖要求的 03-09，取较晚者
@@ -148,6 +158,7 @@ describe('runCpm — 调度约束', () => {
       tasks: [a, b],
       dependencies: [createDependency('A', 'B')],
       calendar: cal,
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
     // A 正推 03-02→03-06，B 最早只能 03-09；但 B 被钉在 03-04
@@ -163,6 +174,7 @@ describe('runCpm — 边界情况', () => {
       tasks: [],
       dependencies: [],
       calendar: createCalendar(),
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
     expect(r).toEqual({})
@@ -174,6 +186,7 @@ describe('runCpm — 边界情况', () => {
       tasks: [mk('A', 2), m],
       dependencies: [createDependency('A', 'M')],
       calendar: createCalendar(),
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
     expect(r.M.earlyStart).toBe('2026-03-04')
@@ -186,6 +199,7 @@ describe('runCpm — 边界情况', () => {
       tasks: [mk('A', 3)],
       dependencies: [],
       calendar: createCalendar(),
+      direction: 'forward',
       projectStart: '2026-03-05',
     })
     expect(r.A.earlyFinish).toBe('2026-03-09')
@@ -197,6 +211,7 @@ describe('runCpm — 边界情况', () => {
         tasks: [mk('A', 1), mk('B', 1)],
         dependencies: [createDependency('A', 'B'), createDependency('B', 'A')],
         calendar: createCalendar(),
+        direction: 'forward',
         projectStart: '2026-03-02',
       }),
     ).toThrow(CycleError)
@@ -215,6 +230,7 @@ describe('runCpm — 六种约束类型的上下界', () => {
       ],
       dependencies: [],
       calendar: cal,
+      direction: 'forward',
       projectStart: '2026-03-02',
     })
 
@@ -245,5 +261,133 @@ describe('runCpm — 六种约束类型的上下界', () => {
   it('finishNoLaterThan：只设结束上界，最早排期不受影响', () => {
     expect(run('finishNoLaterThan').A.earlyStart).toBe('2026-03-02')
     expect(run('finishNoLaterThan').A.lateFinish).toBe('2026-03-16')
+  })
+})
+
+// ── 排期方向（spec §4.3 / §4.4）──────────────────────────
+//
+// 沿用上面的黄金用例：
+//   A(3d) ──┬──> B(2d) ──┐
+//           │             ├──> D(1d)
+//           └──> C(5d) ──┘
+// 前推：A 03-02..03-04，B 03-05..03-06，C 03-05..03-11，D 03-12..03-12
+// 关键路径 A → C → D，跨度 03-02..03-12（9 个工作日）
+function golden(direction: SchedulingDirection, projectEnd?: string) {
+  const tasks = [mk('A', 3), mk('B', 2), mk('C', 5), mk('D', 1)]
+  const dependencies = [
+    createDependency('A', 'B'),
+    createDependency('A', 'C'),
+    createDependency('B', 'D'),
+    createDependency('C', 'D'),
+  ]
+  return runCpm({
+    tasks,
+    dependencies,
+    calendar: createCalendar(),
+    direction,
+    projectStart: '2026-03-02',
+    projectEnd,
+  })
+}
+
+describe('runCpm — 排期方向', () => {
+  it('forward + asap：排期就是正推值', () => {
+    const r = golden('forward')
+    for (const id of ['A', 'B', 'C', 'D']) {
+      expect(r[id].scheduledStart).toBe(r[id].earlyStart)
+      expect(r[id].scheduledFinish).toBe(r[id].earlyFinish)
+    }
+    expect(r.A.scheduledStart).toBe('2026-03-02')
+  })
+
+  it('forward + alap：有浮时的任务被推到最晚，关键任务原地不动', () => {
+    const tasks = [mk('A', 3), mk('B', 2), mk('C', 5), mk('D', 1)].map((t) => ({
+      ...t,
+      schedulingOrder: 'alap' as const,
+    }))
+    const dependencies = [
+      createDependency('A', 'B'),
+      createDependency('A', 'C'),
+      createDependency('B', 'D'),
+      createDependency('C', 'D'),
+    ]
+    const r = runCpm({
+      tasks, dependencies, calendar: createCalendar(),
+      direction: 'forward', projectStart: '2026-03-02',
+    })
+
+    // A 在关键路径上（A→C→D），浮时 0 —— 取早取晚同值。
+    // 手算：A 的 lateFinish 由 C.lateStart(03-05) 往回推一格得到 03-04，
+    // 于是 lateStart = taskStart('2026-03-04', 3) = 03-02，与 early 相同。
+    expect(r.A.totalSlack).toBe(0)
+    expect(r.A.scheduledStart).toBe('2026-03-02')
+    expect(r.A.scheduledFinish).toBe('2026-03-04')
+
+    // B 才是 alap 的判别点：浮时 3（early 03-05..03-06，late 03-10..03-11）
+    expect(r.B.totalSlack).toBe(3)
+    expect(r.B.scheduledStart).toBe('2026-03-10')
+    expect(r.B.scheduledFinish).toBe('2026-03-11')
+
+    // 其余关键任务同样不动，且最晚完成日不越过算出的完成日
+    expect(r.C.scheduledStart).toBe(r.C.earlyStart)
+    expect(r.D.scheduledFinish).toBe('2026-03-12')
+  })
+
+  it('backward + asap：日期整体后移，关键路径与跨度不变', () => {
+    // 窗口比关键链宽：终点定在 03-20（周五）
+    const forward = golden('forward')
+    const backward = golden('backward', '2026-03-20')
+
+    // 判据 1 —— 每条任务的排期日期都变了（更晚）
+    for (const id of ['A', 'B', 'C', 'D']) {
+      expect(backward[id].scheduledStart > forward[id].scheduledStart).toBe(true)
+    }
+
+    // 判据 2 —— 关键路径不变
+    const criticalOf = (r: Record<string, { isCritical: boolean }>) =>
+      Object.keys(r).filter((id) => r[id].isCritical).sort()
+    expect(criticalOf(backward)).toEqual(criticalOf(forward))
+    expect(criticalOf(backward)).toEqual(['A', 'C', 'D'])
+
+    // 判据 3 —— 项目跨度不变（max(lateFinish) - min(lateStart)）
+    const span = (r: Record<string, { lateStart: string; lateFinish: string }>) => {
+      const starts = Object.values(r).map((s) => s.lateStart).sort()
+      const finishes = Object.values(r).map((s) => s.lateFinish).sort((a, b) => (a < b ? 1 : -1))
+      return workdaysBetween(starts[0], finishes[0], createCalendar()) + 1
+    }
+    expect(span(backward)).toBe(span(forward))
+    expect(span(forward)).toBe(9)
+  })
+
+  it('backward 未设 endDate 时退回用正推算出的完成日：排期与 forward 完全一致', () => {
+    const forward = golden('forward')
+    const backward = golden('backward')
+    for (const id of ['A', 'B', 'C', 'D']) {
+      expect(backward[id].scheduledStart).toBe(forward[id].scheduledStart)
+      expect(backward[id].scheduledFinish).toBe(forward[id].scheduledFinish)
+    }
+  })
+
+  it('forward 下 projectEnd 早于算出的完成日 → 浮时变负（期限违约）', () => {
+    const r = golden('forward', '2026-03-10') // 实际完成 03-12
+    expect(r.D.totalSlack).toBeLessThan(0)
+    expect(r.D.isCritical).toBe(false)
+  })
+
+  it('alap 不会把关键任务推早', () => {
+    const tasks = [mk('A', 3), mk('C', 5), mk('D', 1)].map((t) => ({
+      ...t,
+      schedulingOrder: 'alap' as const,
+    }))
+    const r = runCpm({
+      tasks,
+      dependencies: [createDependency('A', 'C'), createDependency('C', 'D')],
+      calendar: createCalendar(),
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    // 全链都是关键任务 → 没有任何浮时可挪
+    expect(r.A.scheduledStart).toBe('2026-03-02')
+    expect(r.D.scheduledFinish).toBe('2026-03-12')
   })
 })

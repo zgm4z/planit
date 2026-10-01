@@ -152,6 +152,13 @@ export interface ComputedSchedule {
   earlyFinish: DateStr
   lateStart: DateStr
   lateFinish: DateStr
+  /**
+   * 该任务在当前「方向 × 顺序」下**实际**落在的排期端。
+   * 显示层（甘特条、大纲列、状态栏）只读这两个字段 ——
+   * 它们才是「用户看到的日期」，early/late 是中间量。
+   */
+  scheduledStart: DateStr
+  scheduledFinish: DateStr
   /** 总浮时（工作日） */
   totalSlack: number
   isCritical: boolean
