@@ -19,7 +19,7 @@ import { formatDate } from '../dateUtils'
 export const DEFAULT_CALENDAR_ID: CalendarId = 'default'
 
 /** 与设计文档一致的 schema 版本，持久化时用于校验 */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 let counter = 0
 
@@ -64,6 +64,9 @@ export function seedIdCounterFromIds(ids: readonly string[]): void {
  * 页面重载后模块级计数器会归零。若不重新播种，新建的 id 会与项目中
  * 已存在的 id 重复，而 Project.tasks / dependencies 等都是 keyed Record
  * —— 重复的 key 会静默覆盖原有数据。
+ *
+ * v1.0 起也扫基线 id：`Project.baselines` 是**数组**（不是 Record），撞 id
+ * 不会静默覆盖，但会让 `activeBaselineId` 指向错误的基线 —— 比覆盖更难查。
  */
 export function seedIdCounterFromProject(project: Project): void {
   seedIdCounterFromIds([
@@ -72,6 +75,7 @@ export function seedIdCounterFromProject(project: Project): void {
     ...Object.keys(project.dependencies),
     ...Object.keys(project.resources),
     ...Object.keys(project.assignments),
+    ...project.baselines.map((baseline) => baseline.id),
   ])
 }
 
@@ -103,6 +107,9 @@ export function createProject(
     dependencies: {},
     resources: {},
     assignments: {},
+    // statusDate 刻意不写 —— 缺省即「未设基准日」（PV / SV 暂不可算）
+    baselines: [],
+    activeBaselineId: null,
     createdAt: now,
     updatedAt: now,
   }

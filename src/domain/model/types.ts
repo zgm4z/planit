@@ -167,6 +167,19 @@ export interface Project {
   dependencies: Record<DependencyId, Dependency>
   resources: Record<ResourceId, Resource>
   assignments: Record<AssignmentId, Assignment>
+  /**
+   * v1.0：基线快照列表（可多个，用于对比不同时间点）。
+   * **落盘** —— 这是 schemaVersion 3→4 的原因。
+   */
+  baselines: Baseline[]
+  /** 用于对比的当前基线；null 表示不对比 */
+  activeBaselineId: string | null
+  /**
+   * v1.0：挣值的**基准日**（「到某日为止」的那个日）。
+   * 缺省表示未设 —— 此时 PV / SV 算不出来（派生为 null），UI 提示用户设置。
+   * 刻意**不**默认成 `new Date()`：墙上时钟会让黄金测试与 e2e 不可复现（计划偏差 3）。
+   */
+  statusDate?: DateStr
   createdAt: string
   updatedAt: string
 }
@@ -236,6 +249,52 @@ export interface LevelingResult {
   delays: Record<TaskId, number>
   /** 平衡后**仍无法消除**的超载（浮时耗尽 / 无可推候选）。空数组 = 完全平衡 */
   unresolved: ResourceOverload[]
+}
+
+// ── 基线（v1.0）─────────────────────────────────────────
+
+/** 一条任务的排期快照。**只快照排期**，不快照任务本身（spec §1.2） */
+export interface BaselineEntry {
+  /** 快照时的任务名 —— 任务被删除后仍能辨认这一条（见计划偏差 1 / spec 缺陷 D9） */
+  name: string
+  /** 基线排期，与 ComputedSchedule 同口径（工作日） */
+  start: DateStr
+  finish: DateStr
+}
+
+export interface Baseline {
+  id: string
+  name: string
+  createdAt: string
+  /** key 为**叶子任务** id。删任务**不**级联删条目 —— 基线是历史记录（spec §1.2） */
+  entries: Record<TaskId, BaselineEntry>
+}
+
+/**
+ * v1.0：一个任务的挣值派生量。**由引擎算出**，UI 只读、不重算。
+ *
+ * 单位：bac / ev / pv / sv 一律是**货币**（与 costs 同币种，货币在资源级）。
+ * 注意 `sv` 是**货币**（EV − PV），与 `startVariance`（工作日）**不同量纲** —— spec 缺陷 D4。
+ */
+export interface EarnedValue {
+  /** 完工预算（BAC）= 该任务的成本总额（costs.total；摘要为子任务之和） */
+  bac: number
+  /** 挣值（BCWP / EV）= bac × progress/100 —— progress 是 **0–100**（spec 缺陷 D1） */
+  ev: number
+  /** 计划值（BCWS / PV）。缺活动基线快照 / 缺基准日时为 **null**（不是 0，见计划偏差 4） */
+  pv: number | null
+  /** 进度差异（SV）= ev − pv（**货币**）。pv 为 null 时同为 null */
+  sv: number | null
+}
+
+/** v1.0：一个任务相对**活动基线**的排期差异。差异为**工作日**口径（spec §1.3） */
+export interface BaselineComparison {
+  /** 基线开始日。无活动基线 / 该任务（叶子）无快照时为 undefined */
+  baselineStart?: DateStr
+  baselineFinish?: DateStr
+  /** 当前 − 基线（工作日，**正数表示延后**） */
+  startVariance?: number
+  finishVariance?: number
 }
 
 export interface ScheduleResult {

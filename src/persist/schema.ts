@@ -1,6 +1,6 @@
 import type { Project } from '../domain/model/types'
 import { SCHEMA_VERSION } from '../domain/model/factories'
-import { migrateV1ToV2, migrateV2ToV3 } from './migrate'
+import { migrateV1ToV2, migrateV2ToV3, migrateV3ToV4 } from './migrate'
 
 // 单一来源：从 domain 层重导出，避免两处版本号各自漂移
 export { SCHEMA_VERSION }
@@ -27,6 +27,7 @@ export interface PersistedProject {
 const MIGRATIONS: Partial<Record<number, (project: never) => unknown>> = {
   1: migrateV1ToV2,
   2: migrateV2ToV3,
+  3: migrateV3ToV4,
 }
 
 /**
