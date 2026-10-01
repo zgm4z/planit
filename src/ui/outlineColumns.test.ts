@@ -233,6 +233,27 @@ describe('getOutlineCellValue', () => {
     })
   })
 
+  it('摘要行（group）的 duration / progress 为空 —— 这两个量对摘要无意义', () => {
+    // duration 取一个**非零且非默认**的值（7），否则「返回原值」与「返回空」
+    // 在断言里区分不出来（新建任务的 duration 默认就是 1，取 1 会让假实现也通过）。
+    // 构造一个真有子任务的摘要行：kind 为 group、childIds 非空。
+    const summary: Task = {
+      ...createTask({ name: '阶段一', kind: 'group', duration: 7 }),
+      progress: 55,
+      childIds: ['task_child'],
+    }
+
+    // 摘要行的 duration / progress 从不被维护（summarizeParents 只汇总排期/浮时），
+    // 直接返回 task.* 会让摘要行显示陈旧原始值 —— 这里断言其为 EMPTY。
+    expect(getOutlineCellValue('duration', { ...ctx, task: summary })).toEqual({ type: 'empty' })
+    expect(getOutlineCellValue('progress', { ...ctx, task: summary })).toEqual({ type: 'empty' })
+
+    // 反向对照：同样非零的 duration/progress 落在普通任务上必须原样透出，
+    // 免得把「摘要行为空」误实现成「duration/progress 一律为空」。
+    expect(getOutlineCellValue('duration', ctx)).toEqual({ type: 'days', count: 3 })
+    expect(getOutlineCellValue('progress', ctx)).toEqual({ type: 'percent', value: 40 })
+  })
+
   it('没有排期时日期/浮时列是空，而不是崩或 "undefined"', () => {
     const bare = { task, schedule: undefined }
     expect(getOutlineCellValue('start', bare)).toEqual({ type: 'empty' })

@@ -249,11 +249,24 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
     case 'finish':
       return schedule ? { type: 'text', text: resolveScheduleDates(schedule).finish } : EMPTY
     case 'duration':
+      // 摘要行（group）**不给** duration：这个字段从不被维护 —— `summarizeParents`
+      // （src/domain/scheduler/summarize.ts）只汇总排期 / 浮时，**不碰 duration**；
+      // `task.indent` 把任务变成 group 时也不重置它。于是它会停在旧值（新建默认 1），
+      // 而 duration 是**默认可见列**：摘要行会渲染成
+      // `start=03-02 finish=03-06 duration=1 天`，三个数并排自相矛盾
+      // （start/finish 是汇总值，duration 是陈旧字段）。Inspector 对摘要任务同样
+      // 刻意隐藏 duration/progress —— 本 App 已声明这两个量对摘要无意义。
+      if (task.kind === 'group') return EMPTY
       // 里程碑显示破折号：「0 天」会被误读成「有个零工期的活儿」
       return task.kind === 'milestone' ? { type: 'text', text: '—' } : { type: 'days', count: task.duration }
     case 'priority':
       return { type: 'text', text: String(task.priority) }
     case 'progress':
+      // 同 duration：progress 也不被汇总（summarizeParents 不碰它），给摘要行一个
+      // 陈旧的原始值只会误导。此处刻意用 EMPTY 而**不是**里程碑那个破折号 ——
+      // 「—」的语义是「按定义为 0」（里程碑是零工期的点），摘要行是「本无此量」，
+      // 两者语义不同，不能复用同一个字形。详见上面 duration 分支的注释。
+      if (task.kind === 'group') return EMPTY
       return { type: 'percent', value: task.progress }
     case 'totalSlack':
       return schedule ? { type: 'days', count: schedule.totalSlack } : EMPTY
