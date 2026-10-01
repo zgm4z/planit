@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
+import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
@@ -25,6 +25,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     css: true,
+    // e2e/ 下是 Playwright 的 spec（浏览器里跑，靠 dev server），
+    // vitest 的默认 include 会把 *.spec.ts 一并捞进来，必须排除
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     // 固定一个非 UTC 时区：dateUtils 的时区正确性只有在本地偏移非零时才可验证，
     // 而 CI 容器默认是 UTC，不固定就会让相关测试静默失效
     env: { TZ: 'America/New_York' },

@@ -110,10 +110,12 @@ export function TaskBar({
 
       <div
         className={`${styles.barHandle} ${styles.barHandleLeft}`}
+        data-testid={`bar-handle-left-${task.id}`}
         onPointerDown={(event) => onBarPointerDown?.(event, 'resizeStart')}
       />
       <div
         className={`${styles.barHandle} ${styles.barHandleRight}`}
+        data-testid={`bar-handle-right-${task.id}`}
         onPointerDown={(event) => onBarPointerDown?.(event, 'resizeEnd')}
       />
 
