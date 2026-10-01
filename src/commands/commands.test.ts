@@ -335,4 +335,17 @@ describe('task.kind 不变式', () => {
 
     expect(p.tasks[a].kind).toBe('task')
   })
+
+  it('task.create 挂到里程碑父任务下时回退到根层，不把里程碑转成 group', () => {
+    let p = run(project, 'task.create', { name: 'M' })
+    const m = p.rootIds[0]
+    p = run(p, 'task.toggleMilestone', { taskId: m })
+
+    p = run(p, 'task.create', { name: '子', parentId: m })
+
+    expect(p.tasks[m].kind).toBe('milestone')
+    expect(p.tasks[m].childIds).toEqual([])
+    expect(p.rootIds).toHaveLength(2) // 新任务落在根层
+    expect(p.tasks[p.rootIds[1]].parentId).toBeNull()
+  })
 })

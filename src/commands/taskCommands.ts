@@ -35,9 +35,12 @@ function detachTask(draft: Draft<Project>, taskId: TaskId): void {
 export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.create': (draft, payload: TaskCreatePayload) => {
     const task = createTask({ name: payload.name })
-    // parentId 指向的任务不存在时（悬空 id）回退到根层，不留下悬空的 parentId。
+    // 里程碑不能当父任务 —— 与 task.indent 的守卫是同一条规则。
+    // 两条路径必须一致：indent 拒绝的事，create 也不该换个方式做成。
+    // 不可用的 parentId（悬空 id / 里程碑）一律回退到根层，不留下悬空的 parentId。
     // createTask 已把 parentId 默认为 null，因此回退分支无需再赋值。
-    const parent = payload.parentId ? draft.tasks[payload.parentId] : undefined
+    const candidate = payload.parentId ? draft.tasks[payload.parentId] : undefined
+    const parent = candidate && candidate.kind !== 'milestone' ? candidate : undefined
 
     draft.tasks[task.id] = task
     if (parent) {
