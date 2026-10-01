@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -26,6 +26,21 @@ function renderInspector() {
       <Inspector />
     </MantineProvider>,
   )
+}
+
+/**
+ * 展开 Mantine 浮层下拉并点选一项。jsdom 里浮层的计算样式停在 display:none，
+ * userEvent.click 会因「元素不可见」拒绝点击，故这里用 fireEvent 直接派发，
+ * 且按 `hidden: true` 取（仍在 DOM 但被判定为不可见）的 option。
+ * 「能不能看得见」这类真实可见性由 e2e 验收，不在单测范围。
+ */
+async function chooseOption(
+  user: ReturnType<typeof userEvent.setup>,
+  selectLabel: string,
+  optionLabel: string,
+) {
+  await user.click(screen.getByRole('combobox', { name: selectLabel }))
+  fireEvent.click(screen.getByRole('option', { name: optionLabel, hidden: true }))
 }
 
 beforeEach(async () => {
@@ -203,5 +218,52 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
     expect(screen.getByLabelText('Duration')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Task' })).toBeInTheDocument()
+  })
+})
+
+describe('任务信息组', () => {
+  it('类型 Select 反映 kind，切到「里程碑」会把工期归零', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    expect(screen.getByRole('combobox', { name: '类型' })).toHaveValue('任务')
+
+    await chooseOption(user, '类型', '里程碑')
+
+    const task = useProjectStore.getState().project!.tasks[taskId]
+    expect(task.kind).toBe('milestone')
+    expect(task.duration).toBe(0)
+  })
+
+  it('「分组」选项是禁用的（没有命令能把 task 变成 group —— 只能靠加子任务）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    // 选项只有在展开下拉后才挂载（与 chooseOption 的同一条路径）
+    await user.click(screen.getByRole('combobox', { name: '类型' }))
+    const groupOption = screen.getByRole('option', { name: '分组', hidden: true })
+    // Mantine 9 的 Combobox.Option 对 disabled 只落 `data-combobox-disabled`（mod 派生），
+    // 既无 `data-disabled` 也无 `aria-disabled`。这条属性由 data 里的 `disabled: true` 驱动 ——
+    // 一旦把它删掉，属性即消失、用例变红，不是恒真断言。
+    expect(groupOption).toHaveAttribute('data-combobox-disabled', 'true')
+  })
+
+  it('任务本身是分组时，类型 Select 整体禁用并给出说明', () => {
+    useViewStore.setState({ selectedTaskId: parentId })
+    renderInspector()
+
+    expect(screen.getByRole('combobox', { name: '类型' })).toBeDisabled()
+    expect(screen.getByText(/分组的类型由子任务决定/)).toBeInTheDocument()
+  })
+
+  it('投入 / 剩余 / 三种成本是禁用态且注明版本（不是隐藏）', () => {
+    renderInspector()
+
+    expect(screen.getByLabelText('投入')).toBeDisabled()
+    expect(screen.getByLabelText('剩余')).toBeDisabled()
+    expect(screen.getByLabelText('任务成本')).toBeDisabled()
+    expect(screen.getByLabelText('资源成本')).toBeDisabled()
+    expect(screen.getByLabelText('总成本')).toBeDisabled()
+    expect(screen.getAllByText(/v0\.5 提供/).length).toBeGreaterThanOrEqual(2)
   })
 })

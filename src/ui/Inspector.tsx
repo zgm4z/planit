@@ -5,7 +5,6 @@ import {
   ActionIcon,
   Alert,
   Box,
-  Checkbox,
   Group,
   NumberInput,
   Select,
@@ -250,6 +249,8 @@ function InfoGroup({
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
+  const isGroup = task.kind === 'group'
+
   return (
     <Stack gap="sm">
       <TextInput
@@ -265,6 +266,38 @@ function InfoGroup({
           })
         }
       />
+
+      {/* 为什么不给「分组」一条可点的路径（计划偏差 1，spec §3.1 散文才是事实）：
+          `kind === 'group'` 是**结构事实的派生** —— deriveKind 里 `childIds.length > 0 ⟺ group`
+          是一条双向不变式（src/domain/model/kind.ts）。一条能手动把 task 置成 group 的命令会造出
+          「kind 是 group 却没有子任务」的畸形任务，破坏该不变式。全仓也只有加子任务（task.indent）
+          能间接走到 group。所以：group 选项恒 disabled（仅作「当前值」的展示），
+          已经是 group 的任务整个 Select disabled（没有任何命令能改分组的类型）。这不是漏做的功能。 */}
+      <Select
+        label={t('inspector.kind')}
+        value={task.kind}
+        disabled={isGroup}
+        data={[
+          { value: 'task', label: t('inspector.kindTask') },
+          { value: 'milestone', label: t('inspector.kindMilestone') },
+          { value: 'group', label: t('inspector.kindGroup'), disabled: true },
+        ]}
+        onChange={(value) => {
+          // 只有 task ↔ milestone 可切换，走既有命令（spec §3.1）
+          if (value === 'task' || value === 'milestone') {
+            dispatch({
+              type: 'task.toggleMilestone',
+              label: 'commands.task.toggleMilestone',
+              payload: { taskId },
+            })
+          }
+        }}
+      />
+      {isGroup && (
+        <Text fz="xs" c="dimmed">
+          {t('inspector.kindGroupHint')}
+        </Text>
+      )}
 
       {isSummary ? (
         <Text fz="xs" c="dimmed">
@@ -303,19 +336,25 @@ function InfoGroup({
             }
           />
 
-          <Checkbox
-            label={t('inspector.kindMilestone')}
-            checked={task.kind === 'milestone'}
-            onChange={() =>
-              dispatch({
-                type: 'task.toggleMilestone',
-                label: 'commands.task.toggleMilestone',
-                payload: { taskId },
-              })
-            }
-          />
+          <DisabledField label={t('inspector.effort')} reason={t('inspector.disabledReason.effort')} />
+          <DisabledField label={t('inspector.remaining')} reason={t('inspector.disabledReason.effort')} />
+          <DisabledField label={t('inspector.taskCost')} reason={t('inspector.disabledReason.cost')} />
+          <DisabledField label={t('inspector.resourceCost')} reason={t('inspector.disabledReason.cost')} />
+          <DisabledField label={t('inspector.totalCost')} reason={t('inspector.disabledReason.cost')} />
         </>
       )}
+    </Stack>
+  )
+}
+
+/** 依赖未实现功能的字段：禁用态 + 注明版本（分批原则，绝不假装能用） */
+function DisabledField({ label, reason }: { label: string; reason: string }) {
+  return (
+    <Stack gap={2}>
+      <NumberInput label={label} disabled value={0} />
+      <Text fz="xs" c="dimmed">
+        {reason}
+      </Text>
     </Stack>
   )
 }
