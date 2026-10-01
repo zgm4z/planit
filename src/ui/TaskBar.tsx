@@ -115,9 +115,14 @@ export function TaskBar({
           cursor: 'crosshair',
           zIndex: 3,
         }}
-        onPointerDown={(event) =>
-          onStartLink?.(event, event.currentTarget.getBoundingClientRect().right, event.clientY)
-        }
+        onPointerDown={(event) => {
+          // 取柄的**中心**而不是外缘：柄的圆心正好落在任务条右缘上，
+          // 与 barRect 的右缘（也就是静态 FS 连线的起点）重合。
+          // 用 getBoundingClientRect().right 会多出半个柄宽（5px），
+          // 幽灵线就从柄外缘起步，与最终落笔的连线对不上。
+          const rect = event.currentTarget.getBoundingClientRect()
+          onStartLink?.(event, rect.left + rect.width / 2, event.clientY)
+        }}
       />
     </div>
   )

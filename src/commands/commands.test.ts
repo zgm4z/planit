@@ -135,6 +135,48 @@ describe('dependency.create', () => {
     expect(() => run(indented, 'dependency.create', { fromTaskId: a, toTaskId: b }))
       .toThrow(/摘要任务不能建立依赖/)
   })
+
+  it('同序对的依赖不会被重复创建', () => {
+    const { p, a, b } = threeRoots()
+    const first = run(p, 'dependency.create', { fromTaskId: a, toTaskId: b })
+    expect(Object.keys(first.dependencies)).toHaveLength(1)
+
+    const second = run(first, 'dependency.create', { fromTaskId: a, toTaskId: b })
+    expect(Object.keys(second.dependencies)).toHaveLength(1) // 没有新增
+  })
+
+  it('重复创建不产生 patch —— store 据此判断「无变更」而不入撤销栈', () => {
+    const { p, a, b } = threeRoots()
+    const first = execute(p, {
+      type: 'dependency.create',
+      label: '操作',
+      payload: { fromTaskId: a, toTaskId: b },
+    })
+    const second = execute(first.project, {
+      type: 'dependency.create',
+      label: '操作',
+      payload: { fromTaskId: a, toTaskId: b },
+    })
+
+    expect(second.patches).toHaveLength(0)
+  })
+
+  it('重复检测只看「序对」：同一对任务换种依赖类型也不新建', () => {
+    // FS A→B 与 SS A→B 在图上都是同一条有序边，并存没有意义
+    const { p, a, b } = threeRoots()
+    const first = run(p, 'dependency.create', { fromTaskId: a, toTaskId: b, type: 'FS' })
+    const second = run(first, 'dependency.create', { fromTaskId: a, toTaskId: b, type: 'SS' })
+
+    expect(Object.keys(second.dependencies)).toHaveLength(1)
+    expect(Object.values(second.dependencies)[0].type).toBe('FS')
+  })
+
+  it('反向的依赖不被查重吞掉，仍按成环处理', () => {
+    const { p, a, b } = threeRoots()
+    const p2 = run(p, 'dependency.create', { fromTaskId: a, toTaskId: b })
+
+    expect(() => run(p2, 'dependency.create', { fromTaskId: b, toTaskId: a })).toThrow(CycleError)
+  })
 })
 
 describe('dependency.delete / setType / setLag', () => {

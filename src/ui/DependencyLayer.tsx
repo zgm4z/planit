@@ -43,7 +43,16 @@ export function DependencyLayer({
     <svg
       width={totalWidth}
       height={totalHeight}
-      style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 2 }}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        pointerEvents: 'none',
+        zIndex: 2,
+        // SVG 根元素默认 overflow:hidden。原点处的里程碑其菱形外接盒左缘在
+        // x = -2.485，会被 viewport 裁掉；本层是 pointer-events:none，放开无副作用。
+        overflow: 'visible',
+      }}
       aria-hidden
       data-testid="dependency-layer"
     >
