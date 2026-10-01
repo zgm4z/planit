@@ -321,7 +321,12 @@ describe('task.kind 不变式', () => {
     p = run(p, 'task.create', { name: 'C' })
     const [a] = p.rootIds
     p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // B 进 A
-    p = run(p, 'task.indent', { taskId: p.rootIds[2] }) // C 也进 A
+    expect(p.tasks[a].childIds).toHaveLength(1)
+    // B 缩进后从 rootIds 里摘掉，此时 rootIds 已是 [A, C] —— C 落在索引 1。
+    // 所以第二次仍取 rootIds[1]（不是 [2]：那是 undefined，命令会静默 no-op，
+    // 用例就退化成只缩进一个子任务，悄悄测不到「删空多子任务」这条路径）。
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // C 进 A
+    expect(p.tasks[a].childIds).toHaveLength(2)
     expect(p.tasks[a].kind).toBe('group')
 
     for (const childId of [...p.tasks[a].childIds]) {
