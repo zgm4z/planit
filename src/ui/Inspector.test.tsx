@@ -285,6 +285,32 @@ describe('Inspector', () => {
     expect(screen.getByText(/→\s*写代码/)).toBeInTheDocument()
   })
 
+  it('已经连过的前置不再出现在候选里', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(siblingId, taskId, 'FS', 0) // 写代码 → 写文档
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+
+    renderInspector()
+
+    // 唯一的叶子候选（写代码）已经连过 → 下拉整体消失
+    expect(screen.queryByRole('combobox', { name: '添加前置任务' })).not.toBeInTheDocument()
+  })
+
+  it('只有反向依赖时候选仍然保留（那是一条合法的新边）', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(taskId, siblingId, 'FS', 0) // 写文档 → 写代码
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+
+    renderInspector()
+
+    expect(screen.getByRole('combobox', { name: '添加前置任务' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '写代码', hidden: true })).toBeInTheDocument()
+  })
+
   it('切换到 English 后标签变英文', async () => {
     await i18n.changeLanguage('en-US')
     renderInspector()
@@ -294,5 +320,23 @@ describe('Inspector', () => {
     expect(screen.getByLabelText('Milestone')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Scheduling' })).toBeInTheDocument()
     expect(screen.queryByLabelText('工期')).not.toBeInTheDocument()
+  })
+
+  it('英文界面用半角冒号，中文界面用全角冒号', async () => {
+    await i18n.changeLanguage('en-US')
+    const { unmount } = renderInspector()
+
+    const en = screen.getByTestId('inspector').textContent!
+    expect(en).toContain('Earliest:')
+    expect(en).toContain('Slack:')
+    expect(en).not.toContain('：')
+
+    unmount()
+    await i18n.changeLanguage('zh-CN')
+    renderInspector()
+
+    const zh = screen.getByTestId('inspector').textContent!
+    expect(zh).toContain('最早：')
+    expect(zh).toContain('浮时：')
   })
 })

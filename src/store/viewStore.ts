@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { TaskId } from '../domain/model/types'
+import { useProjectStore } from './projectStore'
 
 export type ZoomLevel = 'day' | 'week' | 'month'
 
@@ -30,7 +31,16 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   setZoom: (zoom) => set({ zoom, dayWidth: ZOOM_DAY_WIDTH[zoom] }),
 
-  selectTask: (taskId) => set({ selectedTaskId: taskId }),
+  selectTask: (taskId) => {
+    // 换任务是「我转去做另一件事了」的交互边界：必须打断合并，
+    // 否则「改 A 的工期 → 点 B → 点回 A → 再改 A 的工期」会塌缩成
+    // 一次 Ctrl+Z —— 中间这次换任务不产生命令，撤销栈顶没被动过。
+    // 依赖方向是 viewStore → projectStore（scheduleStore 同理），不构成循环。
+    if (get().selectedTaskId !== taskId) {
+      useProjectStore.getState().breakCoalescing()
+    }
+    set({ selectedTaskId: taskId })
+  },
 
   toggleCollapsed: (taskId) => {
     const next = new Set(get().collapsedIds)

@@ -22,7 +22,19 @@ interface ProjectState {
   redoStack: HistoryEntry[]
   /** 最近一次命令失败的说明，供 UI 展示 */
   lastError: string | null
+  /**
+   * 一次性的「合并屏障」：置位后，下一条 dispatch 必须新开一条撤销记录。
+   *
+   * `mergeIntoStack` 只看「栈顶的 coalesceKey 是否与当前命令相同」，它无法
+   * 感知用户做了什么**不产生命令**的动作。于是
+   * 「改 A 的工期 → 点 B 看一眼 → 点回 A → 再改 A 的工期」会塌缩成一次 Ctrl+Z ——
+   * 中间那次换任务没有 dispatch，栈顶没被动过。
+   * 交互边界（切换选中任务、输入框失焦、undo/redo）把这里置位，即可打断合并。
+   */
+  coalesceBarrier: boolean
 
+  /** 打断合并：下一条命令另起一条撤销记录 */
+  breakCoalescing: () => void
   dispatch: (command: Command) => void
   undo: () => void
   redo: () => void
@@ -36,25 +48,30 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   undoStack: [],
   redoStack: [],
   lastError: null,
+  coalesceBarrier: false,
+
+  breakCoalescing: () => set({ coalesceBarrier: true }),
 
   dispatch: (command) => {
-    const { project, undoStack } = get()
+    const { project, undoStack, coalesceBarrier } = get()
     if (!project) return
 
     try {
       const { project: next, patches, inversePatches } = execute(project, command)
 
       // 命令被业务规则拒绝（例如对摘要任务设工期）时 patches 为空，
-      // 此时不应污染撤销栈
+      // 此时不应污染撤销栈。屏障也保留 —— 下一个真正生效的命令
+      // 仍然应该另起一条记录。
       if (patches.length === 0) return
 
       set({
         // updatedAt 在 set 时用展开叠加，而非写进 handler ——
         // 这样它不会出现在 patches 里，也就不会污染撤销栈。
         project: { ...next, updatedAt: new Date().toISOString() },
-        undoStack: mergeIntoStack(undoStack, { command, patches, inversePatches }),
+        undoStack: mergeIntoStack(undoStack, { command, patches, inversePatches }, coalesceBarrier),
         redoStack: [],
         lastError: null,
+        coalesceBarrier: false,
       })
     } catch (error) {
       set({ lastError: error instanceof Error ? error.message : String(error) })
@@ -77,6 +94,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         },
         undoStack: undoStack.slice(0, -1),
         redoStack: [...redoStack, entry],
+        // 撤销后栈顶换成了一条**更早**的记录；若那条的 coalesceKey 恰好与
+        // 接下来的编辑相同，不打断就会把新编辑并进一条已经撤销过的记录里，
+        // 于是一次撤销会连带上一次早已撤销的编辑。
+        coalesceBarrier: true,
       })
     } catch (error) {
       set({ lastError: error instanceof Error ? error.message : String(error) })
@@ -99,6 +120,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         },
         undoStack: [...undoStack, entry],
         redoStack: redoStack.slice(0, -1),
+        coalesceBarrier: true,
       })
     } catch (error) {
       set({ lastError: error instanceof Error ? error.message : String(error) })
@@ -106,7 +128,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProject: (project) => {
-    set({ project, undoStack: [], redoStack: [], lastError: null })
+    set({ project, undoStack: [], redoStack: [], lastError: null, coalesceBarrier: false })
   },
 
   /**
@@ -116,7 +138,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
    * 撤销记录作用到 B 项目上，那是灾难性的。
    */
   closeProject: () => {
-    set({ project: null, undoStack: [], redoStack: [], lastError: null })
+    set({ project: null, undoStack: [], redoStack: [], lastError: null, coalesceBarrier: false })
   },
 
   clearError: () => set({ lastError: null }),
@@ -125,12 +147,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 /**
  * 入栈。若栈顶命令与当前命令的 coalesceKey 相同，则合并为一条撤销记录：
  * 命令换成最新的那条（撤销菜单显示最近的操作名），正/逆向 patch 分别拼接。
+ *
+ * `forceNew` 为真时跳过合并（见 `coalesceBarrier`）。
  */
-function mergeIntoStack(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
+function mergeIntoStack(
+  stack: HistoryEntry[],
+  entry: HistoryEntry,
+  forceNew = false,
+): HistoryEntry[] {
   const top = stack[stack.length - 1]
   const key = entry.command.coalesceKey
 
-  if (top && key !== undefined && top.command.coalesceKey === key) {
+  if (!forceNew && top && key !== undefined && top.command.coalesceKey === key) {
     return [
       ...stack.slice(0, -1),
       {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createProject } from '../domain/model/factories'
 import { __resetRegistryForTests, initCommands } from '../commands/registry'
 import { useProjectStore } from './projectStore'
+import { useViewStore } from './viewStore'
 
 function reset(): void {
   __resetRegistryForTests()
@@ -22,6 +23,16 @@ function seedTask(name: string): string {
   state().dispatch({ type: 'task.create', label: '新建任务', payload: { name } })
   const ids = Object.keys(state().project!.tasks)
   return ids[ids.length - 1]
+}
+
+/** 模拟 Inspector 的名称输入框：每次按键发一条带 coalesceKey 的 rename */
+function dispatchRename(taskId: string, name: string): void {
+  state().dispatch({
+    type: 'task.rename',
+    label: '重命名',
+    payload: { taskId, name },
+    coalesceKey: `task.rename:${taskId}`,
+  })
 }
 
 describe('projectStore.dispatch', () => {
@@ -230,5 +241,75 @@ describe('命令合并（coalesceKey）', () => {
 
     expect(state().project!.tasks[id].duration).toBe(1)
     expect(state().project!.tasks[id].progress).toBe(0)
+  })
+
+  it('改 A → 改 B → 回来改 A，三条命令各自成记录', () => {
+    const a = seedTask('A')
+    const b = seedTask('B')
+    const base = state().undoStack.length
+
+    dispatchRename(a, 'A1')
+    dispatchRename(b, 'B1') // 换了一个任务
+    dispatchRename(a, 'A2')
+
+    expect(state().undoStack.length).toBe(base + 3)
+  })
+
+  it('切换任务后再回来改同一字段，不与之前的编辑合并', () => {
+    // 这条才是真正抓住缺陷的断言：中间那次「换任务」**没有 dispatch 任何命令**，
+    // 所以栈顶仍是 A 的那条记录 —— 仅靠 coalesceKey 相同就会错误地合并。
+    const a = seedTask('A')
+    const b = seedTask('B')
+    const base = state().undoStack.length
+
+    dispatchRename(a, 'A1')
+    useViewStore.getState().selectTask(b)
+    useViewStore.getState().selectTask(a)
+    dispatchRename(a, 'A2')
+
+    expect(state().undoStack.length).toBe(base + 2)
+
+    state().undo()
+    expect(state().project!.tasks[a].name).toBe('A1')
+    state().undo()
+    expect(state().project!.tasks[a].name).toBe('A')
+  })
+
+  it('breakCoalescing 之后的下一条命令另起一条记录', () => {
+    const a = seedTask('A')
+    const base = state().undoStack.length
+
+    dispatchRename(a, 'A1')
+    state().breakCoalescing()
+    dispatchRename(a, 'A2')
+
+    expect(state().undoStack.length).toBe(base + 2)
+  })
+
+  it('undo 之后再编辑同名字段，不会并进撤销后露出的那条记录', () => {
+    // 撤销把栈顶换成了「更早的、coalesceKey 相同的那条」，
+    // 此时继续改名若仍按「与栈顶同 key 就合并」，会并进那条已经撤销过的
+    // 记录里 —— 一次撤销会连带上一次已撤销的编辑。
+    const a = seedTask('A')
+    const base = state().undoStack.length
+
+    dispatchRename(a, 'A1')
+    state().dispatch({
+      type: 'task.setProgress',
+      label: '设置进度',
+      payload: { taskId: a, progress: 10 },
+      coalesceKey: `task.setProgress:${a}`,
+    })
+    expect(state().undoStack.length).toBe(base + 2)
+
+    state().undo() // 弹出 setProgress，栈顶露出 rename:a
+    expect(state().undoStack.length).toBe(base + 1)
+
+    dispatchRename(a, 'A2')
+    expect(state().undoStack.length).toBe(base + 2)
+
+    state().undo()
+    // 只回滚 A2；若被并进旧记录，这里会一路退回 'A'
+    expect(state().project!.tasks[a].name).toBe('A1')
   })
 })

@@ -36,6 +36,7 @@ export function Inspector() {
 
   const project = useProjectStore((state) => state.project)
   const dispatch = useProjectStore((state) => state.dispatch)
+  const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
   const result = useScheduleStore((state) => state.result)
 
@@ -54,11 +55,24 @@ export function Inspector() {
     ? result.conflicts.find((item) => item.taskId === selectedTaskId)
     : undefined
 
-  // 可以作为前置的候选：全部叶子任务中除自己以外的
+  // 可以作为前置的候选：全部叶子任务中除自己以外的，且尚未连过这条有向边。
+  // 已经存在 from: candidate → to: 本任务 的依赖时不再列出 —— 选中它会在命令层
+  // 被静默 no-op，用户看到的是「点了没反应」。反向依赖（本任务 → candidate）不算，
+  // 那是一条合法的新边。
   const candidates = useMemo(() => {
     if (!project || !selectedTaskId) return []
+    const alreadyLinked = new Set(
+      Object.values(project.dependencies)
+        .filter((dep) => dep.toTaskId === selectedTaskId)
+        .map((dep) => dep.fromTaskId),
+    )
     return Object.values(project.tasks)
-      .filter((candidate) => candidate.id !== selectedTaskId && candidate.childIds.length === 0)
+      .filter(
+        (candidate) =>
+          candidate.id !== selectedTaskId &&
+          candidate.childIds.length === 0 &&
+          !alreadyLinked.has(candidate.id),
+      )
       .map((candidate) => ({ value: candidate.id, label: candidate.name }))
   }, [project, selectedTaskId])
 
@@ -89,6 +103,9 @@ export function Inspector() {
         <TextInput
           label={t('inspector.name')}
           value={task.name}
+          // 失焦 = 这次编辑结束。下一次编辑应另起一条撤销记录，
+          // 而不是和「几分钟前那次改名」并成一条。
+          onBlur={breakCoalescing}
           onChange={(event) =>
             dispatch({
               type: 'task.rename',
@@ -109,6 +126,7 @@ export function Inspector() {
               label={t('inspector.duration')}
               min={0}
               value={task.duration}
+              onBlur={breakCoalescing}
               // 注意：NumberInput 的 onChange 给的是值，不是事件
               onChange={(value) =>
                 dispatch({
@@ -125,6 +143,7 @@ export function Inspector() {
               min={0}
               max={100}
               value={task.progress}
+              onBlur={breakCoalescing}
               onChange={(value) =>
                 dispatch({
                   type: 'task.setProgress',
@@ -184,6 +203,7 @@ export function Inspector() {
                 type="date"
                 label={t('inspector.constraintDate')}
                 value={constraint.date}
+                onBlur={breakCoalescing}
                 onChange={(event) =>
                   dispatch({
                     type: 'task.setScheduling',
@@ -219,9 +239,11 @@ export function Inspector() {
 
         {schedule && (
           <Text fz="xs" c="dimmed">
-            {t('inspector.earliest')}：{schedule.earlyStart} → {schedule.earlyFinish}
+            {t('inspector.earliest', {
+              date: `${schedule.earlyStart} → ${schedule.earlyFinish}`,
+            })}
             <br />
-            {t('inspector.slack')}：{schedule.totalSlack} {t('inspector.slackUnit')}
+            {t('inspector.slack', { count: schedule.totalSlack })}
             {schedule.isCritical && ` · ${t('inspector.critical')}`}
           </Text>
         )}
@@ -265,6 +287,7 @@ export function Inspector() {
                   w={64}
                   aria-label={`${t('inspector.lag')} ${otherName}`}
                   value={dep.lag}
+                  onBlur={breakCoalescing}
                   onChange={(value) =>
                     dispatch({
                       type: 'dependency.setLag',
