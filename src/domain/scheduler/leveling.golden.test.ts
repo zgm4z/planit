@@ -243,3 +243,66 @@ describe('黄金判据（稳定性）：无超载时 dates 与 scheduled 逐字�
     expect(result.unresolved).toEqual([])
   })
 })
+
+describe('回归 v0.6.1：冻结的格子若负载增长，必须被重新纳入考虑', () => {
+  /** 用 startOn 把任务钉死在某天 → slack = 0（设计上不可推走） */
+  function pin(task: ReturnType<typeof createTask>, date: string): Task {
+    return { ...task, scheduling: { mode: 'constraint', type: 'startOn', date } }
+  }
+
+  // 场景（单一资源 R）：
+  //   03-02 : M(可动, units=1) + Z0(锁死, units=0.5) → 负载 1.5，把 M 顶到 03-03
+  //   03-03 : M + Z1(锁死, 0.5)                      → 1.5
+  //   03-04 : M + Z2(锁死, 0.5)                      → 1.5
+  //   03-05 : A、B（均 startOn 锁死，units=1）        → 负载 2 = **不可约下限**
+  //
+  // 迭代轨迹（修复前的真实行为）：
+  //   ① 03-05 负载 2 > 03-02 的 1.5 → 先选中 03-05；候选只剩 slack=0 的 A/B
+  //      → 一步推不动 → **永久冻结 03-05@2**
+  //   ② M 被 03-02…03-04 的连番冲突逐日推上来，落到 03-05 → 该格负载涨到 3
+  //   ③ 旧实现再也回不到这个格子 → 最终负载 3（比不可约下限多 1）
+  //
+  // S（无分配、长工期）只为把项目完成日撑远，好让 M 有足够浮时能被推过 03-05。
+  it('热格先被冻结、随后被推来可动任务 → 最终负载仍收敛到不可约下限', () => {
+    const project = createProject('冻结回归', START)
+    const r = createResource({ name: 'R' })
+    project.resources[r.id] = r
+
+    const m = createTask({ name: 'M', duration: 1 }) // 可动（唯一能推的任务）
+    const z0 = pin(createTask({ name: 'Z0', duration: 1 }), '2026-03-02')
+    const z1 = pin(createTask({ name: 'Z1', duration: 1 }), '2026-03-03')
+    const z2 = pin(createTask({ name: 'Z2', duration: 1 }), '2026-03-04')
+    const a = pin(createTask({ name: 'A', duration: 1 }), '2026-03-05') // slack=0
+    const b = pin(createTask({ name: 'B', duration: 1 }), '2026-03-05') // slack=0
+    const s = createTask({ name: 'S', duration: 12 }) // 撑项目完成日（无分配 → 不产生负载）
+
+    for (const task of [m, z0, z1, z2, a, b, s]) {
+      project.tasks[task.id] = task
+      project.rootIds.push(task.id)
+    }
+    // M、A、B 各占 R 全单元；Z0..Z2 各占 0.5（让它们所在格的负载 = 1.5 < 热格 2）
+    const unitsOf: [Task, number][] = [
+      [m, 1],
+      [z0, 0.5],
+      [z1, 0.5],
+      [z2, 0.5],
+      [a, 1],
+      [b, 1],
+    ]
+    for (const [task, units] of unitsOf) {
+      const assignment = createAssignment({ taskId: task.id, resourceId: r.id, units })
+      project.assignments[assignment.id] = assignment
+    }
+
+    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { result } = levelLeaves(project, leaves, durations, calendar, schedules)
+
+    // 断言 1：不可约下限 = A + B = 2。
+    // 修复前这里会拿到 3（03-05 早先被永久冻结，M 落上去后再没被纠正）—— 断言会红。
+    expect(result.unresolved).toEqual([{ resourceId: r.id, date: '2026-03-05', load: 2 }])
+
+    // 断言 2：证明「2」不是凭空掉下来的 —— 可动的 M 确实被推过了 03-05（4 个工作日）。
+    // 若实现退化成「一步都不推」，断言 1 也会以 load=3 失败，但这条把方向钉死。
+    expect(result.delays[m.id]).toBe(4)
+  })
+})

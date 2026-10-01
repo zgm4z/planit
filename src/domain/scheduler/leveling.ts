@@ -179,10 +179,32 @@ function exceedsLateStart(
  *
  * 迭代（spec §2 伪码）：
  *   ① 算负载 → ② 找超载最严重的（资源/日期）→ ③ 在当事任务里选优先级最低的、推 1 个工作日
- *   → ④ 越界则回退并试下一个候选；全推不动 → 标记该超载无法消除 → 继续下一处。
+ *   → ④ 越界则回退并试下一个候选；全推不动 → 按**当前负载**冻结该格 → 继续下一处。
  *
  * 「用浮时推」= 推量恒被夹到 `remainingSlack`（每次推后校验 `∀ start ≤ lateStart`）。
  * 因此**绝不违反依赖、绝不推迟项目完成**（ROADMAP 验收判据）。
+ *
+ * ── v0.6.1：冻结必须「按负载」，不能是永久 ────────────────────────────────
+ * 旧实现把「推不动」的格子永久 `blocked`。但「推不动」只对**当时的候选集**成立：
+ * 后续别的格子被推时，可能把新的**可动**任务挪到这一格上，负载反而增长，
+ * 而此时循环再也不回来看它 —— 真实数据里 `黄伟斌 @ 2026-09-21` 因此从本来
+ * 不可约的 6 涨到 8（6 个 `startOn` 锁死任务 + 2 个本可推走的 auto 任务）。
+ *
+ * 修法：`frozenAt: cellKey → 冻结时的负载`。每轮**只跳过「当前负载 ≤ 冻结负载」**的格子；
+ * 一旦负载增长（说明有新候选落到该格上，旧冻结失效）就重新纳入考虑。
+ *
+ * 这个判据是**充分**的：格子负载只有在「某任务被成功推走/推来」时才会变，而一次
+ * 只动一个任务；只要负载没涨，覆盖该格的任务集合就没有新增（任务只会越排越晚、
+ * 绝不回退，故离开的任务也不会回来），冻结时的候选集仍全部浮时耗尽 → 依然推不动。
+ *
+ * ── 终止性论证 ────────────────────────────────────────────────────────
+ * 记 S = Σ 各任务剩余浮时。每一轮迭代要么：
+ *   (a) 成功推一次 → 某个 `delays` 严格 +1（`delays` 单调不减）→ Σ delays 严格 +1；
+ *   (b) 没有候选可推 → 冻结（或更新）某个格子，把它的冻结负载抬到当前值。
+ * (a) 至多发生 S 次（Σ delays ≤ S，且只会增）。
+ * 对同一格子的两次冻结之间，必然发生过至少一次成功推（否则它的负载不会超过上次
+ * 冻结值，也就不会被重新纳入考虑）→ 每个格子的冻结次数 ≤ 1 + S。
+ * 故总轮数 ≤ S + #格子 × (1 + S)，有限。`MAX_ITERATIONS` 仍是最后的兜底。
  */
 export function levelLeaves(
   project: Project,
@@ -211,13 +233,18 @@ export function levelLeaves(
 
   let dates = leveledForwardPass(leaves, dependencies, durations, calendar, base, delays)
 
-  // 无法消除的超载（资源@日期）—— 避免在它上面反复空转
-  const blocked = new Set<string>()
+  // 推不动的超载（资源@日期）→ 记录**冻结时的负载**（不是永久标记）。
+  // 只在「当前负载 ≤ 冻结负载」时跳过：负载一旦增长就说明旧冻结的候选集已失效，
+  // 需要重新尝试（详见函数头注释的 v0.6.1 说明与终止性论证）。
+  const frozenAt = new Map<string, number>()
   const cellKey = (resourceId: ResourceId, date: DateStr): string => `${resourceId}@${date}`
 
   for (let iter = 0; iter < MAX_ITERATIONS; iter += 1) {
     const overloads = collectOverloads(resourceDayLoad(project, dates, calendar)).filter(
-      (overload) => !blocked.has(cellKey(overload.resourceId, overload.date)),
+      (overload) => {
+        const frozen = frozenAt.get(cellKey(overload.resourceId, overload.date))
+        return frozen === undefined || overload.load > frozen
+      },
     )
     if (overloads.length === 0) break
 
@@ -257,8 +284,8 @@ export function levelLeaves(
       break
     }
 
-    // ④ 所有候选都推不动 → 该处超载无法平衡，标记后继续
-    if (!pushed) blocked.add(cellKey(worst.resourceId, worst.date))
+    // ④ 所有候选都推不动 → 按**当时的负载**冻结该格（负载再涨会被重新纳入考虑）
+    if (!pushed) frozenAt.set(cellKey(worst.resourceId, worst.date), worst.load)
   }
 
   return {
