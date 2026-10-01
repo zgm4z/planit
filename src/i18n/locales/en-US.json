@@ -4,7 +4,8 @@
     "new": "New plan",
     "empty": "No plans yet — click the button above to start",
     "updatedAt": "Updated {{time}}",
-    "untitled": "Untitled plan"
+    "untitled": "Untitled plan",
+    "notFound": "Project not found — it may have been deleted"
   },
   "toolbar": {
     "newTask": "New task",

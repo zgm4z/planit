@@ -7,7 +7,8 @@
     "new": "新建计划",
     "empty": "还没有任何计划，点上面的按钮开始",
     "updatedAt": "更新于 {{time}}",
-    "untitled": "未命名计划"
+    "untitled": "未命名计划",
+    "notFound": "项目不存在，可能已被删除"
   },
   "toolbar": {
     "newTask": "新建任务",

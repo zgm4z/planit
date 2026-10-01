@@ -40,3 +40,13 @@
   --planit-outline-width: 320px;
   --planit-inspector-width: 300px;
 }
+
+// ── 项目列表条目 ─────────────────────────────────────────
+// UnstyledButton 不自带悬停反馈，这里补上，让条目看起来可点。
+.planit-project-item {
+  transition: background-color 120ms ease;
+
+  &:hover {
+    background: var(--planit-bg-hover);
+  }
+}
