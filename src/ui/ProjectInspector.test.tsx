@@ -99,7 +99,7 @@ describe('ProjectInspector', () => {
     expect(screen.getByText(/任务数：2/)).toBeInTheDocument()
   })
 
-  it('投入单位换算可编辑并写回 hoursPerDay；货币仍禁用但 hint 指向「尚未排期」', () => {
+  it('投入单位换算可编辑并写回 hoursPerDay；货币是只读事实行而非禁用控件', () => {
     renderProjectInspector()
 
     const conversion = screen.getByLabelText('投入单位转换')
@@ -109,7 +109,11 @@ describe('ProjectInspector', () => {
     fireEvent.change(conversion, { target: { value: '6' } })
     expect(useProjectStore.getState().project!.calendars.default.hoursPerDay).toBe(6)
 
-    expect(screen.getByRole('combobox', { name: '货币' })).toBeDisabled()
+    // §3.3：货币曾是一个禁用的空 Select（「用控件表达数据」），现为只读事实行。
+    // 区分性断言：一旦有人把它改回 Select，这条 queryByRole 就会命中、立刻变红。
+    expect(screen.queryByRole('combobox', { name: '货币' })).not.toBeInTheDocument()
+    // 无此概念 → 弱化的 `—`（不是空 Select 的空白，也不是「0」）
+    expect(screen.getByTestId('project-currency')).toHaveTextContent('—')
     // v1.0 是路线图最后一版，货币与格式再也指不出一个真实版本 → 写「尚未排期」（偏差 6）
     expect(screen.getByText(/尚未排期/)).toBeInTheDocument()
     expect(screen.queryByText(/v1\.0/)).not.toBeInTheDocument()

@@ -30,7 +30,13 @@ export const GAP_BLOCK = 'xl' as const
 /* ───────────────────────── 日期 ───────────────────────── */
 
 interface DateFieldProps {
-  label: string
+  label?: string
+  /**
+   * 只给可访问名、不渲染可见标签。用于**标签已经由区块标题给出**的场合
+   * （如右栏底部的日历块，「例外日期」已是区块标题）—— 否则同一段文字会在
+   * 页面上出现两次（标题 + 字段标签），既重复又让按文案定位的断言命中两个元素。
+   */
+  ariaLabel?: string
   /** 已存的值，`''` 表示未设。展示前一律过 formatDate（§1.3：YYYY-MM-DD） */
   value: string
   disabled?: boolean
@@ -54,6 +60,7 @@ interface DateFieldProps {
  */
 export function DateField({
   label,
+  ariaLabel,
   value,
   disabled,
   testId,
@@ -74,6 +81,9 @@ export function DateField({
   return (
     <TextInput
       label={label}
+      // ariaLabel 用于「标签已由区块标题给出」的场合：只给可访问名、不渲染可见标签，
+      // 避免同一段文字在页面上出现两次（标题 + 字段标签）。
+      aria-label={ariaLabel}
       value={draft}
       disabled={disabled}
       data-testid={testId}

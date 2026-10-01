@@ -176,13 +176,37 @@ describe('Inspector 任务面板的 7 个分组', () => {
   })
 
   // 「基线」组在 v1.0 已解禁，不再是占位组 —— 本用例改用**仍是占位**的「资源分配」组。
-  it('占位组展开后是禁用态且有说明文案（不是隐藏）', async () => {
+  it('占位组展开后是只读事实块 + 说明文案，且不含任何禁用控件（§3.3）', async () => {
     const user = userEvent.setup()
     renderInspector()
 
     await user.click(screen.getByRole('button', { name: '资源分配' }))
-    expect(screen.getByTestId('placeholder-allocation')).toBeInTheDocument()
+    const group = screen.getByTestId('placeholder-allocation')
+    expect(group).toBeInTheDocument()
     expect(screen.getByText(/分配变更时的自动调整尚未排期/)).toBeInTheDocument()
+
+    // 区分性断言（§3.3「绝不用灰掉的禁用输入框表达数据」）：占位组改为只读事实行后，
+    // 组内**不能再有任何表单控件**。一旦有人把禁用 Select 加回来，这两条立刻变红。
+    expect(within(group).queryAllByRole('combobox')).toHaveLength(0)
+    expect(within(group).queryAllByRole('textbox')).toHaveLength(0)
+    // 字段名仍以**可读文本**呈现（规格表的标签列），而不是被吸附在控件上
+    expect(within(group).getByText('当资源分配更改时')).toBeInTheDocument()
+    expect(within(group).getByText('任务进度需要')).toBeInTheDocument()
+  })
+
+  // 「预计的工作量」同属占位组，此前没有用例覆盖 —— 补一条，防止 NumberInput 回归。
+  it('「预计的工作量」占位组同样是只读事实块，无 NumberInput', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await user.click(screen.getByRole('button', { name: '预计的工作量' }))
+    const group = screen.getByTestId('placeholder-expected-effort')
+    expect(group).toBeInTheDocument()
+    expect(screen.getByText(/预计工作量尚未排期/)).toBeInTheDocument()
+    // 三个量（最小 / 最大 / 期望）曾是三个禁用的 NumberInput —— 现在是三行事实文本
+    expect(within(group).queryAllByRole('spinbutton')).toHaveLength(0)
+    expect(within(group).getByText('最小值')).toBeInTheDocument()
+    expect(within(group).getByText('期望值')).toBeInTheDocument()
   })
 })
 

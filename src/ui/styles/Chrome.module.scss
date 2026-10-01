@@ -1,0 +1,223 @@
+// ── 工具栏 / 状态栏 / 日历设置块的做工层 ───────────────────
+// 设计规范 §1.1 / §1.2 / §1.3 / §2.1 / §6 / §7。
+//
+// 为什么需要它：工具栏与状态栏是最后两层「停在规范之前」的界面 —— 所有控件
+// 并排成一个等距长条（处处 8px = 没有分组），状态栏是一行等重的灰字（三层
+// 信息读不出层级），右栏底部的日历块则是「挤在角落的小控件」。这里用 §2.1 的
+// 间距节奏（组内 6 / 组间 16）替掉「处处 8」，用字重与角色色替掉「全是灰」。
+
+// ── 工具栏 ──────────────────────────────────────────────
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  // §2.3：左右 12px（与右栏内容区同一档），不是面板边缘的 16 —— 工具栏是
+  // 通栏窄条，12px 让控件更贴近边缘、少浪费横向空间。
+  padding: 0 var(--planit-sp-12);
+  // §2.1 组间 16：**组与组之间**的间隔由这里统一持有，组内间隔由 .group 负责。
+  // 这一个 gap 就是「相关的靠近、无关的拉开」的落点。
+  gap: var(--planit-sp-16);
+  background: var(--planit-bg-surface);
+  border-bottom: 1px solid var(--planit-border);
+  font-variant-numeric: tabular-nums; // §1.3
+}
+
+// 一个控件组：组内 6px（§2.1 组内 4–8 档）。
+.group {
+  display: flex;
+  align-items: center;
+  gap: var(--planit-sp-6);
+  flex-shrink: 0;
+}
+
+// 身份组（返回 + 项目名）用 8px：名字与图标不是同类控件，比图标组略松一档，
+// 但仍明显紧于组间的 16 —— 读作「这是哪个项目」，不是两个独立控件。
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--planit-sp-8);
+  min-width: 0; // 允许项目名 truncate，而不是把后面的控件顶出屏幕
+}
+
+// §1.1：项目名是 --fs-xl（18px）+ §1.2 的 600 字重 + --text-strong。
+// 它是工具栏的**唯一**标题，字号必须显著高于控件文字。
+.projectName {
+  font-size: var(--planit-fs-xl);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--planit-text-strong);
+  letter-spacing: 0; // §1.4：中文不加字距
+}
+
+// 把右侧的控件组推到右缘。用一个真实的弹性空档而不是 marginLeft:auto 挂到
+// 某个控件上 —— 后者会在窄屏重排时把「推」的行为绑到那个控件上，容易出错。
+.spacer {
+  flex: 1;
+  min-width: var(--planit-sp-8);
+}
+
+// §6 统一反馈：工具栏里所有 ActionIcon 的悬停 / 按下 / 聚焦。
+// 悬停底色由 Mantine 的 variant 给（subtle / light），这里补上按下与聚焦。
+.toolbar :global(.mantine-ActionIcon-root) {
+  transition:
+    background-color var(--planit-dur-fast) var(--planit-ease-out),
+    color var(--planit-dur-fast) var(--planit-ease-out),
+    transform var(--planit-dur-fast) var(--planit-ease-out);
+  border-radius: var(--planit-sp-6);
+}
+
+// 按下：下沉 1px（§6 的任务条同理）—— 一个跨全 App 一致的「按到了」的反馈
+.toolbar :global(.mantine-ActionIcon-root:active) {
+  transform: translateY(1px);
+}
+
+.toolbar :global(.mantine-ActionIcon-root:focus-visible),
+.toolbar :global(.mantine-SegmentedControl-root:focus-within),
+.toolbar :global(.mantine-Menu-item:focus-visible) {
+  @include focus-ring;
+}
+
+// 分隔两组的竖线（窄屏溢出菜单与撤销/重做之间用）。纯装饰 → 中性色（§4.2）。
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--planit-border);
+  flex-shrink: 0;
+}
+
+// ── 状态栏 ──────────────────────────────────────────────
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--planit-sp-12);
+  // 与工具栏**同一套**组间节奏（16）—— 上下两条通栏读作同一族。
+  gap: var(--planit-sp-16);
+  background: var(--planit-bg-surface);
+  border-top: 1px solid var(--planit-border);
+  font-variant-numeric: tabular-nums; // §1.3：数字等宽，日期与计数不跳动
+}
+
+// 元数据层（§1.2）：11px / 400 / --text-muted。
+// 项目周期、工作日数是**背景事实**，不与信号争视线。
+.meta {
+  font-size: var(--planit-fs-xs);
+  color: var(--planit-text-muted);
+  white-space: nowrap;
+}
+
+// 信号层（§3.1）：关键任务数是状态栏里**唯一**用色的一项。
+.signal {
+  font-size: var(--planit-fs-xs);
+  font-weight: 500;
+  color: var(--planit-critical);
+  white-space: nowrap;
+}
+
+// 冲突数同属信号（§4.2：红色只给关键路径与冲突），用同一支 --critical。
+.conflict {
+  font-size: var(--planit-fs-xs);
+  font-weight: 500;
+  color: var(--planit-critical);
+  white-space: nowrap;
+}
+
+// 元数据之间的分隔点：纯装饰 → 最弱的描边色。
+.dot {
+  color: var(--planit-border-strong);
+  font-size: var(--planit-fs-xs);
+}
+
+// ── 日历设置块（右栏底部独立区域）─────────────────────────
+// 与 Inspector 同一套排版（区块标题 lg/600 + 下沿；组内 6；组间 16；区块 24），
+// 因此它读作「右栏的又一个区块」，而不是一块贴在角落的小控件。
+
+.calendar {
+  flex-shrink: 0; // 宽度由 ProjectView 的右栏容器持有，这里只填满
+  width: 100%;
+  padding: var(--planit-sp-16) var(--planit-sp-12);
+  background: var(--planit-bg-surface);
+  border-top: 1px solid var(--planit-border);
+  font-variant-numeric: tabular-nums; // §1.3
+
+  // §6 统一 focus ring（与 Inspector 面板同一支 mixin）
+  :global(input:focus),
+  :global(input:focus-visible),
+  :global(.mantine-Checkbox-input:focus-visible),
+  :global(.mantine-ActionIcon-root:focus-visible),
+  :global(.mantine-Button-root:focus-visible) {
+    @include focus-ring;
+  }
+
+  // §2.1 组内 6px：标签到字段，与 Inspector 的面板规则一致。
+  :global(.mantine-InputWrapper-label) {
+    margin-bottom: var(--planit-sp-6);
+    font-size: var(--planit-fs-sm);
+    font-weight: 500;
+    color: var(--planit-text-muted);
+    letter-spacing: 0;
+  }
+}
+
+// 区块标题：§1.2 的 lg / 600 / --text-strong + 一条极淡下沿（扫描锚点）。
+// 与 Inspector 的 .accControl 同一形态 —— 这就是「与上面面板并列的区块」的视觉证据。
+.blockTitle {
+  margin: 0;
+  padding-bottom: var(--planit-sp-8);
+  font-size: var(--planit-fs-lg);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--planit-text-strong);
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--planit-border);
+}
+
+// 两个区块之间 24px（§2.1 区块间）
+.blockGap {
+  margin-top: var(--planit-sp-24);
+}
+
+// 标题到内容 16px（组间）
+.blockBody {
+  margin-top: var(--planit-sp-16);
+}
+
+// 工作日复选框组：7 个标签等距铺开。
+// 组内用 4px（§2.1 组内 4–8 的下限）而不是 6 —— 右栏内容宽 275px，
+// 7 个复选框每个约 35px，6px 间距合计 281px 会挤掉最后一个「日」换行；
+// 4px 间距合计 269px，正好一行放下（英文标签更宽时会自然换行，不会溢出）。
+.weekdays {
+  display: flex;
+  align-items: center;
+  gap: var(--planit-sp-4);
+  flex-wrap: wrap;
+}
+
+// 例外日期行（列表项）：日期等宽在左、种类在右、删除按钮最右
+.exceptionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--planit-sp-8);
+}
+
+.exceptionDate {
+  flex: 1;
+  font-size: var(--planit-fs-sm);
+  color: var(--planit-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.exceptionKind {
+  font-size: var(--planit-fs-xs);
+  color: var(--planit-text-muted);
+}
+
+// 例外日期列表：行与行之间 6px（组内节奏）
+.exceptionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-6);
+  margin-top: var(--planit-sp-12);
+}

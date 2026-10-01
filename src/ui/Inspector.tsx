@@ -180,25 +180,19 @@ function TaskPanel({ taskId }: { taskId: TaskId }) {
         // 任务侧入口：与 Task 7 的资源面板共用同一个 AssignmentSection（spec §4.2）
         return <AssignmentSection scope={{ kind: 'task', id: taskId }} />
       case 'allocation':
+        // §3.3：占位组**不再用禁用控件**表达未实现的字段 —— 两个禁用的空 Select
+        // 与一个禁用的 NumberInput 都是「用控件表达数据」。改成只读事实块：
+        // 标签读作规格表的一行，值一律是弱化的 `—`（§3.3 的「无此概念」），
+        // 版本注记由下方说明文字承担（分批原则要求保留）。
         return (
           <PlaceholderGroup
             testId="placeholder-allocation"
             reasonKey="inspector.placeholder.allocationHint"
           >
-            <Select
-              label={t('inspector.placeholder.allocationOnChange')}
-              disabled
-              value={null}
-              data={[]}
-              placeholder="—"
-            />
-            <Select
-              label={t('inspector.placeholder.allocationNeeds')}
-              disabled
-              value={null}
-              data={[]}
-              placeholder="—"
-            />
+            <StatList>
+              <StatRow label={t('inspector.placeholder.allocationOnChange')} value={null} />
+              <StatRow label={t('inspector.placeholder.allocationNeeds')} value={null} />
+            </StatList>
           </PlaceholderGroup>
         )
       case 'expectedEffort':
@@ -207,9 +201,11 @@ function TaskPanel({ taskId }: { taskId: TaskId }) {
             testId="placeholder-expected-effort"
             reasonKey="inspector.placeholder.expectedEffortHint"
           >
-            <NumberField label={t('inspector.placeholder.min')} digits={1} value={0} onChange={() => {}} />
-            <NumberField label={t('inspector.placeholder.max')} digits={1} value={0} onChange={() => {}} />
-            <NumberField label={t('inspector.placeholder.expected')} digits={1} value={0} onChange={() => {}} />
+            <StatList>
+              <StatRow label={t('inspector.placeholder.min')} value={null} />
+              <StatRow label={t('inspector.placeholder.max')} value={null} />
+              <StatRow label={t('inspector.placeholder.expected')} value={null} />
+            </StatList>
           </PlaceholderGroup>
         )
     }

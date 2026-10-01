@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
-import { DateField, GAP_BLOCK, GAP_FIELD, StatList } from './InspectorFields'
+import { DateField, GAP_BLOCK, GAP_FIELD, StatList, StatRow } from './InspectorFields'
 import { formatDate, formatDays } from './format'
 import { computeProjectSummary } from './projectSummary'
 
@@ -166,16 +166,21 @@ export function ProjectInspector() {
         <Text fz="xs" fw={500} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.06em' }}>
           {t('inspector.project.format')}
         </Text>
-        <Select
-          label={t('inspector.project.currency')}
-          disabled
-          value={null}
-          data={[]}
-          placeholder="—"
-        />
-        <Text fz="xs" c="dimmed">
-          {t('inspector.project.currencyHint')}
-        </Text>
+        {/* §3.3：货币曾是一个**禁用的空 Select** —— 典型的「用控件表达数据」。
+            改为只读事实块的一行（标签 + 弱化的 `—`），版本注记仍由下方 hint 承担
+            （分批原则：渲染出来并注明「尚未排期」，而不是删掉）。 */}
+        <Stack gap={GAP_FIELD}>
+          <StatList>
+            <StatRow
+              label={t('inspector.project.currency')}
+              value={null}
+              testId="project-currency"
+            />
+          </StatList>
+          <Text fz="xs" c="dimmed">
+            {t('inspector.project.currencyHint')}
+          </Text>
+        </Stack>
 
         <NumberInput
           label={t('inspector.project.unitConversion')}

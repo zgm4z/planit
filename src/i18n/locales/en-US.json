@@ -18,8 +18,10 @@
     "undoWithLabel": "Undo: {{label}}",
     "redo": "Redo",
     "zoom": { "day": "Day", "week": "Week", "month": "Month" },
+    "zoomLabel": "Zoom",
     "view": { "gantt": "Gantt", "outline": "Task list" },
-    "language": "Language"
+    "language": "Language",
+    "more": "More"
   },
   "outline": {
     "columnTitle": "Task",

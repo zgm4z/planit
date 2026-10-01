@@ -18,8 +18,10 @@
     "undoWithLabel": "元に戻す：{{label}}",
     "redo": "やり直す",
     "zoom": { "day": "日", "week": "週", "month": "月" },
+    "zoomLabel": "ズーム",
     "view": { "gantt": "ガント", "outline": "タスクリスト" },
-    "language": "言語"
+    "language": "言語",
+    "more": "その他"
   },
   "outline": {
     "columnTitle": "タスク",

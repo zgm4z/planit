@@ -21,8 +21,10 @@
     "undoWithLabel": "撤销：{{label}}",
     "redo": "重做",
     "zoom": { "day": "日", "week": "周", "month": "月" },
+    "zoomLabel": "缩放",
     "view": { "gantt": "甘特图", "outline": "任务列表" },
-    "language": "语言"
+    "language": "语言",
+    "more": "更多"
   },
   "outline": {
     "columnTitle": "任务",
