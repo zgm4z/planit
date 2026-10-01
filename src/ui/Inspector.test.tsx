@@ -40,21 +40,25 @@ function currentTask() {
  * 且按 `hidden: true` 取（仍在 DOM 但被判定为不可见）的 option。
  * 「能不能看得见」这类真实可见性由 e2e 验收，不在单测范围。
  *
- * **必须把候选项限定到被点开的那个下拉里**（Mantine 9 只在展开时把下拉 id 挂到
- * `aria-controls` 上，借此定位）：相关性组的两个「添加」下拉候选集相同（同一个叶子
- * 任务在两个方向上都可连），不限定就会命中两个同名 option 而抛错 —— 那不是被测代码的问题。
+ * `scopeTestId`（可选）把候选项限定到某一段的**候选容器**里：相关性组的两个「添加」
+ * 下拉候选集相同（同一个叶子任务在两个方向上都可连），而 Mantine 把下拉渲染进 portal
+ * 且 keepMounted（关闭时仍在 DOM），不限定就会命中两个同名 option 而抛错 —— 那不是
+ * 被测代码的问题。该 testid 由 `RelationSection` 经公开的 `scrollAreaProps` 挂在下拉
+ * 候选容器上，**不再依赖 Mantine 内部的 `aria-controls` / id 注入时机**。
  */
 async function chooseOption(
   user: ReturnType<typeof userEvent.setup>,
   selectLabel: string,
   optionLabel: string,
+  scopeTestId?: string,
 ) {
   const combobox = screen.getByRole('combobox', { name: selectLabel })
   await user.click(combobox)
-  const controlsId = combobox.getAttribute('aria-controls')
-  const dropdown = controlsId ? document.getElementById(controlsId) : null
-  const option = dropdown
-    ? within(dropdown).getByRole('option', { name: optionLabel, hidden: true })
+  const option = scopeTestId
+    ? within(screen.getByTestId(scopeTestId)).getByRole('option', {
+        name: optionLabel,
+        hidden: true,
+      })
     : screen.getByRole('option', { name: optionLabel, hidden: true })
   fireEvent.click(option)
 }
@@ -563,16 +567,6 @@ describe('日程安排组', () => {
   })
 })
 
-describe('相关性组（Task 2 误删的既有用例）', () => {
-  it('摘要任务不渲染「添加前置任务」', () => {
-    useViewStore.setState({ selectedTaskId: parentId })
-    renderInspector()
-
-    expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
-  })
-
-})
-
 // Task 5：相关性重构为「必要条件 / 从属」两段（同一份 Dependency 数据的两个过滤方向）。
 // 下面这些用例替换了上面那 5 条基于「←/→ 单列表」的旧用例 —— 交互形态变了（两段 + 两个
 // 添加下拉），但覆盖的**契约**一条不少：建边（两个方向）/ 改类型 / 改 lag / 删除 /
@@ -588,14 +582,15 @@ describe('相关性组（必要条件 / 从属两段）', () => {
 
   it('两段在无依赖时都显示「无」', () => {
     renderInspector()
-    expect(screen.getAllByText('无')).toHaveLength(2)
+    expect(within(screen.getByTestId('relation-predecessors')).getByText('无')).toBeInTheDocument()
+    expect(within(screen.getByTestId('relation-successors')).getByText('无')).toBeInTheDocument()
   })
 
   it('在「必要条件」里添加：候选 → 本任务，且只落在「必要条件」段', async () => {
     const user = userEvent.setup()
     renderInspector()
 
-    await chooseOption(user, '添加必要条件', '写代码')
+    await chooseOption(user, '添加必要条件', '写代码', 'add-predecessor')
 
     const deps = Object.values(useProjectStore.getState().project!.dependencies)
     expect(deps).toHaveLength(1)
@@ -603,8 +598,8 @@ describe('相关性组（必要条件 / 从属两段）', () => {
 
     // 方向不搞反：这条前驱渲染在「必要条件」段，而**不在**「从属」段。
     // 只断言「出现在列表里」是恒真的 —— 两段都会把依赖名渲染出来；必须限定到具体那一段。
-    const predSection = screen.getByText('必要条件（挡在我前面的）').parentElement!
-    const succSection = screen.getByText('从属（我在挡的）').parentElement!
+    const predSection = screen.getByTestId('relation-predecessors')
+    const succSection = screen.getByTestId('relation-successors')
     expect(within(predSection).getByText('写代码')).toBeInTheDocument()
     expect(within(succSection).queryByText('写代码')).not.toBeInTheDocument()
   })
@@ -613,15 +608,15 @@ describe('相关性组（必要条件 / 从属两段）', () => {
     const user = userEvent.setup()
     renderInspector()
 
-    await chooseOption(user, '添加从属', '写代码')
+    await chooseOption(user, '添加从属', '写代码', 'add-successor')
 
     const deps = Object.values(useProjectStore.getState().project!.dependencies)
     expect(deps).toHaveLength(1)
     expect(deps[0]).toMatchObject({ fromTaskId: taskId, toTaskId: siblingId, type: 'FS', lag: 0 })
 
     // 与上一条镜像：同一条数据、相反方向，渲染段必须跟着反过来（方向搞反就红）
-    const predSection = screen.getByText('必要条件（挡在我前面的）').parentElement!
-    const succSection = screen.getByText('从属（我在挡的）').parentElement!
+    const predSection = screen.getByTestId('relation-predecessors')
+    const succSection = screen.getByTestId('relation-successors')
     expect(within(succSection).getByText('写代码')).toBeInTheDocument()
     expect(within(predSection).queryByText('写代码')).not.toBeInTheDocument()
   })
@@ -656,7 +651,7 @@ describe('相关性组（必要条件 / 从属两段）', () => {
     const user = userEvent.setup()
     renderInspector()
 
-    await chooseOption(user, '添加必要条件', '写代码')
+    await chooseOption(user, '添加必要条件', '写代码', 'add-predecessor')
 
     await chooseOption(user, '必要条件（挡在我前面的） 写代码', 'SS')
 
@@ -671,7 +666,8 @@ describe('相关性组（必要条件 / 从属两段）', () => {
     await user.click(screen.getByLabelText('删除依赖 写代码'))
     expect(Object.values(useProjectStore.getState().project!.dependencies)).toHaveLength(0)
     // 删除后两段都回到空态（既有用例原本也断言了「列表里那条消失」，这里以空态文案承接）
-    expect(screen.getAllByText('无')).toHaveLength(2)
+    expect(within(screen.getByTestId('relation-predecessors')).getByText('无')).toBeInTheDocument()
+    expect(within(screen.getByTestId('relation-successors')).getByText('无')).toBeInTheDocument()
   })
 
   it('摘要任务不渲染添加下拉（日期由子任务汇总）', () => {

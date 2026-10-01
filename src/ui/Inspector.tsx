@@ -15,12 +15,14 @@ import {
   Text,
   TextInput,
 } from '@mantine/core'
+import type { ScrollAreaProps } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
 import type {
   ComputedSchedule,
   ConstraintType,
+  Dependency,
   DependencyType,
   SchedulingOrder,
   Task,
@@ -618,6 +620,8 @@ function RelationsGroup({
   return (
     <Stack gap="md">
       <RelationSection
+        testId="relation-predecessors"
+        addTestId="add-predecessor"
         title={t('inspector.relations.predecessors')}
         emptyLabel={t('inspector.relations.none')}
         addLabel={t('inspector.relations.addPredecessor')}
@@ -627,6 +631,8 @@ function RelationsGroup({
         makePayload={(otherId) => ({ fromTaskId: otherId, toTaskId: taskId })}
       />
       <RelationSection
+        testId="relation-successors"
+        addTestId="add-successor"
         title={t('inspector.relations.successors')}
         emptyLabel={t('inspector.relations.none')}
         addLabel={t('inspector.relations.addSuccessor')}
@@ -643,6 +649,8 @@ function RelationsGroup({
  *  两段共用这一套增删改（改类型 / 改 lag / 删除都走同一份 dispatch），
  *  段与段的唯一差异是 `title`/`emptyLabel`/`addLabel`/`deps`/`options`/`makePayload`。 */
 function RelationSection({
+  testId,
+  addTestId,
   title,
   emptyLabel,
   addLabel,
@@ -651,11 +659,13 @@ function RelationSection({
   options,
   makePayload,
 }: {
+  testId: string
+  addTestId: string
   title: string
   emptyLabel: string
   addLabel: string
   taskId: TaskId
-  deps: { id: string; fromTaskId: TaskId; toTaskId: TaskId; type: DependencyType; lag: number }[]
+  deps: Dependency[]
   options: { value: string; label: string }[]
   makePayload: (otherId: TaskId) => { fromTaskId: TaskId; toTaskId: TaskId }
 }) {
@@ -665,7 +675,7 @@ function RelationSection({
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
   return (
-    <Stack gap={4}>
+    <Stack gap={4} data-testid={testId}>
       <Text fz="xs" fw={650} c="dimmed">
         {title}
       </Text>
@@ -740,6 +750,12 @@ function RelationSection({
           placeholder={t('inspector.relations.selectTask')}
           value={null}
           data={options}
+          // 两段下拉的候选集相同（同一个叶子任务在两个方向都可连），而 Mantine 把下拉渲染进
+          // portal 且 keepMounted（关闭时仍在 DOM），单靠 role=option 会命中两个同名项。
+          // 给这段的候选容器挂 testid，测试用 within(getByTestId(addTestId)) 精确定位 ——
+          // 不再依赖 Mantine 内部的 aria-controls / id 注入时机（scrollAreaProps 是公开 API）。
+          // 类型断言仅因 ScrollAreaProps 未放开任意 data-*（JSX 允许，对象字面量不许）。
+          scrollAreaProps={{ 'data-testid': addTestId } as ScrollAreaProps}
           onChange={(otherId) => {
             if (!otherId) return
             dispatch({
