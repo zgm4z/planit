@@ -105,3 +105,33 @@ describe('viewStore 的 activeView', () => {
     expect(localStorage.length).toBe(0)
   })
 })
+
+// Inspector 的 Tab 与选中资源从组件 useState 提升到 store（菜单栏要够得着），
+// 这两个字段的默认值必须与搬移前完全一致，否则是行为变更而非「搬家」。
+describe('viewStore 的 Inspector Tab 与选中资源', () => {
+  it('activeInspectorTab 默认 task，setActiveInspectorTab 改它且不落盘', () => {
+    expect(useViewStore.getState().activeInspectorTab).toBe('task')
+    useViewStore.getState().setActiveInspectorTab('resource')
+    expect(useViewStore.getState().activeInspectorTab).toBe('resource')
+    useViewStore.getState().setActiveInspectorTab('project')
+    expect(useViewStore.getState().activeInspectorTab).toBe('project')
+    // 不持久化：与 activeView 同族（每次打开默认「任务」更符合直觉）
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('selectedResourceId 默认 null，selectResource 选中／清空', () => {
+    expect(useViewStore.getState().selectedResourceId).toBeNull()
+    useViewStore.getState().selectResource('res-1')
+    expect(useViewStore.getState().selectedResourceId).toBe('res-1')
+    useViewStore.getState().selectResource(null)
+    expect(useViewStore.getState().selectedResourceId).toBeNull()
+  })
+
+  it('selectResource 是纯 setter：不改 selectedTaskId（不触发换任务的复位）', () => {
+    // 这条钉住「菜单新建资源只切 Tab + 选资源，不该牵动任务选中态」——
+    // 否则 Inspector 的「换任务复位到任务 Tab」会被误触发、刚切到资源 Tab 又被弹回。
+    useViewStore.getState().selectTask('task-9')
+    useViewStore.getState().selectResource('res-1')
+    expect(useViewStore.getState().selectedTaskId).toBe('task-9')
+  })
+})

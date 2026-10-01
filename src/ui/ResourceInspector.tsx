@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId } from 'react'
 import { Alert, Button, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,8 @@ import type {
 import type { ResourceKind } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
+import { useViewStore } from '../store/viewStore'
+import { createResourceAndGetId } from './resourceActions'
 import { AssignmentSection } from './AssignmentSection'
 import {
   DateField,
@@ -52,10 +54,15 @@ interface ResourceCommandMap {
 /**
  * 资源面板（spec §4.1）—— Inspector 的第三个 Tab。
  *
- * **选中态是本面板的局部状态**（偏差 7）：本版没有资源视图（spec §7），把选中态
- * 放进 store 只会凭空多一个无处消费的字段。换资源时调 `breakCoalescing()` ——
- * 与 `viewStore.selectTask` 同一惯例（否则「改 A 的邮件 → 换到 B → 改 B 的邮件」
- * 会并成一条撤销）。
+ * **选中态已提升到 `viewStore.selectedResourceId`**（原先的偏差 7 是「本面板局部状态」，
+ * 现按需搬迁）：菜单栏的「资源 > 新建资源」必须能选中刚建好的资源，否则用户点了菜单
+ * 看不到任何反应（违反核心原则「点了没反应比明确禁用更糟」）。提升后菜单栏与面板共用
+ * 同一个选中态，两条路径都落在同一处。换资源时仍调 `breakCoalescing()`（挂在 Select 的
+ * onChange 现场，不在 store 动作里）—— 与 `viewStore.selectTask` 同一惯例（否则
+ * 「改 A 的邮件 → 换到 B → 改 B 的邮件」会并成一条撤销）。
+ *
+ * 选中态**不持久化**，且悬空 id（指向已删除资源）由下面 `selected` 的那行容错回落到
+ * 第一个资源 —— 这条容错是对的（删资源后选中态归零、自动落到剩下资源），刻意保留。
  *
  * 「派生的总计」**只读引擎输出** `result.resourceTotals`（effort.ts 的 collectCosts
  * 算出），不在 UI 里重算 Σunits × 工期（那是同一条规则的第二份实现）。
@@ -70,7 +77,9 @@ export function ResourceInspector() {
   const unresolved = useScheduleStore((state) => state.result.leveling.unresolved)
 
   const resources = Object.values(project.resources)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 选中态来自 viewStore（菜单栏也要能改它）。悬空 id（删资源后残留）回落到第一个资源。
+  const selectedId = useViewStore((state) => state.selectedResourceId)
+  const setSelectedId = useViewStore((state) => state.selectResource)
   const selectId = useId()
   const kindId = useId()
   const selected = (selectedId ? project.resources[selectedId] : undefined) ?? resources[0]
@@ -87,20 +96,11 @@ export function ResourceInspector() {
    * 新建资源并**立刻选中它**——「建完即改」是新建流程最自然的期望；
    * 不选中就会让用户下一眼（与下一次编辑）落在旧资源上。
    *
-   * `resource.create` 的 id 由命令层 `nextId('res')` 生成，payload 不接受 id、命令也不
-   * 回传新 id（见 resourceCommands.ts），因此在 UI 侧无法预知。这里用 dispatch 前后
-   * resources 的 **key 差集**定位刚建的那一个。dispatch 是同步的，`getState()` 读到的
-   * 已是新状态，选中态立即生效，无需等下一次渲染。
+   * 命名与「拿到新 id」都交给共用的 `createResourceAndGetId`（菜单栏那条路径也走它）——
+   * 这条手法不在两处各写一遍。
    */
   const handleCreate = () => {
-    const before = new Set(Object.keys(project.resources))
-    dispatch({
-      type: 'resource.create',
-      label: 'commands.resource.create',
-      payload: { name: `${t('resource.name')} ${resources.length + 1}` },
-    })
-    const after = useProjectStore.getState().project?.resources ?? {}
-    const newId = Object.keys(after).find((id) => !before.has(id))
+    const newId = createResourceAndGetId(`${t('resource.name')} ${resources.length + 1}`)
     if (newId) setSelectedId(newId)
   }
 

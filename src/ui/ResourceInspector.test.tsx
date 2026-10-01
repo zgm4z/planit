@@ -14,6 +14,7 @@ import {
 } from '../domain/model/factories'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
+import { __resetViewStoreForTests } from '../store/viewStore'
 import { solve } from '../domain/scheduler'
 import { ResourceInspector } from './ResourceInspector'
 import i18n from '../i18n'
@@ -33,6 +34,8 @@ beforeEach(async () => {
   initCommands()
   __resetIdCounterForTests()
   await i18n.changeLanguage('zh-CN')
+  // 选中资源已提升到 viewStore —— 不重置会让上一条用例的选中态泄漏到下一条
+  __resetViewStoreForTests()
 
   const project = createProject('测试', '2026-03-02')
   const resource = createResource({ name: '张三' })

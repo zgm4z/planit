@@ -290,4 +290,20 @@ describe('MenuBar「项目」/「资源」菜单', () => {
     fireEvent.click(screen.getByTestId('menu-new-resource'))
     expect(Object.keys(useProjectStore.getState().project!.resources)).toHaveLength(1)
   })
+
+  // 核心原则「点了没反应比明确禁用更糟」：菜单建了资源却停在原 Tab、不选中，
+  // 用户看不到任何变化 = 点了没反应。这条钉住菜单真的把右栏带到了新资源上。
+  it('「新建资源」把右栏切到「资源」Tab 并选中刚建的资源', async () => {
+    renderBar()
+    await openMenu('resource', 'menu-new-resource')
+
+    fireEvent.click(screen.getByTestId('menu-new-resource'))
+
+    const resources = Object.keys(useProjectStore.getState().project!.resources)
+    expect(resources).toHaveLength(1)
+    // 选中的正是刚建的那一个（id 由命令层生成，UI 靠 key 差集拿到）
+    expect(useViewStore.getState().selectedResourceId).toBe(resources[0])
+    // 且切到了资源 Tab —— 否则选中态在看不见的面板里，仍等于没反应
+    expect(useViewStore.getState().activeInspectorTab).toBe('resource')
+  })
 })

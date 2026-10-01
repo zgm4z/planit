@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId } from 'react'
 import type { ReactNode } from 'react'
 import {
   Accordion,
@@ -32,7 +32,7 @@ import type {
 } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
-import { useViewStore } from '../store/viewStore'
+import { useViewStore, type InspectorTab } from '../store/viewStore'
 import { DEFAULT_OPEN_GROUPS, INSPECTOR_GROUPS, type InspectorGroupKey } from './inspectorGroups'
 import { resolveScheduleDates } from './outlineColumns'
 import { AssignmentSection } from './AssignmentSection'
@@ -76,18 +76,23 @@ export function Inspector() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
-  const [tab, setTab] = useState<'task' | 'project' | 'resource'>('task')
+  // Tab 状态**提升到 viewStore**：菜单栏的「资源 > 新建资源」需要把它切到 resource
+  // （放在组件 useState 里菜单栏够不着）。默认值与复位时机与搬移前完全一致。
+  const tab = useViewStore((state) => state.activeInspectorTab)
+  const setTab = useViewStore((state) => state.setActiveInspectorTab)
 
-  // 换任务时回到「任务」Tab（spec §2：选中任务时默认任务 Tab）
+  // 换任务时回到「任务」Tab（spec §2：选中任务时默认任务 Tab）。
+  // 注意：菜单栏「新建资源」只切 Tab + 选资源，**不改** selectedTaskId，因此不会触发
+  // 这次复位 —— 否则刚切到资源 Tab 就会被弹回任务 Tab。
   useEffect(() => {
     setTab('task')
-  }, [selectedTaskId])
+  }, [selectedTaskId, setTab])
 
   if (!project) return null
 
   const hasTask = Boolean(selectedTaskId && project.tasks[selectedTaskId])
   // 未选任务时默认「项目」Tab（右栏不塌陷），但允许手动切到「资源」Tab
-  const value: 'task' | 'project' | 'resource' = hasTask ? tab : tab === 'resource' ? 'resource' : 'project'
+  const value: InspectorTab = hasTask ? tab : tab === 'resource' ? 'resource' : 'project'
 
   return (
     <Box
@@ -122,7 +127,7 @@ export function Inspector() {
       <Tabs
         keepMounted={false}
         value={value}
-        onChange={(next) => setTab(next as 'task' | 'project' | 'resource')}
+        onChange={(next) => setTab(next as InspectorTab)}
       >
         <Tabs.List mb="md">
           <Tabs.Tab value="task" disabled={!hasTask} data-testid="inspector-tab-task">
