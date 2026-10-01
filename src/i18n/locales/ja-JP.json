@@ -245,6 +245,12 @@
     "overload": "超過負荷：{{count}} 日",
     "noOverload": "超過負荷なし"
   },
+  "resourceView": {
+    "columns": { "kind": "種類", "name": "資源" },
+    "empty": "リソースがまだありません。",
+    "timelineTitle": "割り当てタイムライン",
+    "timelineEmpty": "このリソースはまだどのタスクにも割り当てられていません。"
+  },
   "scheduling": {
     "auto": "自動",
     "startOn": "開始日を固定",

@@ -47,6 +47,11 @@ interface ViewState {
    * 容错（悬空 id 回落到第一个资源）由消费方 ResourceInspector 承担 —— 与搬移前一致。
    */
   selectedResourceId: ResourceId | null
+  /**
+   * 资源树里被折叠的**组**（有子资源的节点）。与 `collapsedIds`（任务树）同族：
+   * 纯 UI 状态，「怎么看」而非「是什么」—— 不持久化、不写进 Project、不进撤销栈。
+   */
+  collapsedResourceIds: Set<ResourceId>
 
   setZoom: (zoom: ZoomLevel) => void
   selectTask: (taskId: TaskId | null) => void
@@ -63,6 +68,7 @@ interface ViewState {
   /** 选中一个资源（null = 清空，由消费方回落到第一个资源）。**刻意不 breakCoalescing** ——
    *  见实现处的说明：打断合并留在交互现场（Select 的 onChange），本动作是纯 setter。 */
   selectResource: (resourceId: ResourceId | null) => void
+  toggleResourceCollapsed: (resourceId: ResourceId) => void
 }
 
 const ZOOM_DAY_WIDTH: Record<ZoomLevel, number> = {
@@ -123,6 +129,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   visibleColumns: loadVisibleColumns(),
   activeInspectorTab: 'task',
   selectedResourceId: null,
+  collapsedResourceIds: new Set<ResourceId>(),
 
   setZoom: (zoom) => set({ zoom, dayWidth: ZOOM_DAY_WIDTH[zoom] }),
 
@@ -135,6 +142,14 @@ export const useViewStore = create<ViewState>((set, get) => ({
   // 而菜单栏「新建资源」这条路径**不**打断合并（与搬移前 handleCreate 的行为一致）。
   // 若把打断合并塞进这里，就会给菜单路径凭空加一次语义变更。
   selectResource: (selectedResourceId) => set({ selectedResourceId }),
+
+  // 与 toggleCollapsed（任务树）同一手法：换一个 Set 引用，让订阅者看到变化
+  toggleResourceCollapsed: (resourceId) => {
+    const next = new Set(get().collapsedResourceIds)
+    if (next.has(resourceId)) next.delete(resourceId)
+    else next.add(resourceId)
+    set({ collapsedResourceIds: next })
+  },
 
   setVisibleColumns: (keys) => {
     const visibleColumns = normalizeVisibleColumns(keys)
@@ -202,5 +217,6 @@ export function __resetViewStoreForTests(): void {
     visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],
     activeInspectorTab: 'task',
     selectedResourceId: null,
+    collapsedResourceIds: new Set(),
   })
 }

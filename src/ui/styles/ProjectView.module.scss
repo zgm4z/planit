@@ -303,3 +303,61 @@
 }
 
 // 甘特图的行与任务条样式在 GanttPane.module.scss（GanttRows / TaskBar 使用）
+
+/* ── v0.7 资源视图 ─────────────────────────────── */
+.resourceView {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100%;
+}
+
+.resourceTree {
+  flex: 0 0 auto;
+  min-width: 320px;
+  border-right: 1px solid var(--planit-border);
+}
+
+.resourceMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--planit-sp-16);
+  overflow-x: auto;
+}
+
+.resourceTimelineTitle {
+  margin: 0 0 var(--planit-sp-8);
+  font-size: var(--planit-fs-sm);
+  color: var(--planit-text-muted);
+}
+
+.resourceTimelineBody {
+  position: relative;
+}
+
+.resourceBar {
+  position: absolute;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--planit-work);
+  color: var(--planit-bg-surface);
+  font-size: var(--planit-fs-xs);
+  line-height: 18px;
+  padding: 0 var(--planit-sp-6);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* 超载是信号层（§4.2）：用琥珀而非红 —— 红只留给关键路径与冲突 */
+.resourceOverloadBand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--planit-warning) 18%, transparent);
+  pointer-events: none;
+}
+
+.resourceEmpty {
+  padding: var(--planit-sp-16);
+  color: var(--planit-text-faint);
+  font-size: var(--planit-fs-sm);
+}

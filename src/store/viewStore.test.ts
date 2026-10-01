@@ -135,3 +135,20 @@ describe('viewStore 的 Inspector Tab 与选中资源', () => {
     expect(useViewStore.getState().selectedTaskId).toBe('task-9')
   })
 })
+
+describe('资源树的折叠态（v0.7）', () => {
+  it('toggleResourceCollapsed 增删同一个 Set；重复点同一个 id 来回切换', () => {
+    const { toggleResourceCollapsed } = useViewStore.getState()
+    expect(useViewStore.getState().collapsedResourceIds.has('resource_1')).toBe(false)
+    toggleResourceCollapsed('resource_1')
+    expect(useViewStore.getState().collapsedResourceIds.has('resource_1')).toBe(true)
+    toggleResourceCollapsed('resource_1')
+    expect(useViewStore.getState().collapsedResourceIds.has('resource_1')).toBe(false)
+  })
+
+  it('__resetViewStoreForTests 把折叠态清空（否则跨用例泄漏）', () => {
+    useViewStore.getState().toggleResourceCollapsed('resource_9')
+    __resetViewStoreForTests()
+    expect(useViewStore.getState().collapsedResourceIds.size).toBe(0)
+  })
+})

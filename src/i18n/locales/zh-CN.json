@@ -248,6 +248,12 @@
     "overload": "超载：{{count}} 天",
     "noOverload": "无超载"
   },
+  "resourceView": {
+    "columns": { "kind": "类型", "name": "资源" },
+    "empty": "还没有资源。",
+    "timelineTitle": "分配时间线",
+    "timelineEmpty": "该资源还没有被分配到任何任务。"
+  },
   "scheduling": {
     "auto": "自动排期",
     "startOn": "固定开始日期",

@@ -245,6 +245,12 @@
     "overload": "Overloaded: {{count}} day(s)",
     "noOverload": "No overload"
   },
+  "resourceView": {
+    "columns": { "kind": "Type", "name": "Resource" },
+    "empty": "No resources yet.",
+    "timelineTitle": "Assignment timeline",
+    "timelineEmpty": "This resource is not assigned to any task yet."
+  },
   "scheduling": {
     "auto": "Automatic",
     "startOn": "Start on",
