@@ -2,10 +2,10 @@ import { create } from 'zustand'
 import type { ResourceId, TaskId } from '../domain/model/types'
 import {
   DEFAULT_VISIBLE_COLUMNS,
-  OUTLINE_COLUMNS,
+  OUTLINE_COLUMN_KEYS,
   isEnabledOutlineColumnKey,
   type OutlineColumnKey,
-} from '../ui/outlineColumns'
+} from './columnKeys'
 import { useProjectStore } from './projectStore'
 
 export type ZoomLevel = 'day' | 'week' | 'month'
@@ -34,7 +34,7 @@ interface ViewState {
   dayWidth: number
   /** 当前视图。**不持久化** —— 每次打开默认甘特更符合直觉（spec §2） */
   activeView: ActiveView
-  /** 可见列的**集合**（顺序由 OUTLINE_COLUMNS 的注册顺序决定，不在这里） */
+  /** 可见列的**集合**（顺序由 OUTLINE_COLUMN_KEYS 的注册顺序决定，不在这里） */
   visibleColumns: OutlineColumnKey[]
   /**
    * Inspector 右栏当前激活的 Tab。默认 `task`（与搬移前的组件 useState 初值一致）。
@@ -72,7 +72,7 @@ const ZOOM_DAY_WIDTH: Record<ZoomLevel, number> = {
 }
 
 /** 注册顺序 → 序号。归一化时按它排序，让 visibleColumns 的顺序可预测 */
-const COLUMN_ORDER = new Map(OUTLINE_COLUMNS.map((column, index) => [column.key, index]))
+const COLUMN_ORDER = new Map(OUTLINE_COLUMN_KEYS.map((key, index) => [key, index]))
 
 /**
  * 收敛成一份**只含本版可用 key 的、去重的、按注册顺序排列的**列表，且保证 `title` 在内。
