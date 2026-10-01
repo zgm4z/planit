@@ -187,7 +187,9 @@
     "currency": "Currency",
     "totalAssignments": "{{count}} assignments",
     "totalHours": "{{count}} hours",
-    "totalCost": "Total cost: {{amount}} {{currency}}"
+    "totalCost": "Total cost: {{amount}} {{currency}}",
+    "overload": "Overloaded: {{count}} day(s)",
+    "noOverload": "No overload"
   },
   "scheduling": {
     "auto": "Automatic",

@@ -190,7 +190,9 @@
     "currency": "货币",
     "totalAssignments": "总使用次数：{{count}}",
     "totalHours": "总时数：{{count}}",
-    "totalCost": "总成本：{{amount}} {{currency}}"
+    "totalCost": "总成本：{{amount}} {{currency}}",
+    "overload": "超载：{{count}} 天",
+    "noOverload": "无超载"
   },
   "scheduling": {
     "auto": "自动排期",

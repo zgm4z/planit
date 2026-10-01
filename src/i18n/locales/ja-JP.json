@@ -187,7 +187,9 @@
     "currency": "通貨",
     "totalAssignments": "使用回数：{{count}}",
     "totalHours": "総時間：{{count}}",
-    "totalCost": "総コスト：{{amount}} {{currency}}"
+    "totalCost": "総コスト：{{amount}} {{currency}}",
+    "overload": "超過負荷：{{count}} 日",
+    "noOverload": "超過負荷なし"
   },
   "scheduling": {
     "auto": "自動",
