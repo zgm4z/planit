@@ -138,22 +138,6 @@ export function ResourceInspector() {
 
   return (
     <Stack gap={GAP_BLOCK}>
-      {/* 超载 = 本面板的头号信号，放在**最顶部、分组之外** —— 与任务面板的冲突
-          Alert 同位置同体例。它曾排在 8 个字段之下、要滚动才看得到，而「这个资源
-          超载了」正是先于一切字段该被看到的事实（§3.1 的「信号」层）。
-          无超载时**不喧哗**：同位置只留一行 xs/dimmed 的确认，不动用信号色。
-          为什么保留而非删掉它：超载数=0 是**算出来的 0**（§3.3 的第三类），与
-          「引擎没跑 / 无此概念」必须可分；留白会让二者混为一谈。 */}
-      {overloads.length > 0 ? (
-        <Alert color="red" p="xs" data-testid="resource-overload">
-          {t('resource.overload', { count: formatDays(overloads.length) ?? '—' })}
-        </Alert>
-      ) : (
-        <Text fz="xs" c="dimmed">
-          {t('resource.noOverload')}
-        </Text>
-      )}
-
       {/* 「选择资源」是面板的主体（它定义下面所有字段讲的是谁）；「新建」是它的
           尾部动作 —— 同排、同高、light 次级按钮。曾经那个通栏靛蓝实心方块是面板里
           最抢眼的东西，与内容抢注意力，与「先看清资源」的诉求相悖。 */}
@@ -173,6 +157,25 @@ export function ResourceInspector() {
           {t('resource.create')}
         </Button>
       </Group>
+
+      {/* 超载 = 本面板的头号信号，**分组之外、且在主体之后** —— 与任务面板的冲突
+          Alert 同位置同体例（都在「这是哪个主体」之后、「分组」之前）。
+          排序理由（IA）：超载讲的是**某个资源**的状态，因此必须先让用户看到
+          「这是哪个资源」（选择器），状态再出场；曾把它放在选择器之前，是「状态先于
+          主体」，读起来突兀。它也确实必须排在 8 个字段之上 —— 「这个资源超载了」是
+          先于一切字段该被看到的事实（§3.1 的「信号」层）。
+          无超载时**不喧哗**：同位置只留一行 xs/dimmed 的确认，不动用信号色。
+          为什么保留而非删掉它：超载数=0 是**算出来的 0**（§3.3 的第三类），与
+          「引擎没跑 / 无此概念」必须可分；留白会让二者混为一谈。 */}
+      {overloads.length > 0 ? (
+        <Alert color="red" p="xs" data-testid="resource-overload">
+          {t('resource.overload', { count: formatDays(overloads.length) ?? '—' })}
+        </Alert>
+      ) : (
+        <Text fz="xs" c="dimmed">
+          {t('resource.noOverload')}
+        </Text>
+      )}
 
       {/* ── 基本信息 ── 名称 / 类型 / 电子邮件。
           排序按「使用频率 × 重要性」：名称必填、类型（人员/设备/素材/群组）常改且

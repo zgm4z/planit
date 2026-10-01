@@ -5,7 +5,7 @@ import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { CalendarSettings } from './CalendarSettings'
-import { DateField, GAP_BLOCK, GAP_FIELD, StatList, StatRow } from './InspectorFields'
+import { DateField, GAP_BLOCK, GAP_FIELD, Section, StatList, StatRow } from './InspectorFields'
 import { formatDate, formatDays } from './format'
 import { computeProjectSummary } from './projectSummary'
 
@@ -110,11 +110,12 @@ export function ProjectInspector() {
       </Stack>
 
       {/* 摘要：**只读事实块**。日期一律 formatDate（YYYY-MM-DD），
-          数字一律 formatDays / formatPlain —— 组件里不再出现第二份四舍五入。 */}
-      <Stack gap={GAP_FIELD}>
-        <Text fz="xs" fw={500} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.06em' }}>
-          {t('inspector.project.summary')}
-        </Text>
+          数字一律 formatDays / formatPlain —— 组件里不再出现第二份四舍五入。
+          标题体例：与「工作日 / 例外日期」（CalendarSettings）及任务面板 Accordion 头
+          共用同一角色（§1.2「区块标题」：lg / 600 + 下沿），因此直接用共用的 <Section>
+          （产出 <h3>，不是 <p>）。它此前是 micro / 大写 / 弱化的**列头**档，与同面板的
+          「工作日」撞出两套层级 —— 一个面板只应有一套区块标题。 */}
+      <Section title={t('inspector.project.summary')}>
         {summary ? (
           <StatList>
             {/* 一律拼成「标签：值」的单行事实 —— 数字过 formatDate / formatDays
@@ -140,7 +141,7 @@ export function ProjectInspector() {
             —
           </Text>
         )}
-      </Stack>
+      </Section>
 
       {/* 基准日（挣值的「到某日为止」）：项目级设置，落在项目面板（偏差 3 / 偏差 7）。
           输入框驱动 → 合并键 `project.setStatusDate` + onBlur 打断合并。 */}
@@ -166,41 +167,40 @@ export function ProjectInspector() {
         </Text>
       </Stack>
 
-      <Stack gap={GAP_FIELD}>
-        <Text fz="xs" fw={500} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.06em' }}>
-          {t('inspector.project.format')}
-        </Text>
+      <Section title={t('inspector.project.format')}>
         {/* §3.3：货币曾是一个**禁用的空 Select** —— 典型的「用控件表达数据」。
             改为只读事实块的一行（标签 + 弱化的 `—`），版本注记仍由下方 hint 承担
             （分批原则：渲染出来并注明「尚未排期」，而不是删掉）。 */}
         <Stack gap={GAP_FIELD}>
-          <StatList>
-            <StatRow
-              label={t('inspector.project.currency')}
-              value={null}
-              testId="project-currency"
-            />
-          </StatList>
-          <Text fz="xs" c="dimmed">
-            {t('inspector.project.currencyHint')}
-          </Text>
-        </Stack>
+          <Stack gap={GAP_FIELD}>
+            <StatList>
+              <StatRow
+                label={t('inspector.project.currency')}
+                value={null}
+                testId="project-currency"
+              />
+            </StatList>
+            <Text fz="xs" c="dimmed">
+              {t('inspector.project.currencyHint')}
+            </Text>
+          </Stack>
 
-        <NumberInput
-          label={t('inspector.project.unitConversion')}
-          min={1}
-          value={calendar.hoursPerDay}
-          onBlur={breakCoalescing}
-          onChange={(value) =>
-            dispatch({
-              type: 'calendar.setHoursPerDay',
-              label: 'commands.calendar.setHoursPerDay',
-              payload: { hoursPerDay: Number(value) || 1 },
-              coalesceKey: 'calendar.setHoursPerDay',
-            })
-          }
-        />
-      </Stack>
+          <NumberInput
+            label={t('inspector.project.unitConversion')}
+            min={1}
+            value={calendar.hoursPerDay}
+            onBlur={breakCoalescing}
+            onChange={(value) =>
+              dispatch({
+                type: 'calendar.setHoursPerDay',
+                label: 'commands.calendar.setHoursPerDay',
+                payload: { hoursPerDay: Number(value) || 1 },
+                coalesceKey: 'calendar.setHoursPerDay',
+              })
+            }
+          />
+        </Stack>
+      </Section>
 
       {/* 工作日历：**项目配置**，与上面的 名称 / 排期方向 / 基准日 / 格式 并列。
           IA 修正 —— 它此前被钉在右栏底部（所有 Tab 之下的公共位置），切到「资源」
