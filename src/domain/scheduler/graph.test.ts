@@ -66,4 +66,26 @@ describe('buildGraph', () => {
       expect((e as CycleError).cycle).toEqual(['a', 'b', 'c', 'a'])
     }
   })
+
+  it('忽略 fromTaskId 不存在于任务列表的悬空依赖', () => {
+    const g = buildGraph([t('a')], [createDependency('ghost', 'a')])
+    expect(g.order).toEqual(['a'])
+    expect(g.incoming.get('a')).toEqual([])
+  })
+
+  it('环路只包含环上的节点，不含通往环的前缀路径', () => {
+    // s → t → u → v → t：s 通向环，但 s 本身不在环上
+    try {
+      buildGraph([t('s'), t('t'), t('u'), t('v')], [
+        createDependency('s', 't'),
+        createDependency('t', 'u'),
+        createDependency('u', 'v'),
+        createDependency('v', 't'),
+      ])
+      throw new Error('应当抛出 CycleError')
+    } catch (e) {
+      expect(e).toBeInstanceOf(CycleError)
+      expect((e as CycleError).cycle).toEqual(['t', 'u', 'v', 't'])
+    }
+  })
 })
