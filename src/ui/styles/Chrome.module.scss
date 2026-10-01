@@ -78,6 +78,31 @@
   @include focus-ring;
 }
 
+// 溢出入口（§7 窄屏）——「此处还有内容」的可感知形态。
+// 图标是 IconDotsVertical（⋯，溢出约定符号）+ tooltip；当**被收进菜单的控件处于
+// 非默认状态**（缩放不是「日」或语言不是默认中文）时点亮右上角小圆点，
+// 让用户知道「主条上没有的控件此刻带着一个非默认值，没丢」。
+//
+// 圆点用 --work（与选中态同一支靛蓝，属「界面态」而非信号色 —— §4.2 的红色只给
+// 关键路径与冲突）；box-shadow 描一圈表面色，让小圆点压在白底工具栏上仍有边界。
+// 悬停 / 按下 / 聚焦沿用上面的工具栏统一反馈（.mantine-ActionIcon-root 那几条）。
+.overflow {
+  position: relative;
+
+  &[data-has-hidden='true']::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--planit-work);
+    box-shadow: 0 0 0 1.5px var(--planit-bg-surface);
+    pointer-events: none;
+  }
+}
+
 // 分隔两组的竖线（窄屏溢出菜单与撤销/重做之间用）。纯装饰 → 中性色（§4.2）。
 .divider {
   width: 1px;
@@ -130,16 +155,16 @@
   font-size: var(--planit-fs-xs);
 }
 
-// ── 日历设置块（右栏底部独立区域）─────────────────────────
+// ── 日历设置块（「项目」Tab 内的一个区块）───────────────────
 // 与 Inspector 同一套排版（区块标题 lg/600 + 下沿；组内 6；组间 16；区块 24），
-// 因此它读作「右栏的又一个区块」，而不是一块贴在角落的小控件。
+// 因此它读作「项目配置区的又一个区块」，而不是一块贴在角落的小控件。
+//
+// 它**不再**是右栏底部的一条，所以没有 border-top / 外内边距 / 底色 —— 那些是
+// 「钉在底部的一条」才需要的分隔。现在它与上方的项目字段同处一个 Stack，
+// 间距由 GAP_BLOCK(24) 与标题的下沿承担；左右内边距由 Inspector Box 的 p="md" 统一持有。
 
 .calendar {
-  flex-shrink: 0; // 宽度由 ProjectView 的右栏容器持有，这里只填满
   width: 100%;
-  padding: var(--planit-sp-16) var(--planit-sp-12);
-  background: var(--planit-bg-surface);
-  border-top: 1px solid var(--planit-border);
   font-variant-numeric: tabular-nums; // §1.3
 
   // §6 统一 focus ring（与 Inspector 面板同一支 mixin）

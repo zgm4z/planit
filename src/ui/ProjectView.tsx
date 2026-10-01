@@ -25,7 +25,6 @@ import {
 } from './timeline'
 import { Toolbar } from './Toolbar'
 import { StatusBar } from './StatusBar'
-import { CalendarSettings } from './CalendarSettings'
 import { useBarDrag } from './useBarDrag'
 import { useDependencyLink } from './useDependencyLink'
 import { useLayoutMode } from './useBreakpoints'
@@ -326,7 +325,9 @@ export function ProjectView() {
           )}
         </div>
 
-        {/* 右栏内容分上下两段：Inspector 自负滚动，日历设置钉在底部。
+        {/* 右栏内容 = Inspector 一个整体（自负滚动）。
+            日历设置已**并入项目 Tab**（见 CalendarSettings 的 IA 注释）——
+            右栏底部不再有常驻块，切到「资源」Tab 时底下也不会再挂着项目日历设置。
             **常驻面板与窄屏抽屉共用同一份内容** —— 两处各写一遍的话，将来给右栏
             加一块，漏改一处就会「宽屏有、窄屏没有」。 */}
         {isNarrow ? (
@@ -343,13 +344,10 @@ export function ProjectView() {
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 <Inspector />
               </div>
-              <CalendarSettings />
             </div>
           </Drawer>
         ) : (
-          // 常驻右栏：宽度与左边框由**这个容器**统一持有（唯一来源）——
-          // Inspector 与 CalendarSettings 都只填 100%，否则改宽度时要同时改三处，
-          // 漏改一处就会静默错位。
+          // 常驻右栏：宽度与左边框由**这个容器**统一持有（唯一来源）。
           <div
             style={{
               ...inspectorColumnStyle,
@@ -361,7 +359,6 @@ export function ProjectView() {
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               <Inspector />
             </div>
-            <CalendarSettings />
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
+import { CalendarSettings } from './CalendarSettings'
 import { DateField, GAP_BLOCK, GAP_FIELD, StatList, StatRow } from './InspectorFields'
 import { formatDate, formatDays } from './format'
 import { computeProjectSummary } from './projectSummary'
@@ -17,6 +18,9 @@ import { computeProjectSummary } from './projectSummary'
  *
  * 排版（§2.1）：可编辑字段按「区块」分组，块内 16px、块间 24px；摘要是一个
  * **只读事实块**（平排的规格表），与上方带边框的控件形成对照 —— 方块 = 可改，平排 = 事实。
+ *
+ * 本面板末尾挂入 **CalendarSettings**（工作日 / 例外日期）：工作日历是**项目级配置**，
+ * 与排期方向、基准日同类，因此与它们并列在「项目」Tab —— 不再常驻右栏底部。
  */
 export function ProjectInspector() {
   const { t } = useTranslation()
@@ -197,6 +201,12 @@ export function ProjectInspector() {
           }
         />
       </Stack>
+
+      {/* 工作日历：**项目配置**，与上面的 名称 / 排期方向 / 基准日 / 格式 并列。
+          IA 修正 —— 它此前被钉在右栏底部（所有 Tab 之下的公共位置），切到「资源」
+          Tab 时底下仍挂着项目日历设置，属信息架构错位。现在它归「项目」Tab。
+          详见 CalendarSettings 顶部的归属说明（含对「全局设置应常驻」那条论证的回应）。 */}
+      <CalendarSettings />
     </Stack>
   )
 }
