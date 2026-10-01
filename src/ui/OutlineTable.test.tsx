@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 import type { VirtualItem } from '@tanstack/react-virtual'
 
@@ -10,6 +11,7 @@ import { flattenVisibleRows } from './flattenRows'
 import { DEFAULT_VISIBLE_COLUMNS, OUTLINE_COLUMNS } from './outlineColumns'
 import { OutlineTable } from './OutlineTable'
 import { ROW_HEIGHT } from './useSharedVirtualizer'
+import { useViewStore, __resetViewStoreForTests } from '../store/viewStore'
 import i18n from '../i18n'
 
 let project: Project
@@ -48,6 +50,8 @@ function renderTable(keys = DEFAULT_VISIBLE_COLUMNS) {
 beforeEach(async () => {
   __resetIdCounterForTests()
   await i18n.changeLanguage('zh-CN')
+  localStorage.clear()
+  __resetViewStoreForTests()
 
   project = createProject('测试', '2026-03-02')
   const task = createTask({ name: '写文档', duration: 3 })
@@ -110,5 +114,72 @@ describe('OutlineTable', () => {
     renderTable()
     expect(screen.getByTestId('outline-col-title')).toHaveTextContent('Title')
     expect(screen.getByTestId('outline-col-start')).toHaveTextContent('Start')
+  })
+})
+
+/**
+ * 菜单是**浮层**交互。jsdom 里 Mantine 的浮层「不显形」（计算样式停在 display:none，
+ * 见 Inspector.test.tsx 的 chooseOption 注释），但**展开后 DOM 是真实挂载的** ——
+ * 所以这里用 fireEvent 打开菜单、再断言菜单项的 DOM 与状态是可行的。
+ * 「能不能看得见」由 Task 7 的 e2e 验收。
+ */
+async function openMenu() {
+  fireEvent.contextMenu(screen.getByTestId('outline-table-header'))
+  // 展开后 Dropdown 才挂载；等一帧让 Transition 走完挂载
+  await screen.findByTestId('column-menu')
+}
+
+describe('OutlineTable 的列菜单', () => {
+  it('右键表头打开菜单，列出全部 27 列（11 可用 + 16 禁用）', async () => {
+    renderTable()
+    expect(screen.queryByTestId('column-menu')).not.toBeInTheDocument()
+
+    await openMenu()
+
+    expect(screen.getAllByTestId(/^column-menu-item-/)).toHaveLength(OUTLINE_COLUMNS.length)
+    expect(screen.getAllByTestId(/^column-menu-item-/)).toHaveLength(27)
+    // 菜单里没有跨项目依赖条目 —— 它不是列，注册表里根本没有这个 key
+    expect(OUTLINE_COLUMNS.some((column) => column.key.includes('crossProject'))).toBe(false)
+  })
+
+  it('禁用列是 disabled，且被一个非禁用的宿主包着（Tooltip 要挂在它上面）', async () => {
+    renderTable()
+    await openMenu()
+
+    expect(screen.getByTestId('column-menu-item-effort')).toBeDisabled()
+    // 禁用的 <button> 不派发鼠标事件，Tooltip 必须挂在这个 span 上 ——
+    // 它的存在就是「tooltip 有机会显示」的证据（文案本身由 e2e 断言）
+    const host = screen.getByTestId('column-menu-disabledwrap-effort')
+    expect(host.tagName).toBe('SPAN')
+    expect(host).not.toBeDisabled()
+  })
+
+  it('title 项被禁用（不可取消）', async () => {
+    renderTable()
+    await openMenu()
+
+    expect(screen.getByTestId('column-menu-item-title')).toBeDisabled()
+  })
+
+  it('点击可用列切换显隐，并写回 store 与 localStorage', async () => {
+    const user = userEvent.setup()
+    renderTable()
+    await openMenu()
+
+    await user.click(screen.getByTestId('column-menu-item-progress'))
+    expect(useViewStore.getState().visibleColumns).toContain('progress')
+    expect(localStorage.getItem('planit.outlineColumns')).toContain('progress')
+
+    await user.click(screen.getByTestId('column-menu-item-progress'))
+    expect(useViewStore.getState().visibleColumns).not.toContain('progress')
+  })
+
+  it('强行点击 title 项也不改变可见列', async () => {
+    renderTable()
+    await openMenu()
+
+    // 禁用的 <button> 不派发 click；断言的是「守卫没有被绕过」
+    fireEvent.click(screen.getByTestId('column-menu-item-title'))
+    expect(useViewStore.getState().visibleColumns).toContain('title')
   })
 })
