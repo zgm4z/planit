@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActionIcon, Alert, Button, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { ActionIcon, Alert, Button, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,6 +16,8 @@ import type { ResourceKind } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { AssignmentSection } from './AssignmentSection'
+import { DateField, GAP_BLOCK, GAP_FIELD, NumberField, StatList } from './InspectorFields'
+import { formatCost, formatDays, formatHours } from './format'
 
 const KINDS: ResourceKind[] = ['staff', 'equipment', 'material', 'group']
 
@@ -107,15 +109,11 @@ export function ResourceInspector() {
 
   if (!selected) {
     return (
-      <Stack gap="sm">
+      <Stack gap={GAP_BLOCK}>
         <Text fz="xs" c="dimmed">
           {t('resource.empty')}
         </Text>
-        <ActionIcon
-          variant="light"
-          aria-label={t('resource.create')}
-          onClick={handleCreate}
-        >
+        <ActionIcon variant="light" aria-label={t('resource.create')} onClick={handleCreate}>
           +
         </ActionIcon>
       </Stack>
@@ -127,124 +125,192 @@ export function ResourceInspector() {
   const overloads = unresolved.filter((overload) => overload.resourceId === selected.id)
 
   return (
-    <Stack gap="sm">
-      <Group gap="xs" wrap="nowrap" align="flex-end">
-        <Select
-          label={t('resource.select')}
-          value={selected.id}
-          style={{ flex: 1 }}
-          data={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
-          onChange={(value) => {
-            // 换资源 = 交互边界：打断合并，否则跨资源的连续编辑会塌缩成一条撤销
-            breakCoalescing()
-            setSelectedId(value)
-          }}
+    <Stack gap={GAP_BLOCK}>
+      <Stack gap={GAP_FIELD}>
+        <Group gap="xs" wrap="nowrap" align="flex-end">
+          <Select
+            label={t('resource.select')}
+            value={selected.id}
+            style={{ flex: 1 }}
+            data={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
+            onChange={(value) => {
+              // 换资源 = 交互边界：打断合并，否则跨资源的连续编辑会塌缩成一条撤销
+              breakCoalescing()
+              setSelectedId(value)
+            }}
+          />
+          <ActionIcon variant="light" aria-label={t('resource.create')} onClick={handleCreate}>
+            +
+          </ActionIcon>
+        </Group>
+
+        <TextInputField
+          label={t('resource.name')}
+          value={selected.name}
+          onBlur={breakCoalescing}
+          onChange={(name) =>
+            send(
+              'resource.rename',
+              'commands.resource.rename',
+              { resourceId: selected.id, name },
+              `resource.rename:${selected.id}`,
+            )
+          }
         />
-        <ActionIcon
-          variant="light"
-          aria-label={t('resource.create')}
-          onClick={handleCreate}
-        >
-          +
-        </ActionIcon>
-      </Group>
 
-      <TextInput
-        label={t('resource.name')}
-        value={selected.name}
-        onBlur={breakCoalescing}
-        onChange={(event) =>
-          send('resource.rename', 'commands.resource.rename', { resourceId: selected.id, name: event.target.value }, `resource.rename:${selected.id}`)
-        }
-      />
+        <TextInputField
+          label={t('resource.email')}
+          value={selected.email ?? ''}
+          onBlur={breakCoalescing}
+          onChange={(email) =>
+            send(
+              'resource.setEmail',
+              'commands.resource.setEmail',
+              { resourceId: selected.id, email },
+              `resource.setEmail:${selected.id}`,
+            )
+          }
+        />
 
-      <TextInput
-        label={t('resource.email')}
-        value={selected.email ?? ''}
-        onBlur={breakCoalescing}
-        onChange={(event) =>
-          send('resource.setEmail', 'commands.resource.setEmail', { resourceId: selected.id, email: event.target.value }, `resource.setEmail:${selected.id}`)
-        }
-      />
+        <Select
+          label={t('resource.kind')}
+          value={selected.kind}
+          data={KINDS.map((kind) => ({ value: kind, label: t(`resource.kind_${kind}`) }))}
+          onChange={(value) =>
+            value &&
+            send('resource.setKind', 'commands.resource.setKind', {
+              resourceId: selected.id,
+              kind: value as ResourceKind,
+            })
+          }
+        />
+      </Stack>
 
-      <Select
-        label={t('resource.kind')}
-        value={selected.kind}
-        data={KINDS.map((kind) => ({ value: kind, label: t(`resource.kind_${kind}`) }))}
-        onChange={(value) =>
-          value && send('resource.setKind', 'commands.resource.setKind', { resourceId: selected.id, kind: value as ResourceKind })
-        }
-      />
+      <Stack gap={GAP_FIELD}>
+        <NumberField
+          label={t('resource.availability')}
+          digits={0}
+          min={0}
+          max={100}
+          value={Math.round(selected.availability * 100)}
+          onBlur={breakCoalescing}
+          onChange={(value) =>
+            send(
+              'resource.setAvailability',
+              'commands.resource.setAvailability',
+              { resourceId: selected.id, availability: (value ?? 0) / 100 },
+              `resource.setAvailability:${selected.id}`,
+            )
+          }
+        />
 
-      <NumberInput
-        label={t('resource.availability')}
-        min={0}
-        max={100}
-        value={Math.round(selected.availability * 100)}
-        onBlur={breakCoalescing}
-        onChange={(value) =>
-          send('resource.setAvailability', 'commands.resource.setAvailability', { resourceId: selected.id, availability: (Number(value) || 0) / 100 }, `resource.setAvailability:${selected.id}`)
-        }
-      />
+        <NumberField
+          label={t('resource.efficiency')}
+          digits={2}
+          min={0}
+          allowEmpty
+          value={selected.efficiency}
+          onBlur={breakCoalescing}
+          onChange={(value) =>
+            send(
+              'resource.setEfficiency',
+              'commands.resource.setEfficiency',
+              { resourceId: selected.id, efficiency: value },
+              `resource.setEfficiency:${selected.id}`,
+            )
+          }
+        />
+      </Stack>
 
-      <NumberInput
-        label={t('resource.efficiency')}
-        min={0}
-        value={selected.efficiency ?? ''}
-        onBlur={breakCoalescing}
-        onChange={(value) =>
-          send('resource.setEfficiency', 'commands.resource.setEfficiency', { resourceId: selected.id, efficiency: value === '' ? undefined : Number(value) }, `resource.setEfficiency:${selected.id}`)
-        }
-      />
+      <Stack gap={GAP_FIELD}>
+        <DateField
+          label={t('resource.availableFrom')}
+          value={selected.availableFrom ?? ''}
+          clearable
+          onBlur={breakCoalescing}
+          onChange={(next) =>
+            send(
+              'resource.setAvailablePeriod',
+              'commands.resource.setAvailablePeriod',
+              {
+                resourceId: selected.id,
+                availableFrom: next || undefined,
+                availableUntil: selected.availableUntil,
+              },
+              `resource.setAvailablePeriod:${selected.id}`,
+            )
+          }
+        />
 
-      <TextInput
-        type="date"
-        label={t('resource.availableFrom')}
-        value={selected.availableFrom ?? ''}
-        onBlur={breakCoalescing}
-        onChange={(event) =>
-          send('resource.setAvailablePeriod', 'commands.resource.setAvailablePeriod', { resourceId: selected.id, availableFrom: event.target.value || undefined, availableUntil: selected.availableUntil }, `resource.setAvailablePeriod:${selected.id}`)
-        }
-      />
+        <DateField
+          label={t('resource.availableUntil')}
+          value={selected.availableUntil ?? ''}
+          clearable
+          onBlur={breakCoalescing}
+          onChange={(next) =>
+            send(
+              'resource.setAvailablePeriod',
+              'commands.resource.setAvailablePeriod',
+              {
+                resourceId: selected.id,
+                availableFrom: selected.availableFrom,
+                availableUntil: next || undefined,
+              },
+              `resource.setAvailablePeriod:${selected.id}`,
+            )
+          }
+        />
+      </Stack>
 
-      <TextInput
-        type="date"
-        label={t('resource.availableUntil')}
-        value={selected.availableUntil ?? ''}
-        onBlur={breakCoalescing}
-        onChange={(event) =>
-          send('resource.setAvailablePeriod', 'commands.resource.setAvailablePeriod', { resourceId: selected.id, availableFrom: selected.availableFrom, availableUntil: event.target.value || undefined }, `resource.setAvailablePeriod:${selected.id}`)
-        }
-      />
+      <Stack gap={GAP_FIELD}>
+        <NumberField
+          label={t('resource.usageCost')}
+          digits={0}
+          min={0}
+          allowEmpty
+          value={selected.cost.usage}
+          onBlur={breakCoalescing}
+          onChange={(value) =>
+            send(
+              'resource.setCost',
+              'commands.resource.setCost',
+              { resourceId: selected.id, cost: { ...selected.cost, usage: value } },
+              `resource.setCost:${selected.id}`,
+            )
+          }
+        />
 
-      <NumberInput
-        label={t('resource.usageCost')}
-        min={0}
-        value={selected.cost.usage ?? ''}
-        onBlur={breakCoalescing}
-        onChange={(value) =>
-          send('resource.setCost', 'commands.resource.setCost', { resourceId: selected.id, cost: { ...selected.cost, usage: value === '' ? undefined : Number(value) } }, `resource.setCost:${selected.id}`)
-        }
-      />
+        <NumberField
+          label={t('resource.hourlyCost')}
+          digits={0}
+          min={0}
+          allowEmpty
+          value={selected.cost.hourly}
+          onBlur={breakCoalescing}
+          onChange={(value) =>
+            send(
+              'resource.setCost',
+              'commands.resource.setCost',
+              { resourceId: selected.id, cost: { ...selected.cost, hourly: value } },
+              `resource.setCost:${selected.id}`,
+            )
+          }
+        />
 
-      <NumberInput
-        label={t('resource.hourlyCost')}
-        min={0}
-        value={selected.cost.hourly ?? ''}
-        onBlur={breakCoalescing}
-        onChange={(value) =>
-          send('resource.setCost', 'commands.resource.setCost', { resourceId: selected.id, cost: { ...selected.cost, hourly: value === '' ? undefined : Number(value) } }, `resource.setCost:${selected.id}`)
-        }
-      />
-
-      <TextInput
-        label={t('resource.currency')}
-        value={selected.cost.currency}
-        onBlur={breakCoalescing}
-        onChange={(event) =>
-          send('resource.setCost', 'commands.resource.setCost', { resourceId: selected.id, cost: { ...selected.cost, currency: event.target.value } }, `resource.setCost:${selected.id}`)
-        }
-      />
+        <TextInputField
+          label={t('resource.currency')}
+          value={selected.cost.currency}
+          onBlur={breakCoalescing}
+          onChange={(currency) =>
+            send(
+              'resource.setCost',
+              'commands.resource.setCost',
+              { resourceId: selected.id, cost: { ...selected.cost, currency } },
+              `resource.setCost:${selected.id}`,
+            )
+          }
+        />
+      </Stack>
 
       <Button
         color="red"
@@ -255,21 +321,27 @@ export function ResourceInspector() {
         {t('resource.delete')}
       </Button>
 
-      <Text fz="xs" c="dimmed">
-        {t('resource.totalAssignments', { count: totals.assignments })}
-      </Text>
-      <Text fz="xs" c="dimmed">
-        {t('resource.totalHours', { count: Math.round(totals.hours * 100) / 100 })}
-      </Text>
-      <Text fz="xs" c="dimmed">
-        {t('resource.totalCost', { amount: Math.round(totals.cost * 100) / 100, currency: selected.cost.currency })}
-      </Text>
+      {/* 派生总计：**只读事实块**（§3.3）—— 数字过 format*，日期/金额不再各自四舍五入 */}
+      <StatList>
+        <Text fz="sm" c="dimmed" data-testid="resource-total-assignments">
+          {t('resource.totalAssignments', { count: formatDays(totals.assignments) ?? '—' })}
+        </Text>
+        <Text fz="sm" c="dimmed" data-testid="resource-total-hours">
+          {t('resource.totalHours', { count: formatHours(totals.hours) ?? '—' })}
+        </Text>
+        <Text fz="sm" c="dimmed" data-testid="resource-total-cost">
+          {t('resource.totalCost', {
+            amount: formatCost(totals.cost) ?? '—',
+            currency: selected.cost.currency,
+          })}
+        </Text>
+      </StatList>
 
       {/* v0.6 偏差 7：超载复用资源面板呈现。unresolved 是「平衡后仍超载」的如实上报，
           不是加载失败 —— 故只在真有超载时提示，无超载时明说「无超载」而非留白 */}
       {overloads.length > 0 ? (
         <Alert color="red" p="xs" data-testid="resource-overload">
-          {t('resource.overload', { count: overloads.length })}
+          {t('resource.overload', { count: formatDays(overloads.length) ?? '—' })}
         </Alert>
       ) : (
         <Text fz="xs" c="dimmed">
@@ -279,5 +351,30 @@ export function ResourceInspector() {
 
       <AssignmentSection scope={{ kind: 'resource', id: selected.id }} />
     </Stack>
+  )
+}
+
+/**
+ * 一个薄薄的文本输入框：把 onChange 的取值从 event 里剥出来，让调用点只描述
+ * 「这个字段写回什么」—— 与 DateField / NumberField 三个形态同构，读起来一致。
+ */
+function TextInputField({
+  label,
+  value,
+  onChange,
+  onBlur,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  onBlur?: () => void
+}) {
+  return (
+    <TextInput
+      label={label}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+      onBlur={onBlur}
+    />
   )
 }

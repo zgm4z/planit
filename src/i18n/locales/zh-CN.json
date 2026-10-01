@@ -151,7 +151,7 @@
     "priorityHint": "资源平衡时生效（数值越大越优先）",
     "delay": "延迟",
     "delayHint": "资源平衡时应至少推迟的工作日数。",
-    "slack": "浮时：{{count}} 个工作日",
+    "slack": "浮时：{{days}} 天",
     "critical": "位于关键路径",
     "relations": {
       "predecessors": "必要条件（挡在我前面的）",

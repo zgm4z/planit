@@ -148,7 +148,7 @@
     "priorityHint": "Takes effect during resource leveling (higher = more important)",
     "delay": "Delay",
     "delayHint": "At least this many workdays this task should be delayed during resource leveling.",
-    "slack": "Slack: {{count}} workdays",
+    "slack": "Slack: {{days}} days",
     "critical": "on critical path",
     "relations": {
       "predecessors": "Predecessors (blocking me)",

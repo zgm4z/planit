@@ -246,7 +246,16 @@ function NoteCell({ task }: { task: Task }) {
   )
 }
 
-/** 把结构化取值翻成当前语言的文案 —— 单数单位（天 / %）只在这里出现 */
+/**
+ * 把结构化取值翻成当前语言的文案 —— 单位（天 / 人日 / %）只在这里出现。
+ *
+ * ⚠️ **本组件尚未接入 `/src/ui/format.ts`**（那一步是「大纲列」的后续改动，不在
+ * 本次「右栏 Inspector」的范围）。接入时要一并把数字过 formatDays / formatPercent /
+ * formatEffort / formatCost —— 后者会引入 §1.3 的千分位，届时 `e2e/earned-value.spec.ts`
+ * 里 `outline-cell-bac-t1` 的断言需从 `1000` 改为 `1,000`。本次刻意不动，原因见下：
+ * 另一个 agent 正在同一个 dev server（:5174）上跑 e2e，此刻改动大纲单元格的文本
+ * 会让它的运行出现与本次改动无关的红。
+ */
 function CellText({ value }: { value: CellValue }) {
   const { t } = useTranslation()
 
