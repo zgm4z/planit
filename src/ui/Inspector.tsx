@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Accordion,
@@ -546,9 +546,14 @@ function ScheduleGroup({
         {t('inspector.priorityHint')}
       </Text>
 
+      {/* 摘要任务禁用「延迟」：task.setDelay 对 group 是 no-op（摘要不单独挪），
+          不禁用就会留下一个「点了没反应」的输入框（违反分批原则）。
+          ⚠️ 刻意**不**给上面的「优先级」加 disabled：task.setPriority 对摘要是**生效**的
+          （备注与优先级对摘要同样有意义，见 taskCommands 的注释）。别来「统一」这个不对称。 */}
       <NumberInput
         label={t('inspector.delay')}
         min={0}
+        disabled={isSummary}
         value={task.delay}
         onBlur={breakCoalescing}
         onChange={(value) =>
@@ -574,7 +579,15 @@ function ScheduleGroup({
   )
 }
 
-// 注意：`task` 只出现在**类型**里、不从参数里解构 —— 本组用 taskId 就够（避免未使用变量）。
+/**
+ * 相关性（spec §3.4 + 偏差 6）：**一个** Accordion 分组，内含**两段**带标题的小节 ——
+ * 必要条件（`toTaskId === taskId`，即指向本任务的前驱）与从属（`fromTaskId === taskId`，后继）。
+ *
+ * 两段是**同一份 Dependency 数据**的两个过滤方向，所以增删改只写一次（`RelationSection`），
+ * 各自只在「往哪一头连线」上不同（`makePayload`）—— 防止两份必然漂移的重复真相。
+ *
+ * 注意：`task` 只出现在**类型**里、不从参数里解构 —— 本组用 taskId 就够（避免未使用变量）。
+ */
 function RelationsGroup({
   taskId,
   isSummary,
@@ -585,44 +598,96 @@ function RelationsGroup({
 }) {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)!
+
+  const incoming = Object.values(project.dependencies).filter((dep) => dep.toTaskId === taskId)
+  const outgoing = Object.values(project.dependencies).filter((dep) => dep.fromTaskId === taskId)
+
+  // 候选 = 全部叶子任务里，尚未与本任务连过**同向**边的。
+  // 「同向」是关键：A→本任务 与 本任务→A 是两条合法的边（图上有向），
+  // 所以前驱的已连集只看 incoming、后继只看 outgoing —— 两个方向各自过滤，互不牵连。
+  const leaves = Object.values(project.tasks).filter(
+    (candidate) => candidate.childIds.length === 0 && candidate.id !== taskId,
+  )
+  const predecessorOptions = leaves
+    .filter((candidate) => !incoming.some((dep) => dep.fromTaskId === candidate.id))
+    .map((candidate) => ({ value: candidate.id, label: candidate.name }))
+  const successorOptions = leaves
+    .filter((candidate) => !outgoing.some((dep) => dep.toTaskId === candidate.id))
+    .map((candidate) => ({ value: candidate.id, label: candidate.name }))
+
+  return (
+    <Stack gap="md">
+      <RelationSection
+        title={t('inspector.relations.predecessors')}
+        emptyLabel={t('inspector.relations.none')}
+        addLabel={t('inspector.relations.addPredecessor')}
+        taskId={taskId}
+        deps={incoming}
+        options={isSummary ? [] : predecessorOptions}
+        makePayload={(otherId) => ({ fromTaskId: otherId, toTaskId: taskId })}
+      />
+      <RelationSection
+        title={t('inspector.relations.successors')}
+        emptyLabel={t('inspector.relations.none')}
+        addLabel={t('inspector.relations.addSuccessor')}
+        taskId={taskId}
+        deps={outgoing}
+        options={isSummary ? [] : successorOptions}
+        makePayload={(otherId) => ({ fromTaskId: taskId, toTaskId: otherId })}
+      />
+    </Stack>
+  )
+}
+
+/** 一段相关性（必要条件 或 从属）：逐条依赖 + 一个「添加」下拉。
+ *  两段共用这一套增删改（改类型 / 改 lag / 删除都走同一份 dispatch），
+ *  段与段的唯一差异是 `title`/`emptyLabel`/`addLabel`/`deps`/`options`/`makePayload`。 */
+function RelationSection({
+  title,
+  emptyLabel,
+  addLabel,
+  taskId,
+  deps,
+  options,
+  makePayload,
+}: {
+  title: string
+  emptyLabel: string
+  addLabel: string
+  taskId: TaskId
+  deps: { id: string; fromTaskId: TaskId; toTaskId: TaskId; type: DependencyType; lag: number }[]
+  options: { value: string; label: string }[]
+  makePayload: (otherId: TaskId) => { fromTaskId: TaskId; toTaskId: TaskId }
+}) {
+  const { t } = useTranslation()
+  const project = useProjectStore((state) => state.project)!
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
-  const related = Object.values(project.dependencies).filter(
-    (dep) => dep.toTaskId === taskId || dep.fromTaskId === taskId,
-  )
-
-  const candidates = useMemo(() => {
-    const alreadyLinked = new Set(
-      Object.values(project.dependencies)
-        .filter((dep) => dep.toTaskId === taskId)
-        .map((dep) => dep.fromTaskId),
-    )
-    return Object.values(project.tasks)
-      .filter(
-        (candidate) =>
-          candidate.id !== taskId &&
-          candidate.childIds.length === 0 &&
-          !alreadyLinked.has(candidate.id),
-      )
-      .map((candidate) => ({ value: candidate.id, label: candidate.name }))
-  }, [project, taskId])
-
   return (
-    <Stack gap="sm">
-      {related.map((dep) => {
-        const isIncoming = dep.toTaskId === taskId
-        const otherId = isIncoming ? dep.fromTaskId : dep.toTaskId
+    <Stack gap={4}>
+      <Text fz="xs" fw={650} c="dimmed">
+        {title}
+      </Text>
+
+      {deps.length === 0 && (
+        <Text fz="xs" c="dimmed" pl="xs">
+          {emptyLabel}
+        </Text>
+      )}
+
+      {deps.map((dep) => {
+        const otherId = dep.toTaskId === taskId ? dep.fromTaskId : dep.toTaskId
         const otherName = project.tasks[otherId]?.name ?? t('inspector.deletedTask')
         return (
           <Group key={dep.id} gap={4} wrap="nowrap">
             <Text fz="xs" truncate style={{ flex: 1 }}>
-              {isIncoming ? '←' : '→'} {otherName}
+              {otherName}
             </Text>
             <Select
               size="xs"
               w={72}
-              aria-label={`${t('inspector.groups.relations')} ${otherName}`}
+              aria-label={`${title} ${otherName}`}
               value={dep.type}
               data={DEPENDENCY_TYPES.map((type) => ({ value: type, label: type }))}
               onChange={(value) =>
@@ -668,18 +733,19 @@ function RelationsGroup({
         )
       })}
 
-      {!isSummary && candidates.length > 0 && (
+      {options.length > 0 && (
         <Select
-          label={t('inspector.relations.addPredecessor')}
+          size="xs"
+          label={addLabel}
           placeholder={t('inspector.relations.selectTask')}
           value={null}
-          data={candidates}
-          onChange={(fromTaskId) => {
-            if (!fromTaskId) return
+          data={options}
+          onChange={(otherId) => {
+            if (!otherId) return
             dispatch({
               type: 'dependency.create',
               label: 'commands.dependency.create',
-              payload: { fromTaskId, toTaskId: taskId, type: 'FS' as DependencyType, lag: 0 },
+              payload: { ...makePayload(otherId), type: 'FS' as DependencyType, lag: 0 },
             })
           }}
         />

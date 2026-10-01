@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -39,14 +39,24 @@ function currentTask() {
  * userEvent.click 会因「元素不可见」拒绝点击，故这里用 fireEvent 直接派发，
  * 且按 `hidden: true` 取（仍在 DOM 但被判定为不可见）的 option。
  * 「能不能看得见」这类真实可见性由 e2e 验收，不在单测范围。
+ *
+ * **必须把候选项限定到被点开的那个下拉里**（Mantine 9 只在展开时把下拉 id 挂到
+ * `aria-controls` 上，借此定位）：相关性组的两个「添加」下拉候选集相同（同一个叶子
+ * 任务在两个方向上都可连），不限定就会命中两个同名 option 而抛错 —— 那不是被测代码的问题。
  */
 async function chooseOption(
   user: ReturnType<typeof userEvent.setup>,
   selectLabel: string,
   optionLabel: string,
 ) {
-  await user.click(screen.getByRole('combobox', { name: selectLabel }))
-  fireEvent.click(screen.getByRole('option', { name: optionLabel, hidden: true }))
+  const combobox = screen.getByRole('combobox', { name: selectLabel })
+  await user.click(combobox)
+  const controlsId = combobox.getAttribute('aria-controls')
+  const dropdown = controlsId ? document.getElementById(controlsId) : null
+  const option = dropdown
+    ? within(dropdown).getByRole('option', { name: optionLabel, hidden: true })
+    : screen.getByRole('option', { name: optionLabel, hidden: true })
+  fireEvent.click(option)
 }
 
 beforeEach(async () => {
@@ -534,6 +544,17 @@ describe('日程安排组', () => {
     expect(screen.getByText(/拆分排期尚未实现/)).toBeInTheDocument()
   })
 
+  it('摘要任务下「延迟」禁用、「优先级」可编辑（不对称是有意的）', () => {
+    useViewStore.setState({ selectedTaskId: parentId })
+    renderInspector()
+
+    // task.setDelay 对 group 是 no-op → 必须禁用，否则是个「点了没反应」的输入框
+    expect(screen.getByLabelText('延迟')).toBeDisabled()
+    // 但 task.setPriority 对摘要**生效**（备注与优先级对摘要同样有意义）→ 绝不能禁用。
+    // 这条断言就是防止下一个人来「统一」这个刻意的对称缺口。
+    expect(screen.getByLabelText('优先级')).not.toBeDisabled()
+  })
+
   it('手动模式下显示手动安排提示', async () => {
     const user = userEvent.setup()
     renderInspector()
@@ -550,7 +571,27 @@ describe('相关性组（Task 2 误删的既有用例）', () => {
     expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
   })
 
-  it('通过下拉建立前置依赖，并显示在依赖列表里', async () => {
+})
+
+// Task 5：相关性重构为「必要条件 / 从属」两段（同一份 Dependency 数据的两个过滤方向）。
+// 下面这些用例替换了上面那 5 条基于「←/→ 单列表」的旧用例 —— 交互形态变了（两段 + 两个
+// 添加下拉），但覆盖的**契约**一条不少：建边（两个方向）/ 改类型 / 改 lag / 删除 /
+// 候选过滤（同向才占用候选）/ 方向不搞反。断言强度只增不减。
+describe('相关性组（必要条件 / 从属两段）', () => {
+  it('分成「必要条件」与「从属」两段，各段有添加下拉', () => {
+    renderInspector()
+    expect(screen.getByText('必要条件（挡在我前面的）')).toBeInTheDocument()
+    expect(screen.getByText('从属（我在挡的）')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '添加必要条件' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '添加从属' })).toBeInTheDocument()
+  })
+
+  it('两段在无依赖时都显示「无」', () => {
+    renderInspector()
+    expect(screen.getAllByText('无')).toHaveLength(2)
+  })
+
+  it('在「必要条件」里添加：候选 → 本任务，且只落在「必要条件」段', async () => {
     const user = userEvent.setup()
     renderInspector()
 
@@ -559,18 +600,65 @@ describe('相关性组（Task 2 误删的既有用例）', () => {
     const deps = Object.values(useProjectStore.getState().project!.dependencies)
     expect(deps).toHaveLength(1)
     expect(deps[0]).toMatchObject({ fromTaskId: siblingId, toTaskId: taskId, type: 'FS', lag: 0 })
-    // 前置依赖在列表里以「←」标记
-    expect(screen.getByText(/←\s*写代码/)).toBeInTheDocument()
+
+    // 方向不搞反：这条前驱渲染在「必要条件」段，而**不在**「从属」段。
+    // 只断言「出现在列表里」是恒真的 —— 两段都会把依赖名渲染出来；必须限定到具体那一段。
+    const predSection = screen.getByText('必要条件（挡在我前面的）').parentElement!
+    const succSection = screen.getByText('从属（我在挡的）').parentElement!
+    expect(within(predSection).getByText('写代码')).toBeInTheDocument()
+    expect(within(succSection).queryByText('写代码')).not.toBeInTheDocument()
   })
 
-  it('改依赖类型与 lag 会更新 store，删除后消失', async () => {
+  it('在「从属」里添加：本任务 → 候选，且只落在「从属」段', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await chooseOption(user, '添加从属', '写代码')
+
+    const deps = Object.values(useProjectStore.getState().project!.dependencies)
+    expect(deps).toHaveLength(1)
+    expect(deps[0]).toMatchObject({ fromTaskId: taskId, toTaskId: siblingId, type: 'FS', lag: 0 })
+
+    // 与上一条镜像：同一条数据、相反方向，渲染段必须跟着反过来（方向搞反就红）
+    const predSection = screen.getByText('必要条件（挡在我前面的）').parentElement!
+    const succSection = screen.getByText('从属（我在挡的）').parentElement!
+    expect(within(succSection).getByText('写代码')).toBeInTheDocument()
+    expect(within(predSection).queryByText('写代码')).not.toBeInTheDocument()
+  })
+
+  it('已在某候选连过前驱时，它从「必要条件」候选里消失（另一段不受影响）', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(siblingId, taskId, 'FS', 0)
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+    renderInspector()
+
+    expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
+    // 从属段的候选仍是「写代码」——那是一条合法的新边
+    expect(screen.getByRole('combobox', { name: '添加从属' })).toBeInTheDocument()
+  })
+
+  it('反向边不占用候选：「本任务 → 写代码」不影响「必要条件」的候选', () => {
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(taskId, siblingId, 'FS', 0) // 出边：本任务 → 写代码
+    useProjectStore.setState({
+      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
+    })
+    renderInspector()
+
+    // 同向才占候选：出边不该把「写代码」从前驱候选里抹掉（它仍是一条合法的入边）
+    expect(screen.getByRole('combobox', { name: '添加必要条件' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '写代码', hidden: true })).toBeInTheDocument()
+  })
+
+  it('行内改类型与 lag、删除依赖都能生效', async () => {
     const user = userEvent.setup()
     renderInspector()
 
     await chooseOption(user, '添加必要条件', '写代码')
-    expect(screen.getByText(/←\s*写代码/)).toBeInTheDocument()
 
-    await chooseOption(user, '相关性 写代码', 'SS')
+    await chooseOption(user, '必要条件（挡在我前面的） 写代码', 'SS')
 
     const lagInput = screen.getByLabelText('延迟 写代码')
     await user.clear(lagInput)
@@ -581,46 +669,15 @@ describe('相关性组（Task 2 误删的既有用例）', () => {
     expect(dep.lag).toBe(2)
 
     await user.click(screen.getByLabelText('删除依赖 写代码'))
-
     expect(Object.values(useProjectStore.getState().project!.dependencies)).toHaveLength(0)
-    expect(screen.queryByText(/←\s*写代码/)).not.toBeInTheDocument()
+    // 删除后两段都回到空态（既有用例原本也断言了「列表里那条消失」，这里以空态文案承接）
+    expect(screen.getAllByText('无')).toHaveLength(2)
   })
 
-  it('依赖列表面向后续任务时用「→」标记', () => {
-    const project = useProjectStore.getState().project!
-    const dep = createDependency(taskId, siblingId, 'FS', 0)
-    useProjectStore.setState({
-      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
-    })
-
+  it('摘要任务不渲染添加下拉（日期由子任务汇总）', () => {
+    useViewStore.setState({ selectedTaskId: parentId })
     renderInspector()
-
-    expect(screen.getByText(/→\s*写代码/)).toBeInTheDocument()
-  })
-
-  it('已经连过的前置不再出现在候选里', () => {
-    const project = useProjectStore.getState().project!
-    const dep = createDependency(siblingId, taskId, 'FS', 0) // 写代码 → 写文档
-    useProjectStore.setState({
-      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
-    })
-
-    renderInspector()
-
-    // 唯一的叶子候选（写代码）已经连过 → 下拉整体消失
     expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
-  })
-
-  it('只有反向依赖时候选仍然保留（那是一条合法的新边）', () => {
-    const project = useProjectStore.getState().project!
-    const dep = createDependency(taskId, siblingId, 'FS', 0) // 写文档 → 写代码
-    useProjectStore.setState({
-      project: { ...project, dependencies: { ...project.dependencies, [dep.id]: dep } },
-    })
-
-    renderInspector()
-
-    expect(screen.getByRole('combobox', { name: '添加必要条件' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '写代码', hidden: true })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '添加从属' })).not.toBeInTheDocument()
   })
 })
