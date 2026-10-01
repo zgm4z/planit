@@ -9,6 +9,8 @@ import {
   snapToWorkday,
   addWorkdays,
   workdaysBetween,
+  taskFinish,
+  taskStart,
 } from './workdays'
 
 // 2026-03-06 是周五，03-07 周六，03-08 周日，03-09 周一
@@ -100,5 +102,35 @@ describe('workdaysBetween', () => {
   })
   it('反向区间返回负数', () => {
     expect(workdaysBetween('2026-03-09', '2026-03-06', cal)).toBe(-1)
+  })
+})
+
+describe('taskFinish / taskStart', () => {
+  // 含首尾："3 个工作日" = 起始日 + 后 2 个工作日
+  it('taskFinish：工期含起始日，3 天从周五落到下周二', () => {
+    // 03-06(五) → 03-06, 03-09(一), 03-10(二)
+    expect(taskFinish('2026-03-06', 3, cal)).toBe('2026-03-10')
+  })
+
+  it('taskFinish：工期 1 天即当天', () => {
+    expect(taskFinish('2026-03-06', 1, cal)).toBe('2026-03-06')
+  })
+
+  it('taskFinish：工期为 0 的里程碑返回吸附到的工作日', () => {
+    expect(taskFinish('2026-03-07', 0, cal)).toBe('2026-03-09')
+  })
+
+  it('taskStart：从结束日反推，与 taskFinish 互为逆运算', () => {
+    expect(taskStart('2026-03-10', 3, cal)).toBe('2026-03-06')
+    expect(taskStart(taskFinish('2026-03-06', 5, cal), 5, cal)).toBe('2026-03-06')
+  })
+
+  it('taskStart：工期为 0 时返回吸附到的工作日', () => {
+    expect(taskStart('2026-03-07', 0, cal)).toBe('2026-03-09')
+  })
+
+  it('跨周末时工期按工作日计算而非自然日', () => {
+    // 03-06(五) + 3 个工作日 = 03-10(二)，自然日只跨了 4 天
+    expect(taskFinish('2026-03-06', 3, cal)).toBe('2026-03-10')
   })
 })
