@@ -66,6 +66,8 @@ describe('StatusBar', () => {
         costs: {},
         resourceTotals: {},
         leveling: { delays: {}, unresolved: [] },
+        earnedValues: {},
+        baselineDiffs: {},
       },
       error: null,
     })

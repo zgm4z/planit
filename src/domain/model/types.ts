@@ -315,4 +315,11 @@ export interface ScheduleResult {
    * **UI 只读这里** —— 负载与超载的判定在 `scheduler/leveling.ts`，不在 UI 重算。
    */
   leveling: LevelingResult
+  /**
+   * v1.0：每任务的挣值（BAC / EV / PV / SV）。**UI 只读这里** ——
+   * `BAC × progress/100` 与计划完成比例的计算只在 `earnedValue.ts`，不在 UI 重算。
+   */
+  earnedValues: Record<TaskId, EarnedValue>
+  /** v1.0：每任务相对活动基线的排期差异（工作日口径）。**UI 只读这里** */
+  baselineDiffs: Record<TaskId, BaselineComparison>
 }
