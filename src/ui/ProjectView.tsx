@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import { flattenVisibleRows } from './flattenRows'
 import { DependencyLayer } from './DependencyLayer'
 import { GanttRows } from './GanttRows'
+import { Inspector } from './Inspector'
 import { OutlineTree } from './OutlineTree'
 import { TimeRuler } from './TimeRuler'
 import { dragCommitCommands } from './barDrag'
@@ -240,7 +241,7 @@ export function ProjectView() {
           </div>
         </div>
 
-        {/* Inspector 在 Task 19 接入 */}
+        <Inspector />
       </div>
 
       {/* 拖拽中的幽灵线：固定定位，坐标为视口坐标。
