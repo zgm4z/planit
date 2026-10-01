@@ -1,17 +1,16 @@
 import type { Calendar, ComputedSchedule, Task } from '../domain/model/types'
 import { addWorkdays } from '../domain/calendar/workdays'
-import { barRect, type TimelineScale } from './timeline'
+import {
+  BAR_HEIGHT,
+  MILESTONE_SIZE,
+  barRect,
+  milestoneRect,
+  type TimelineScale,
+} from './timeline'
 import { ROW_HEIGHT } from './useSharedVirtualizer'
 import styles from './styles/GanttPane.module.scss'
 
 export type BarDragMode = 'move' | 'resizeStart' | 'resizeEnd'
-
-/**
- * 任务条高度与里程碑边长。DependencyLayer（Task 17）算连线端点时必须用同一组常量，
- * 否则连线会落在任务条上下缘之外 —— 从这里 import，不要再写一份字面量。
- */
-export const BAR_HEIGHT = 16
-export const MILESTONE_SIZE = 12
 
 interface TaskBarProps {
   task: Task
@@ -45,10 +44,21 @@ export function TaskBar({
     : schedule.earlyFinish
 
   if (task.isMilestone) {
+    // 几何全部来自 milestoneRect()（外接盒），DependencyLayer 用的是同一个函数
+    const rect = milestoneRect(scale, displayStart)
+
     return (
       <div
-        className={`${styles.milestone} ${schedule.isCritical ? styles.milestoneCritical : ''}`}
-        style={{ left: scale.xOf(displayStart), top: (ROW_HEIGHT - MILESTONE_SIZE) / 2 }}
+        className={`${styles.milestone} ${schedule.isCritical ? styles.milestoneCritical : ''} ${
+          hasConflict ? styles.milestoneConflict : ''
+        }`}
+        style={{
+          // AABB 比方块大 √2 倍，把方块中心对齐到 AABB 中心
+          left: rect.x + (rect.width - MILESTONE_SIZE) / 2,
+          top: rect.y + (rect.height - MILESTONE_SIZE) / 2,
+          width: MILESTONE_SIZE,
+          height: MILESTONE_SIZE,
+        }}
         title={`${task.name} · ${displayStart}`}
         data-task-id={task.id}
         data-testid={`task-milestone-${task.id}`}
@@ -62,7 +72,10 @@ export function TaskBar({
 
   return (
     <div
-      className={`${styles.bar} ${schedule.isCritical && !hasConflict ? styles.barCritical : ''} ${
+      // 关键与冲突可以并存：barConflict 用的是 outline，与 background 不冲突。
+      // （isCritical 定义为 slack === 0，而冲突要求 slack < 0，二者互斥，
+      //   但这里不为互斥写守卫 —— 将来放宽 isCritical 时守卫会静默吞掉关键色。）
+      className={`${styles.bar} ${schedule.isCritical ? styles.barCritical : ''} ${
         hasConflict ? styles.barConflict : ''
       }`}
       style={{ left: x, top: (ROW_HEIGHT - BAR_HEIGHT) / 2, width, height: BAR_HEIGHT }}

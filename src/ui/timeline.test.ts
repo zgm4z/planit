@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { createScale, barRect, MIN_BAR_WIDTH_RATIO } from './timeline'
+import {
+  createScale,
+  barRect,
+  milestoneRect,
+  MIN_BAR_WIDTH_RATIO,
+  MILESTONE_SIZE,
+} from './timeline'
+import { ROW_HEIGHT } from './useSharedVirtualizer'
 
 describe('createScale', () => {
   it('xOf 把日期映射为距起始日的像素偏移', () => {
@@ -55,5 +62,31 @@ describe('barRect', () => {
     const month = createScale('2026-03-02', 4)
     expect(barRect(month, '2026-03-02', '2026-03-02').width).toBe(4)
     expect(MIN_BAR_WIDTH_RATIO).toBe(0.6)
+  })
+})
+
+describe('milestoneRect', () => {
+  const scale = createScale('2026-03-02', 30)
+
+  it('外接盒是边长的 √2 倍（45° 旋转）', () => {
+    const rect = milestoneRect(scale, '2026-03-04')
+    expect(rect.width).toBeCloseTo(MILESTONE_SIZE * Math.SQRT2, 6)
+    expect(rect.height).toBeCloseTo(MILESTONE_SIZE * Math.SQRT2, 6)
+    expect(rect.width).toBeCloseTo(16.9706, 3)
+  })
+
+  it('左上角相对 xOf 向左偏移 MILESTONE_SIZE/2 - MILESTONE_SIZE·√2/2（≈ -2.485）', () => {
+    // 2026-03-04 的 xOf = 60 → 57.5147
+    expect(milestoneRect(scale, '2026-03-04').x).toBeCloseTo(57.5147, 3)
+  })
+
+  it('菱形中心 = xOf + 半个边长 —— 依赖端点靠这条不变量对齐', () => {
+    const rect = milestoneRect(scale, '2026-03-04')
+    expect(rect.x + rect.width / 2).toBeCloseTo(scale.xOf('2026-03-04') + MILESTONE_SIZE / 2, 6)
+  })
+
+  it('垂直方向在行内居中', () => {
+    const rect = milestoneRect(scale, '2026-03-04')
+    expect(rect.y).toBeCloseTo((ROW_HEIGHT - MILESTONE_SIZE * Math.SQRT2) / 2, 6)
   })
 })

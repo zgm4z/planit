@@ -1,6 +1,7 @@
 import { differenceInCalendarDays } from 'date-fns'
 import type { DateStr } from '../domain/model/types'
 import { parseDate, addDays } from '../domain/calendar/workdays'
+import { ROW_HEIGHT } from './useSharedVirtualizer'
 
 /**
  * 日期与像素之间的映射。
@@ -38,6 +39,20 @@ export function createScale(startDate: DateStr, dayWidth: number): TimelineScale
 /** 任务条最小宽度占一天的比例 —— 缩放很小或工期极短时，条不能细到看不见 */
 export const MIN_BAR_WIDTH_RATIO = 0.6
 
+/** 任务条高度 */
+export const BAR_HEIGHT = 16
+
+/** 里程碑菱形的边长（旋转前那个方块的边长）。渲染与几何都读它，不要再写字面量 */
+export const MILESTONE_SIZE = 12
+
+/** 轴对齐矩形 */
+export interface Rect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface BarRect {
   x: number
   width: number
@@ -53,5 +68,26 @@ export function barRect(scale: TimelineScale, start: DateStr, finish: DateStr): 
   return {
     x: scale.xOf(start),
     width: Math.max(scale.dayWidth * MIN_BAR_WIDTH_RATIO, scale.widthOf(start, finish)),
+  }
+}
+
+/**
+ * 里程碑菱形的外接矩形（AABB）。
+ *
+ * 菱形是 MILESTONE_SIZE 见方的方块绕中心 `rotate(45deg)`（旋转在 SCSS 里），
+ * 所以它的包围盒是方块的 √2 倍，且左上角相对 xOf 向左偏移 ——
+ * 直接拿 xOf 当连线端点会落到菱形右侧约 32px 处。
+ *
+ * 垂直方向在行内居中；`y` 即 AABB 顶边，不是方块顶边。
+ */
+export function milestoneRect(scale: TimelineScale, date: DateStr): Rect {
+  const spread = MILESTONE_SIZE * Math.SQRT2
+
+  return {
+    // 方块中心保持在「xOf + 半个边长」，AABB 由该中心向两侧各扩 √2/2
+    x: scale.xOf(date) + MILESTONE_SIZE / 2 - spread / 2,
+    y: (ROW_HEIGHT - spread) / 2,
+    width: spread,
+    height: spread,
   }
 }
