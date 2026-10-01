@@ -74,7 +74,14 @@ export function OutlineTree({
                 ) : column.key === 'kind' ? (
                   <KindCell task={task} />
                 ) : column.key === 'note' ? (
-                  <NoteCell task={task} />
+                  // key 是**为正确性**加的，不是为性能：外层行容器用 `key={item.key}`
+                  // （= 行**下标**），rows 位移（折叠/展开、增删/移动、撤销等不经 blur
+                  // 的变化）时 React 会复用该下标处的组件实例。若此时正处在编辑态，
+                  // 复用会让 `editing` 仍为 true、`draft` 仍是**旧任务**的文字，
+                  // 而 `task` prop 已是新任务 —— 失焦就会用新任务的 id 提交旧任务的文字
+                  // （真实的写错数据路径）。挂 `key={task.id}` 让底层任务切换时强制重挂载，
+                  // 从而重置 draft / editing。
+                  <NoteCell key={task.id} task={task} />
                 ) : (
                   <CellText value={getOutlineCellValue(column.key, { task, schedule, project })} />
                 )}

@@ -229,4 +229,55 @@ describe('OutlineTree', () => {
 
     expect(useProjectStore.getState().project!.tasks[childId].note).toBe('')
   })
+
+  it('备注单元格按 task.id 挂 key：行位不变、底层任务换 id 时退出编辑态（草稿不跨任务泄漏）', async () => {
+    const user = userEvent.setup()
+    const columns = OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'note')
+
+    const tree = (p: Project) => {
+      const rows = flattenVisibleRows(p, new Set())
+      return (
+        <MantineProvider>
+          <OutlineTree
+            project={p}
+            rows={rows}
+            virtualItems={virtualItems(rows.length)}
+            schedules={{}}
+            columns={columns}
+            selectedTaskId={null}
+            onSelect={() => {}}
+            onToggleCollapse={() => {}}
+          />
+        </MantineProvider>
+      )
+    }
+
+    // 第二份 project：结构与第一份**同形**（一个 group 根 + 一个子任务，仍是 2 行），
+    // 但每个任务的 id 都不同 —— 这样行**下标**不变、底层任务却换了。
+    const next = createProject('测试2', '2026-03-02')
+    const nextParent = createTask({ name: '阶段二', duration: 2 })
+    const nextChild = createTask({ name: '另一个', duration: 3 })
+    next.tasks[nextParent.id] = nextParent
+    next.tasks[nextChild.id] = { ...nextChild, parentId: nextParent.id }
+    next.tasks[nextParent.id].childIds = [nextChild.id]
+    next.tasks[nextParent.id].kind = 'group'
+    next.rootIds = [nextParent.id]
+
+    const { rerender } = render(tree(project))
+
+    // 下标 0 处（parentId 那一行）进入编辑态，留下一条旧任务的草稿。
+    await user.dblClick(screen.getByTestId(`outline-note-${parentId}`))
+    await user.type(screen.getByTestId(`outline-note-input-${parentId}`), '旧任务的草稿')
+    expect(screen.getByTestId(`outline-note-input-${parentId}`)).toHaveValue('旧任务的草稿')
+
+    // 行容器用 `key={item.key}`（= 行下标），所以这次 rerender 会**复用**下标 0 处的
+    // 组件实例。若 NoteCell 没有 `key={task.id}`，编辑态与草稿会跟着实例一起被复用
+    // —— 于是下标 0 处仍是「编辑中」、draft 仍是「旧任务的草稿」，只是 task 变成了
+    // nextParent；此时失焦会用 nextParent.id 提交旧任务的文字（写错数据）。
+    rerender(tree(next))
+
+    // 有 key={task.id} 时 NoteCell 被强制重挂载：退出编辑态，只剩只读的备注单元格。
+    expect(screen.queryByTestId(`outline-note-input-${nextParent.id}`)).not.toBeInTheDocument()
+    expect(screen.getByTestId(`outline-note-${nextParent.id}`)).toBeInTheDocument()
+  })
 })
