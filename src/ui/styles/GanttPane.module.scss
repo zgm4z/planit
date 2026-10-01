@@ -54,6 +54,32 @@
   outline-offset: 1px;
 }
 
+// 拖拽中的影子条：半透明 + 虚线描边，与已提交的真实排期在观感上区分开。
+// 定义在 .barConflict 之后 —— 二者都用 outline，影子态应当压过冲突描边。
+.barGhost,
+.milestoneGhost {
+  opacity: 0.55;
+  outline: 2px dashed var(--planit-accent-strong);
+  outline-offset: 2px;
+  cursor: grabbing;
+}
+
+// 拖拽中的浮动提示：贴在影子条下方，显示预览的起止与工期
+.dragHint {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 10;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--planit-text);
+  color: var(--planit-bg-app);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .barProgress {
   height: 100%;
   // 与 .bar 的圆角一致。少了它，宽度接近 100% 时进度层的方角会顶到条的圆角外侧

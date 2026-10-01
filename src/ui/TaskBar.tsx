@@ -51,7 +51,7 @@ export function TaskBar({
       <div
         className={`${styles.milestone} ${schedule.isCritical ? styles.milestoneCritical : ''} ${
           hasConflict ? styles.milestoneConflict : ''
-        }`}
+        } ${override ? styles.milestoneGhost : ''}`}
         style={{
           // AABB 比方块大 √2 倍，把方块中心对齐到 AABB 中心
           left: rect.x + (rect.width - MILESTONE_SIZE) / 2,
@@ -77,7 +77,7 @@ export function TaskBar({
       //   但这里不为互斥写守卫 —— 将来放宽 isCritical 时守卫会静默吞掉关键色。）
       className={`${styles.bar} ${schedule.isCritical ? styles.barCritical : ''} ${
         hasConflict ? styles.barConflict : ''
-      }`}
+      } ${override ? styles.barGhost : ''}`}
       style={{ left: x, top: (ROW_HEIGHT - BAR_HEIGHT) / 2, width, height: BAR_HEIGHT }}
       title={`${task.name}\n${displayStart} → ${displayFinish}`}
       data-task-id={task.id}
@@ -89,6 +89,12 @@ export function TaskBar({
         style={{ width: `${task.progress}%` }}
         data-testid={`task-bar-progress-${task.id}`}
       />
+
+      {override && (
+        <div className={styles.dragHint} data-testid={`drag-hint-${task.id}`}>
+          {`${displayStart} → ${displayFinish} · ${displayDuration}d`}
+        </div>
+      )}
 
       <div
         className={`${styles.barHandle} ${styles.barHandleLeft}`}

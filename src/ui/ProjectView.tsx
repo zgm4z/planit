@@ -8,8 +8,10 @@ import { OutlineTree } from './OutlineTree'
 import { TimeRuler } from './TimeRuler'
 import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
 import { Toolbar } from './Toolbar'
+import { useBarDrag } from './useBarDrag'
 import { useDependencyLink } from './useDependencyLink'
 import { useSharedVirtualizer, ROW_HEIGHT } from './useSharedVirtualizer'
+import { createCalendar } from '../domain/model/factories'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore } from '../store/viewStore'
@@ -125,6 +127,47 @@ export function ProjectView() {
 
   const link = useDependencyLink(handleLink)
 
+  // 日历与 scale 一样要在 hook 里无条件取得。ProjectView 实际只在 store 里
+  // 有 project 时挂载（见 App.tsx），`?? createCalendar()` 只是让类型收窄、
+  // 并保证 hook 调用次数恒定。
+  const calendar = useMemo(
+    () => project?.calendars[project.calendarId] ?? createCalendar(),
+    [project],
+  )
+
+  // 拖拽期间只更新影子预览；松手才 dispatch 命令 ——
+  // 因此拖拽过程中 undoStack 长度必须保持不变。
+  const drag = useBarDrag({
+    calendar,
+    dayWidth,
+    onCommit: (taskId, mode, preview) => {
+      if (mode === 'move') {
+        dispatch({
+          type: 'task.moveTo',
+          label: 'commands.task.moveTo',
+          payload: { taskId, startDate: preview.startDate },
+        })
+        return
+      }
+
+      dispatch({
+        type: 'task.setDuration',
+        label: 'commands.task.setDuration',
+        payload: { taskId, duration: preview.duration },
+        coalesceKey: `task.setDuration:${taskId}`,
+      })
+
+      // resizeStart 同时改变了开始日期，需要额外提交一次
+      if (mode === 'resizeStart') {
+        dispatch({
+          type: 'task.moveTo',
+          label: 'commands.task.moveTo',
+          payload: { taskId, startDate: preview.startDate },
+        })
+      }
+    },
+  })
+
   if (!project) return null
 
   return (
@@ -186,14 +229,21 @@ export function ProjectView() {
 
               <GanttRows
                 project={project}
-                calendar={project.calendars[project.calendarId]}
+                calendar={calendar}
                 rows={rows}
                 virtualItems={virtualItems}
                 schedules={schedulesResult.schedules}
                 conflictIds={conflictIds}
                 scale={scale}
-                dragOverride={null}
-                onBarPointerDown={() => {}}
+                dragOverride={drag.preview}
+                onBarPointerDown={(event, taskId, mode) => {
+                  // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，
+                  // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
+                  selectTask(taskId)
+                  const schedule = schedulesResult.schedules[taskId]
+                  if (!schedule) return
+                  drag.begin(event, taskId, mode, schedule.earlyStart, project.tasks[taskId].duration)
+                }}
                 onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
               />
 
