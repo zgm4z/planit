@@ -61,4 +61,10 @@ describe('parsePersistedProject', () => {
   it('非对象输入被拒绝', () => {
     expect(() => parsePersistedProject(null)).toThrow(/不是一个对象/)
   })
+
+  it('项目自带的 schemaVersion 不匹配时也拒绝载入', () => {
+    const project = { ...createProject('x', '2026-03-02'), schemaVersion: 999 }
+    expect(() => parsePersistedProject({ schemaVersion: SCHEMA_VERSION, project }))
+      .toThrow(/项目 schema 版本不匹配/)
+  })
 })

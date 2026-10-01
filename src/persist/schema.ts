@@ -1,7 +1,8 @@
 import type { Project } from '../domain/model/types'
+import { SCHEMA_VERSION } from '../domain/model/factories'
 
-/** 与 factories.SCHEMA_VERSION 保持一致。载入时严格比对，不匹配就拒绝 */
-export const SCHEMA_VERSION = 1
+// 单一来源：从 domain 层重导出，避免两处版本号各自漂移
+export { SCHEMA_VERSION }
 
 export interface PersistedProject {
   schemaVersion: number
@@ -29,6 +30,12 @@ export function parsePersistedProject(raw: unknown): Project {
 
   if (!candidate.project || typeof candidate.project !== 'object') {
     throw new Error('存档缺少 project 字段')
+  }
+
+  if (candidate.project.schemaVersion !== SCHEMA_VERSION) {
+    throw new Error(
+      `项目 schema 版本不匹配（项目 v${String(candidate.project.schemaVersion)}，当前 v${SCHEMA_VERSION}），已拒绝载入以免损坏数据`,
+    )
   }
 
   return candidate.project

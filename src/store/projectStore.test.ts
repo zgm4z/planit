@@ -39,6 +39,20 @@ describe('projectStore.dispatch', () => {
     expect(state().undoStack).toHaveLength(0)
   })
 
+  it('dispatch 会刷新 updatedAt，反映最后一次修改时间', async () => {
+    const before = state().project!.updatedAt
+
+    await new Promise((r) => setTimeout(r, 5))
+    seedTask('A')
+    const afterFirst = state().project!.updatedAt
+    expect(afterFirst).not.toBe(before)
+
+    await new Promise((r) => setTimeout(r, 5))
+    seedTask('B')
+    const afterSecond = state().project!.updatedAt
+    expect(afterSecond).not.toBe(afterFirst)
+  })
+
   it('命令执行失败时写入 lastError 且 project 保持不变', () => {
     const a = seedTask('A')
     const b = seedTask('B')

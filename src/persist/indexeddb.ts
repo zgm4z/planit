@@ -36,10 +36,25 @@ function withStore<T>(
       new Promise<T>((resolve, reject) => {
         const tx = db.transaction(STORE, mode)
         const request = run(tx.objectStore(STORE))
-        request.onsuccess = () => resolve(request.result)
+        let result: T
+
+        request.onsuccess = () => {
+          result = request.result
+          // 读事务没有后续提交动作，可以在 onsuccess 直接兑现
+          if (mode === 'readonly') resolve(result)
+        }
         request.onerror = () => reject(request.error ?? new Error('IndexedDB 操作失败'))
-        tx.oncomplete = () => db.close()
-        tx.onabort = () => reject(tx.error ?? new Error('IndexedDB 事务被中止'))
+
+        // 写事务必须等提交完成 —— onsuccess 早于 oncomplete，
+        // 若在提交阶段 abort（如配额超限），提前 resolve 会让失败被吞掉
+        tx.oncomplete = () => {
+          db.close()
+          if (mode !== 'readonly') resolve(result)
+        }
+        tx.onabort = () => {
+          db.close()
+          reject(tx.error ?? new Error('IndexedDB 事务被中止'))
+        }
       }),
   )
 }

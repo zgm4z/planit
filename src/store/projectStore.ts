@@ -48,7 +48,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (patches.length === 0) return
 
       set({
-        project: next,
+        // updatedAt 在 set 时用展开叠加，而非写进 handler ——
+        // 这样它不会出现在 patches 里，也就不会污染撤销栈。
+        project: { ...next, updatedAt: new Date().toISOString() },
         undoStack: mergeIntoStack(undoStack, { command, patches, inversePatches }),
         redoStack: [],
         lastError: null,
