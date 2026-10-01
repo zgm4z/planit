@@ -27,14 +27,15 @@
     "collapse": "Collapse subtasks",
     "cell": {
       "days": "{{count}} d",
-      "percent": "{{value}}%"
+      "percent": "{{value}}%",
+      "effort": "{{count}} person-days",
+      "cost": "{{amount}}"
     },
     "menu": {
       "title": "Columns",
       "titleLocked": "Title is always shown and cannot be hidden"
     },
     "disabledReason": {
-      "resources": "Requires resources & effort (v0.5)",
       "baseline": "Requires baselines & earned value (v1.0)"
     },
     "columns": {

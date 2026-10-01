@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { ComputedSchedule, Project, Task, TaskId } from '../domain/model/types'
+import type { ComputedSchedule, Project, Task, TaskCosts, TaskId } from '../domain/model/types'
 import type { FlatRow } from './flattenRows'
 import {
   cellFlex,
@@ -19,6 +19,9 @@ interface OutlineTreeProps {
   /** 与甘特侧共享的虚拟项 —— 两侧消费同一份，行才对得齐 */
   virtualItems: VirtualItem[]
   schedules: Record<TaskId, ComputedSchedule>
+  /** v0.5：引擎派生的投入与成本 —— UI 只读，不重算 */
+  efforts: Record<TaskId, number>
+  costs: Record<TaskId, TaskCosts>
   /** 要渲染的列，**调用方保证已按注册表顺序排好** */
   columns: OutlineColumn[]
   selectedTaskId: TaskId | null
@@ -35,6 +38,8 @@ export function OutlineTree({
   rows,
   virtualItems,
   schedules,
+  efforts,
+  costs,
   columns,
   selectedTaskId,
   onSelect,
@@ -83,7 +88,9 @@ export function OutlineTree({
                   // 从而重置 draft / editing。
                   <NoteCell key={task.id} task={task} />
                 ) : (
-                  <CellText value={getOutlineCellValue(column.key, { task, schedule, project })} />
+                  <CellText
+                    value={getOutlineCellValue(column.key, { task, schedule, project, efforts, costs })}
+                  />
                 )}
               </div>
             ))}
@@ -223,6 +230,10 @@ function CellText({ value }: { value: CellValue }) {
       return <>{t('outline.cell.days', { count: value.count })}</>
     case 'percent':
       return <>{t('outline.cell.percent', { value: value.value })}</>
+    case 'effort':
+      return <>{t('outline.cell.effort', { count: value.count })}</>
+    case 'cost':
+      return <>{t('outline.cell.cost', { amount: value.amount })}</>
     case 'text':
       return <>{value.text}</>
     case 'empty':

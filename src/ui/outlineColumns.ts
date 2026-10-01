@@ -1,4 +1,4 @@
-import type { ComputedSchedule, DateStr, Project, Task, TaskKind } from '../domain/model/types'
+import type { ComputedSchedule, DateStr, Project, Task, TaskCosts, TaskId, TaskKind } from '../domain/model/types'
 
 /**
  * 列的**标识**：可序列化，进 localStorage 的就是这一层。
@@ -19,16 +19,14 @@ export type OutlineColumnKey =
   | 'progress'
   | 'totalSlack'
   | 'freeSlack'
-  // 显示但禁用（依赖未实现的功能）—— 16 个
-  //
-  // 注意 `assignees` 在这里，而不是上面：spec §4.1 把它列进「本版可用」，
-  // 但 §4.2 说它「本版留空占位（v0.5 填数据）」—— 没有真实数据来源，
-  // 按 ROADMAP 的分批原则应当「显示但禁用」。见计划开头的偏差 5。
+  // v0.5 解禁：这 5 列有了真实数据来源（项目的 assignments 反查、引擎的 efforts / costs）
+  // 与 v1.0 的基线与挣值列区分开 —— 后 11 个仍是「显示但禁用」。
   | 'assignees'
   | 'effort'
   | 'taskCost'
   | 'resourceCost'
   | 'totalCost'
+  // 显示但禁用（依赖 v1.0 的基线与挣值功能）—— 11 个
   | 'baselineStart'
   | 'baselineFinish'
   | 'startVariance'
@@ -55,8 +53,6 @@ export interface OutlineColumn {
   flex?: boolean
 }
 
-/** 依赖 v0.5 的资源与工作量功能的列 */
-const RESOURCES_REASON = 'outline.disabledReason.resources'
 /** 依赖 v1.0 的基线与挣值功能的列 */
 const BASELINE_REASON = 'outline.disabledReason.baseline'
 
@@ -82,12 +78,12 @@ export const OUTLINE_COLUMNS: readonly OutlineColumn[] = [
   { key: 'totalSlack', width: 90, labelKey: 'outline.columns.totalSlack', enabled: true },
   { key: 'freeSlack', width: 90, labelKey: 'outline.columns.freeSlack', enabled: true },
 
-  // assignees 与成本类同组：都是「数据要等 v0.5 的资源与分配落地」才有的列
-  { key: 'assignees', width: 120, labelKey: 'outline.columns.assignees', enabled: false, disabledReasonKey: RESOURCES_REASON },
-  { key: 'effort', width: 100, labelKey: 'outline.columns.effort', enabled: false, disabledReasonKey: RESOURCES_REASON },
-  { key: 'taskCost', width: 100, labelKey: 'outline.columns.taskCost', enabled: false, disabledReasonKey: RESOURCES_REASON },
-  { key: 'resourceCost', width: 100, labelKey: 'outline.columns.resourceCost', enabled: false, disabledReasonKey: RESOURCES_REASON },
-  { key: 'totalCost', width: 100, labelKey: 'outline.columns.totalCost', enabled: false, disabledReasonKey: RESOURCES_REASON },
+  // v0.5：以下 5 列有了真实数据来源（引擎的 efforts / costs 与项目的 assignments）
+  { key: 'assignees', width: 120, labelKey: 'outline.columns.assignees', enabled: true },
+  { key: 'effort', width: 100, labelKey: 'outline.columns.effort', enabled: true },
+  { key: 'taskCost', width: 100, labelKey: 'outline.columns.taskCost', enabled: true },
+  { key: 'resourceCost', width: 100, labelKey: 'outline.columns.resourceCost', enabled: true },
+  { key: 'totalCost', width: 100, labelKey: 'outline.columns.totalCost', enabled: true },
 
   { key: 'baselineStart', width: 110, labelKey: 'outline.columns.baselineStart', enabled: false, disabledReasonKey: BASELINE_REASON },
   { key: 'baselineFinish', width: 110, labelKey: 'outline.columns.baselineFinish', enabled: false, disabledReasonKey: BASELINE_REASON },
@@ -185,6 +181,10 @@ export type CellValue =
   | { type: 'text'; text: string }
   | { type: 'days'; count: number }
   | { type: 'percent'; value: number }
+  /** v0.5：投入（人·工作日） */
+  | { type: 'effort'; count: number }
+  /** v0.5：成本金额。货币是资源级属性，在资源面板展示，这里只给数字 */
+  | { type: 'cost'; amount: number }
   | { type: 'empty' }
 
 export interface ColumnCellContext {
@@ -197,9 +197,20 @@ export interface ColumnCellContext {
    * （如跨项目依赖）时再让它派上用场。
    */
   project?: Project
+  /** v0.5：引擎派生的投入（人·工作日）。UI 只读，不重算 */
+  efforts?: Record<TaskId, number>
+  /** v0.5：引擎派生的成本拆解。UI 只读，不重算 */
+  costs?: Record<TaskId, TaskCosts>
 }
 
 const EMPTY: CellValue = { type: 'empty' }
+
+/** 成本列：零成本按「没有」处理（不显示 0，与空值同形） */
+function costCell(ctx: ColumnCellContext, taskId: TaskId, field: keyof TaskCosts): CellValue {
+  const costs = ctx.costs?.[taskId]
+  if (!costs || costs[field] === 0) return EMPTY
+  return { type: 'cost', amount: costs[field] }
+}
 
 /**
  * kind 列的字形：分组 ▤ / 里程碑 ◆ / 任务 ▪。
@@ -228,7 +239,7 @@ const TASK_KIND_GLYPH: Record<TaskKind, string> = {
  * 都有取值口径」这条不变式能整表断言；实际渲染时标题单元格走 OutlineTree 的专用
  * 渲染（缩进 + 折叠箭头），不读这个分支。
  *
- * 只有**可用**列有 case；禁用列（含 `assignees` —— 它要等 v0.5 的分配数据）
+ * 只有**可用**列有 case；禁用列（v0.5 起只剩 v1.0 的基线与挣值列）
  * 一律落进 default 返回空。它们永远不会被渲染：菜单里点不动，
  * 且载入配置时被 `isEnabledOutlineColumnKey` 挡在门外。
  */
@@ -272,8 +283,31 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
       return schedule ? { type: 'days', count: schedule.totalSlack } : EMPTY
     case 'freeSlack':
       return schedule ? { type: 'days', count: schedule.freeSlack } : EMPTY
+    case 'assignees': {
+      const project = ctx.project
+      if (!project) return EMPTY
+      // 从 Assignment 反查资源名 —— 这是全项目**唯一**一处该反查。
+      // 别处再写一遍就是「同一规则两份实现」（本项目出过的事故），
+      // 将来改分配语义（如多资源排序 / 过滤失效资源）必须只改这里。
+      const names = Object.values(project.assignments)
+        .filter((assignment) => assignment.taskId === task.id)
+        .map((assignment) => project.resources[assignment.resourceId]?.name)
+        .filter((name): name is string => Boolean(name))
+      return names.length > 0 ? { type: 'text', text: names.join(', ') } : EMPTY
+    }
+    case 'effort': {
+      const effort = ctx.efforts?.[task.id]
+      // 摘要行显示子任务之和（collectEfforts 会汇总），因此**不**对 group 特判
+      return effort === undefined ? EMPTY : { type: 'effort', count: effort }
+    }
+    case 'taskCost':
+      return costCell(ctx, task.id, 'task')
+    case 'resourceCost':
+      return costCell(ctx, task.id, 'resource')
+    case 'totalCost':
+      return costCell(ctx, task.id, 'total')
     default:
-      // 全部禁用列（assignees / 成本 / 基线 / 挣值）：本版没有数据来源
+      // 全部禁用列（基线 / 挣值，v1.0）：本版没有数据来源
       return EMPTY
   }
 }

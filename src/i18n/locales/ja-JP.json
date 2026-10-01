@@ -27,14 +27,15 @@
     "collapse": "サブタスクを折りたたむ",
     "cell": {
       "days": "{{count}} 日",
-      "percent": "{{value}}%"
+      "percent": "{{value}}%",
+      "effort": "{{count}} 人日",
+      "cost": "{{amount}}"
     },
     "menu": {
       "title": "表示列",
       "titleLocked": "タイトル列は常に表示され、非表示にできません"
     },
     "disabledReason": {
-      "resources": "リソースと工数の機能（v0.5）が必要です",
       "baseline": "基準とアーンドバリューの機能（v1.0）が必要です"
     },
     "columns": {

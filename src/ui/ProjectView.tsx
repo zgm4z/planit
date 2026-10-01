@@ -211,6 +211,8 @@ export function ProjectView() {
                   rows={rows}
                   virtualItems={virtualItems}
                   schedules={schedulesResult.schedules}
+                  efforts={schedulesResult.efforts}
+                  costs={schedulesResult.costs}
                   columns={GANTT_OUTLINE_COLUMNS}
                   selectedTaskId={selectedTaskId}
                   onSelect={selectTask}
@@ -276,6 +278,8 @@ export function ProjectView() {
               rows={rows}
               virtualItems={virtualItems}
               schedules={schedulesResult.schedules}
+              efforts={schedulesResult.efforts}
+              costs={schedulesResult.costs}
               columns={outlineColumns}
               selectedTaskId={selectedTaskId}
               onSelect={selectTask}

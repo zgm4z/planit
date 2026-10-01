@@ -208,6 +208,12 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.kind === 'group') return // 摘要任务的投入由子任务汇总
+    // 里程碑是零工期的时间点，按定义不该有工作量。引擎的 effectiveDuration 对
+    // milestone 恒返回 0，本不会排出坏日期；但放行会让里程碑挂上 fixedEffort + effort，
+    // collectEfforts 随即报出非零投入 —— 一个零工期的点却有工作量，语义自相矛盾。
+    // 与同文件其它日期命令（setScheduling / moveTo / resize / setSchedulingOrder）
+    // 对 milestone 的守卫保持一致，否则同一类命令里只有这两条放行，规则就不统一了。
+    if (task.kind === 'milestone') return
 
     // 切到「固定工作量」且尚无 effort 时，用「当前工期 × Σunits」初始化：
     // 否则反解会把工期算成 1（effort 缺省 0），任务会突然跳变。
@@ -222,6 +228,8 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.kind === 'group') return
+    // 同 setEffortMode：里程碑零工期，不该有工作量 —— 详见那处的注释。
+    if (task.kind === 'milestone') return
     task.effort = payload.effort === undefined ? undefined : Math.max(0, payload.effort)
   },
 }

@@ -612,6 +612,21 @@ describe('v0.5 工作量命令', () => {
     expect(next.tasks[taskId].effort).toBe(9)
   })
 
+  it('task.setEffortMode / task.setEffort 对里程碑是 no-op —— 零工期的时间点不该有工作量', () => {
+    // 与同文件其它日期命令（setScheduling / moveTo / resize / setSchedulingOrder）
+    // 的 milestone 守卫保持一致：它们都挡住里程碑，这两条也必须挡。
+    let p = run(project, 'task.create', { name: 'M' })
+    const taskId = p.rootIds[0]
+    p = run(p, 'task.toggleMilestone', { taskId })
+
+    const afterMode = run(p, 'task.setEffortMode', { taskId, effortMode: 'fixedEffort' })
+    expect(afterMode.tasks[taskId].effortMode).toBe('fixedDuration') // 未被切成 fixedEffort
+    expect(afterMode.tasks[taskId].effort).toBeUndefined() // 也未被「工期 × Σunits」初始化
+
+    const afterEffort = run(p, 'task.setEffort', { taskId, effort: 5 })
+    expect(afterEffort.tasks[taskId].effort).toBeUndefined() // 未被写入
+  })
+
   it('日历命令 calendar.setHoursPerDay 夹到 ≥1 的整数', () => {
     const next = run(project, 'calendar.setHoursPerDay', { hoursPerDay: 6.4 })
     expect(next.calendars.default.hoursPerDay).toBe(6)

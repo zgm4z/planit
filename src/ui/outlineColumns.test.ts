@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createTask } from '../domain/model/factories'
+import { createAssignment, createProject, createResource, createTask } from '../domain/model/factories'
 import type { ComputedSchedule, Task } from '../domain/model/types'
 import zhCN from '../i18n/locales/zh-CN.json'
 import enUS from '../i18n/locales/en-US.json'
@@ -17,23 +17,23 @@ import {
 } from './outlineColumns'
 
 /**
- * **本版可用**的 11 个 key。
+ * **本版可用**的 16 个 key。
  *
- * 与 spec §4.1 的联合类型**刻意不同**：`assignees` 在 spec 里被列进「本版可用」，
- * 但 §4.2 说它「本版留空占位（v0.5 填数据）」—— 没有真实数据来源，按 ROADMAP 的
- * 分批原则应当「显示但禁用」。因此它被归到 DISABLED_KEYS（见计划开头的偏差 5）。
+ * v0.5 起 `assignees` / `effort` / 三种成本列从「显示但禁用」转入可用：它们有了
+ * 真实数据来源（项目的 assignments、引擎的 efforts / costs），再禁用就是说谎
+ * （见计划开头的偏差 5）。
  */
 const ENABLED_KEYS: OutlineColumnKey[] = [
   'kind', 'title', 'note', 'id',
   'start', 'finish', 'duration',
   'priority', 'progress',
   'totalSlack', 'freeSlack',
+  // v0.5：以下 5 列有了真实数据来源（引擎的 efforts / costs 与项目的 assignments）
+  'assignees', 'effort', 'taskCost', 'resourceCost', 'totalCost',
 ]
 
-/** **显示但禁用**的 16 个 key（依赖 v0.5 资源功能或 v1.0 基线/挣值功能） */
+/** **显示但禁用**的 11 个 key（只剩 v1.0 的基线与挣值） */
 const DISABLED_KEYS: OutlineColumnKey[] = [
-  'assignees',
-  'effort', 'taskCost', 'resourceCost', 'totalCost',
   'baselineStart', 'baselineFinish', 'startVariance', 'finishVariance',
   'bcws', 'bcwp', 'acwp', 'cv', 'sv', 'eac', 'bac',
 ]
@@ -67,15 +67,18 @@ describe('OUTLINE_COLUMNS 注册表', () => {
     expect(OUTLINE_COLUMNS).toHaveLength(27)
   })
 
-  it('可用 11 列、禁用 16 列', () => {
+  it('可用 16 列、禁用 11 列', () => {
     expect(OUTLINE_COLUMNS.filter((c) => c.enabled).map((c) => c.key)).toEqual(ENABLED_KEYS)
     expect(OUTLINE_COLUMNS.filter((c) => !c.enabled).map((c) => c.key)).toEqual(DISABLED_KEYS)
   })
 
-  it('assignees 是禁用列（与 spec §4.1 的刻意偏离，见偏差 5）', () => {
+  it('v0.5：assignees 已解禁（有真实数据来源），三种成本与投入列同批解禁', () => {
     const assignees = OUTLINE_COLUMNS.find((c) => c.key === 'assignees')!
-    expect(assignees.enabled).toBe(false)
-    expect(assignees.disabledReasonKey).toBe('outline.disabledReason.resources')
+    expect(assignees.enabled).toBe(true)
+    expect(assignees.disabledReasonKey).toBeUndefined()
+    for (const key of ['effort', 'taskCost', 'resourceCost', 'totalCost'] as const) {
+      expect(OUTLINE_COLUMNS.find((c) => c.key === key)!.enabled).toBe(true)
+    }
   })
 
   it('只有 title 是 flex，且它在默认可见列里', () => {
@@ -132,6 +135,9 @@ describe('OUTLINE_COLUMNS 注册表', () => {
     for (const dict of [zhCN, enUS, jaJP]) {
       expect(lookup(dict, 'outline.cell.days')).toBeTypeOf('string')
       expect(lookup(dict, 'outline.cell.percent')).toBeTypeOf('string')
+      // v0.5 新增的两种取值（投入 / 成本）也必须在三语里都有文案，否则渲染出裸 key
+      expect(lookup(dict, 'outline.cell.effort')).toBeTypeOf('string')
+      expect(lookup(dict, 'outline.cell.cost')).toBeTypeOf('string')
     }
   })
 
@@ -151,7 +157,7 @@ describe('cellFlex — 表头与单元格共用的列宽口径', () => {
 describe('isOutlineColumnKey / isEnabledOutlineColumnKey', () => {
   it('isOutlineColumnKey：注册表里认识的 key 通过，其余一律拒绝', () => {
     expect(isOutlineColumnKey('title')).toBe(true)
-    expect(isOutlineColumnKey('assignees')).toBe(true) // 认识 —— 只是本版禁用
+    expect(isOutlineColumnKey('assignees')).toBe(true) // 认识且本版可用（v0.5 解禁）
     expect(isOutlineColumnKey('ghost-column')).toBe(false)
     expect(isOutlineColumnKey(42)).toBe(false)
     expect(isOutlineColumnKey(null)).toBe(false)
@@ -160,9 +166,10 @@ describe('isOutlineColumnKey / isEnabledOutlineColumnKey', () => {
   it('isEnabledOutlineColumnKey：认识的 key 里只有本版可用的算「可用」', () => {
     expect(isEnabledOutlineColumnKey('title')).toBe(true)
     expect(isEnabledOutlineColumnKey('start')).toBe(true)
-    // 这几个都「认识」，但本版禁用 —— 载入配置时必须按不可用丢掉
-    expect(isEnabledOutlineColumnKey('assignees')).toBe(false)
-    expect(isEnabledOutlineColumnKey('effort')).toBe(false)
+    // v0.5 起 assignees / effort 有了真实数据来源，载入配置时按可用接受
+    expect(isEnabledOutlineColumnKey('assignees')).toBe(true)
+    expect(isEnabledOutlineColumnKey('effort')).toBe(true)
+    // bcws 仍是 v1.0 的列 —— 「认识」但本版禁用，载入时必须丢掉
     expect(isEnabledOutlineColumnKey('bcws')).toBe(false)
     // 不认识的同样拒绝
     expect(isEnabledOutlineColumnKey('ghost-column')).toBe(false)
@@ -266,7 +273,30 @@ describe('getOutlineCellValue', () => {
     for (const key of DISABLED_KEYS) {
       expect(getOutlineCellValue(key, ctx)).toEqual({ type: 'empty' })
     }
-    // 显式钉一下 assignees：它在 spec 里被误列为「可用」，本版是禁用列
+  })
+
+  it('assignees 列取真实资源名；未分配时为 empty', () => {
+    const resource = { ...createResource({ name: '张三' }), id: 'r1' }
+    const assignment = { ...createAssignment({ taskId: task.id, resourceId: 'r1' }), id: 'a1' }
+    const withAssignments = {
+      ...ctx,
+      project: { ...createProject('x'), resources: { r1: resource }, assignments: { a1: assignment } },
+    }
+    expect(getOutlineCellValue('assignees', withAssignments)).toEqual({ type: 'text', text: '张三' })
     expect(getOutlineCellValue('assignees', ctx)).toEqual({ type: 'empty' })
+  })
+
+  it('effort 列读引擎的 efforts；无之则为 empty', () => {
+    expect(getOutlineCellValue('effort', { ...ctx, efforts: { [task.id]: 5 } })).toEqual({
+      type: 'effort', count: 5,
+    })
+    expect(getOutlineCellValue('effort', ctx)).toEqual({ type: 'empty' })
+  })
+
+  it('三种成本列读引擎的 costs，零成本时为 empty', () => {
+    const withCosts = { ...ctx, costs: { [task.id]: { task: 500, resource: 0, total: 500 } } }
+    expect(getOutlineCellValue('taskCost', withCosts)).toEqual({ type: 'cost', amount: 500 })
+    expect(getOutlineCellValue('resourceCost', withCosts)).toEqual({ type: 'empty' })
+    expect(getOutlineCellValue('totalCost', withCosts)).toEqual({ type: 'cost', amount: 500 })
   })
 })
