@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { Drawer } from '@mantine/core'
 
-import { flattenVisibleRows } from '../outline/flattenRows'
+import { flattenVisibleRows } from '../shared/flattenRows'
 import { DependencyLayer } from '../gantt/DependencyLayer'
 import { GanttRows } from '../gantt/GanttRows'
 import { Inspector } from '../inspector/Inspector'

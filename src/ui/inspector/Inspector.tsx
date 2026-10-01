@@ -35,7 +35,7 @@ import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore, type InspectorTab } from '../../store/viewStore'
 import { DEFAULT_OPEN_GROUPS, INSPECTOR_GROUPS, type InspectorGroupKey } from './inspectorGroups'
-import { resolveScheduleDates } from '../outline/outlineColumns'
+import { resolveScheduleDates } from '../shared/scheduleDates'
 import { AssignmentSection } from './AssignmentSection'
 import {
   DateField,

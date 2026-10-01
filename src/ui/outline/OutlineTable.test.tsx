@@ -7,7 +7,7 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 
 import { createProject, createTask, __resetIdCounterForTests } from '../../domain/model/factories'
 import type { Project } from '../../domain/model/types'
-import { flattenVisibleRows } from './flattenRows'
+import { flattenVisibleRows } from '../shared/flattenRows'
 import { DEFAULT_VISIBLE_COLUMNS } from '../../store/columnKeys'
 import { OUTLINE_COLUMNS } from './outlineColumns'
 import { OutlineTable } from './OutlineTable'
