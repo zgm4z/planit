@@ -188,6 +188,12 @@
     "empty": "No resources yet.",
     "create": "New resource",
     "delete": "Delete resource",
+    "groups": {
+      "info": "Basic info",
+      "availability": "Availability",
+      "cost": "Cost",
+      "assignments": "Assignments"
+    },
     "name": "Name",
     "email": "Email",
     "kind": "Type",
@@ -202,9 +208,9 @@
     "usageCost": "Usage cost",
     "hourlyCost": "Hourly cost",
     "currency": "Currency",
-    "totalAssignments": "{{count}} assignments",
-    "totalHours": "{{count}} hours",
-    "totalCost": "Total cost: {{amount}} {{currency}}",
+    "totalAssignments": "Total assignments",
+    "totalHours": "Total hours",
+    "totalCost": "Total cost",
     "overload": "Overloaded: {{count}} day(s)",
     "noOverload": "No overload"
   },

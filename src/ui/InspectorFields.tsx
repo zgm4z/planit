@@ -237,3 +237,25 @@ export function StatRow({ label, value, testId }: StatRowProps) {
 export function StatList({ children }: { children: ReactNode }) {
   return <div className={styles.statList}>{children}</div>
 }
+
+/* ───────────────────── 区块（信息架构） ───────────────────── */
+
+/**
+ * 区块 = 一条区块标题 + 内容。标题与任务面板的 `Accordion.Control` **共用同一个
+ * `section-heading` mixin**（见 _tokens.scss），所以两处体例逐字一致（lg / 600 /
+ * 一条下沿）；差别只在**这一版不可折叠**。
+ *
+ * 为什么资源面板不折叠：它总共就三个数据分组（基本信息 / 可用性 / 成本）+ 分配，
+ * 加起来的字段比任务面板**单个**分组（如相关性）还少。折叠在这里只多一次点击、
+ * 并把整屏的信息架构藏进标题里 —— 用标题的排版层次（字号 / 字重 / 下沿 + 24px
+ * 区块间距）已经足够分块，无需交互层次。任务面板用 Accordion 是因为它有 7 组、
+ * 其中相关性 / 分配动辄长过一屏；那是「必须收」的场景，这里不是。
+ */
+export function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={styles.section}>
+      <h3 className={styles.sectionHeading}>{title}</h3>
+      {children}
+    </section>
+  )
+}

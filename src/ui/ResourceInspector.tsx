@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActionIcon, Alert, Button, Group, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Button, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,8 +16,17 @@ import type { ResourceKind } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { AssignmentSection } from './AssignmentSection'
-import { DateField, GAP_BLOCK, GAP_FIELD, NumberField, StatList } from './InspectorFields'
+import {
+  DateField,
+  GAP_BLOCK,
+  GAP_FIELD,
+  NumberField,
+  Section,
+  StatList,
+  StatRow,
+} from './InspectorFields'
 import { formatCost, formatDays, formatHours } from './format'
+import styles from './styles/Inspector.module.scss'
 
 const KINDS: ResourceKind[] = ['staff', 'equipment', 'material', 'group']
 
@@ -110,12 +119,15 @@ export function ResourceInspector() {
   if (!selected) {
     return (
       <Stack gap={GAP_BLOCK}>
-        <Text fz="xs" c="dimmed">
+        <Text fz="sm" c="dimmed">
           {t('resource.empty')}
         </Text>
-        <ActionIcon variant="light" aria-label={t('resource.create')} onClick={handleCreate}>
-          +
-        </ActionIcon>
+        {/* 与主态的「新建」按钮同一形态（light 次级按钮，不是通栏实心方块） */}
+        <Group>
+          <Button variant="light" size="sm" onClick={handleCreate}>
+            {t('resource.create')}
+          </Button>
+        </Group>
       </Stack>
     )
   }
@@ -126,219 +138,12 @@ export function ResourceInspector() {
 
   return (
     <Stack gap={GAP_BLOCK}>
-      <Stack gap={GAP_FIELD}>
-        <Group gap="xs" wrap="nowrap" align="flex-end">
-          <Select
-            label={t('resource.select')}
-            value={selected.id}
-            style={{ flex: 1 }}
-            data={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
-            onChange={(value) => {
-              // 换资源 = 交互边界：打断合并，否则跨资源的连续编辑会塌缩成一条撤销
-              breakCoalescing()
-              setSelectedId(value)
-            }}
-          />
-          <ActionIcon variant="light" aria-label={t('resource.create')} onClick={handleCreate}>
-            +
-          </ActionIcon>
-        </Group>
-
-        <TextInputField
-          label={t('resource.name')}
-          value={selected.name}
-          onBlur={breakCoalescing}
-          onChange={(name) =>
-            send(
-              'resource.rename',
-              'commands.resource.rename',
-              { resourceId: selected.id, name },
-              `resource.rename:${selected.id}`,
-            )
-          }
-        />
-
-        <TextInputField
-          label={t('resource.email')}
-          value={selected.email ?? ''}
-          onBlur={breakCoalescing}
-          onChange={(email) =>
-            send(
-              'resource.setEmail',
-              'commands.resource.setEmail',
-              { resourceId: selected.id, email },
-              `resource.setEmail:${selected.id}`,
-            )
-          }
-        />
-
-        <Select
-          label={t('resource.kind')}
-          value={selected.kind}
-          data={KINDS.map((kind) => ({ value: kind, label: t(`resource.kind_${kind}`) }))}
-          onChange={(value) =>
-            value &&
-            send('resource.setKind', 'commands.resource.setKind', {
-              resourceId: selected.id,
-              kind: value as ResourceKind,
-            })
-          }
-        />
-      </Stack>
-
-      <Stack gap={GAP_FIELD}>
-        <NumberField
-          label={t('resource.availability')}
-          digits={0}
-          min={0}
-          max={100}
-          value={Math.round(selected.availability * 100)}
-          onBlur={breakCoalescing}
-          onChange={(value) =>
-            send(
-              'resource.setAvailability',
-              'commands.resource.setAvailability',
-              { resourceId: selected.id, availability: (value ?? 0) / 100 },
-              `resource.setAvailability:${selected.id}`,
-            )
-          }
-        />
-
-        <NumberField
-          label={t('resource.efficiency')}
-          digits={2}
-          min={0}
-          allowEmpty
-          value={selected.efficiency}
-          onBlur={breakCoalescing}
-          onChange={(value) =>
-            send(
-              'resource.setEfficiency',
-              'commands.resource.setEfficiency',
-              { resourceId: selected.id, efficiency: value },
-              `resource.setEfficiency:${selected.id}`,
-            )
-          }
-        />
-      </Stack>
-
-      <Stack gap={GAP_FIELD}>
-        <DateField
-          label={t('resource.availableFrom')}
-          value={selected.availableFrom ?? ''}
-          clearable
-          onBlur={breakCoalescing}
-          onChange={(next) =>
-            send(
-              'resource.setAvailablePeriod',
-              'commands.resource.setAvailablePeriod',
-              {
-                resourceId: selected.id,
-                availableFrom: next || undefined,
-                availableUntil: selected.availableUntil,
-              },
-              `resource.setAvailablePeriod:${selected.id}`,
-            )
-          }
-        />
-
-        <DateField
-          label={t('resource.availableUntil')}
-          value={selected.availableUntil ?? ''}
-          clearable
-          onBlur={breakCoalescing}
-          onChange={(next) =>
-            send(
-              'resource.setAvailablePeriod',
-              'commands.resource.setAvailablePeriod',
-              {
-                resourceId: selected.id,
-                availableFrom: selected.availableFrom,
-                availableUntil: next || undefined,
-              },
-              `resource.setAvailablePeriod:${selected.id}`,
-            )
-          }
-        />
-      </Stack>
-
-      <Stack gap={GAP_FIELD}>
-        <NumberField
-          label={t('resource.usageCost')}
-          digits={0}
-          min={0}
-          allowEmpty
-          value={selected.cost.usage}
-          onBlur={breakCoalescing}
-          onChange={(value) =>
-            send(
-              'resource.setCost',
-              'commands.resource.setCost',
-              { resourceId: selected.id, cost: { ...selected.cost, usage: value } },
-              `resource.setCost:${selected.id}`,
-            )
-          }
-        />
-
-        <NumberField
-          label={t('resource.hourlyCost')}
-          digits={0}
-          min={0}
-          allowEmpty
-          value={selected.cost.hourly}
-          onBlur={breakCoalescing}
-          onChange={(value) =>
-            send(
-              'resource.setCost',
-              'commands.resource.setCost',
-              { resourceId: selected.id, cost: { ...selected.cost, hourly: value } },
-              `resource.setCost:${selected.id}`,
-            )
-          }
-        />
-
-        <TextInputField
-          label={t('resource.currency')}
-          value={selected.cost.currency}
-          onBlur={breakCoalescing}
-          onChange={(currency) =>
-            send(
-              'resource.setCost',
-              'commands.resource.setCost',
-              { resourceId: selected.id, cost: { ...selected.cost, currency } },
-              `resource.setCost:${selected.id}`,
-            )
-          }
-        />
-      </Stack>
-
-      <Button
-        color="red"
-        variant="light"
-        leftSection={<IconTrash size={16} />}
-        onClick={handleDelete}
-      >
-        {t('resource.delete')}
-      </Button>
-
-      {/* 派生总计：**只读事实块**（§3.3）—— 数字过 format*，日期/金额不再各自四舍五入 */}
-      <StatList>
-        <Text fz="sm" c="dimmed" data-testid="resource-total-assignments">
-          {t('resource.totalAssignments', { count: formatDays(totals.assignments) ?? '—' })}
-        </Text>
-        <Text fz="sm" c="dimmed" data-testid="resource-total-hours">
-          {t('resource.totalHours', { count: formatHours(totals.hours) ?? '—' })}
-        </Text>
-        <Text fz="sm" c="dimmed" data-testid="resource-total-cost">
-          {t('resource.totalCost', {
-            amount: formatCost(totals.cost) ?? '—',
-            currency: selected.cost.currency,
-          })}
-        </Text>
-      </StatList>
-
-      {/* v0.6 偏差 7：超载复用资源面板呈现。unresolved 是「平衡后仍超载」的如实上报，
-          不是加载失败 —— 故只在真有超载时提示，无超载时明说「无超载」而非留白 */}
+      {/* 超载 = 本面板的头号信号，放在**最顶部、分组之外** —— 与任务面板的冲突
+          Alert 同位置同体例。它曾排在 8 个字段之下、要滚动才看得到，而「这个资源
+          超载了」正是先于一切字段该被看到的事实（§3.1 的「信号」层）。
+          无超载时**不喧哗**：同位置只留一行 xs/dimmed 的确认，不动用信号色。
+          为什么保留而非删掉它：超载数=0 是**算出来的 0**（§3.3 的第三类），与
+          「引擎没跑 / 无此概念」必须可分；留白会让二者混为一谈。 */}
       {overloads.length > 0 ? (
         <Alert color="red" p="xs" data-testid="resource-overload">
           {t('resource.overload', { count: formatDays(overloads.length) ?? '—' })}
@@ -349,7 +154,249 @@ export function ResourceInspector() {
         </Text>
       )}
 
-      <AssignmentSection scope={{ kind: 'resource', id: selected.id }} />
+      {/* 「选择资源」是面板的主体（它定义下面所有字段讲的是谁）；「新建」是它的
+          尾部动作 —— 同排、同高、light 次级按钮。曾经那个通栏靛蓝实心方块是面板里
+          最抢眼的东西，与内容抢注意力，与「先看清资源」的诉求相悖。 */}
+      <Group gap="xs" wrap="nowrap" align="flex-end">
+        <Select
+          label={t('resource.select')}
+          value={selected.id}
+          style={{ flex: 1 }}
+          data={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
+          onChange={(value) => {
+            // 换资源 = 交互边界：打断合并，否则跨资源的连续编辑会塌缩成一条撤销
+            breakCoalescing()
+            setSelectedId(value)
+          }}
+        />
+        <Button variant="light" size="sm" onClick={handleCreate}>
+          {t('resource.create')}
+        </Button>
+      </Group>
+
+      {/* ── 基本信息 ── 名称 / 类型 / 电子邮件。
+          排序按「使用频率 × 重要性」：名称必填、类型（人员/设备/素材/群组）常改且
+          影响语义，靠前；电子邮件**多数为空**，降到本组末位，不再占住第二行。 */}
+      <Section title={t('resource.groups.info')}>
+        <Stack gap={GAP_FIELD}>
+          <TextInputField
+            label={t('resource.name')}
+            value={selected.name}
+            onBlur={breakCoalescing}
+            onChange={(name) =>
+              send(
+                'resource.rename',
+                'commands.resource.rename',
+                { resourceId: selected.id, name },
+                `resource.rename:${selected.id}`,
+              )
+            }
+          />
+
+          <Select
+            label={t('resource.kind')}
+            value={selected.kind}
+            data={KINDS.map((kind) => ({ value: kind, label: t(`resource.kind_${kind}`) }))}
+            onChange={(value) =>
+              value &&
+              send('resource.setKind', 'commands.resource.setKind', {
+                resourceId: selected.id,
+                kind: value as ResourceKind,
+              })
+            }
+          />
+
+          <TextInputField
+            label={t('resource.email')}
+            value={selected.email ?? ''}
+            onBlur={breakCoalescing}
+            onChange={(email) =>
+              send(
+                'resource.setEmail',
+                'commands.resource.setEmail',
+                { resourceId: selected.id, email },
+                `resource.setEmail:${selected.id}`,
+              )
+            }
+          />
+        </Stack>
+      </Section>
+
+      {/* ── 可用性 ── 可用率 / 效率 / 可用期。
+          这四个是「这台资源什么时候、以多大力气可用」的同一族输入，此前被拆成两个
+          无名块（可用率+效率 / 起止日期）中间的层级断裂，现在合成一个语义组。 */}
+      <Section title={t('resource.groups.availability')}>
+        <Stack gap={GAP_FIELD}>
+          <NumberField
+            label={t('resource.availability')}
+            digits={0}
+            min={0}
+            max={100}
+            value={Math.round(selected.availability * 100)}
+            onBlur={breakCoalescing}
+            onChange={(value) =>
+              send(
+                'resource.setAvailability',
+                'commands.resource.setAvailability',
+                { resourceId: selected.id, availability: (value ?? 0) / 100 },
+                `resource.setAvailability:${selected.id}`,
+              )
+            }
+          />
+
+          <NumberField
+            label={t('resource.efficiency')}
+            digits={2}
+            min={0}
+            allowEmpty
+            value={selected.efficiency}
+            onBlur={breakCoalescing}
+            onChange={(value) =>
+              send(
+                'resource.setEfficiency',
+                'commands.resource.setEfficiency',
+                { resourceId: selected.id, efficiency: value },
+                `resource.setEfficiency:${selected.id}`,
+              )
+            }
+          />
+
+          <DateField
+            label={t('resource.availableFrom')}
+            value={selected.availableFrom ?? ''}
+            clearable
+            onBlur={breakCoalescing}
+            onChange={(next) =>
+              send(
+                'resource.setAvailablePeriod',
+                'commands.resource.setAvailablePeriod',
+                {
+                  resourceId: selected.id,
+                  availableFrom: next || undefined,
+                  availableUntil: selected.availableUntil,
+                },
+                `resource.setAvailablePeriod:${selected.id}`,
+              )
+            }
+          />
+
+          <DateField
+            label={t('resource.availableUntil')}
+            value={selected.availableUntil ?? ''}
+            clearable
+            onBlur={breakCoalescing}
+            onChange={(next) =>
+              send(
+                'resource.setAvailablePeriod',
+                'commands.resource.setAvailablePeriod',
+                {
+                  resourceId: selected.id,
+                  availableFrom: selected.availableFrom,
+                  availableUntil: next || undefined,
+                },
+                `resource.setAvailablePeriod:${selected.id}`,
+              )
+            }
+          />
+        </Stack>
+      </Section>
+
+      {/* ── 成本 ── 费率（可编辑）＋ 派生的总计（只读事实行）。
+          费率与总计分开两块：前者是**控件**（有边框、能改），后者是**数据**（平排、
+          等宽、右对齐）—— §3.3 的「方块 = 能改，平排 = 事实」，一眼可分。 */}
+      <Section title={t('resource.groups.cost')}>
+        <Stack gap={GAP_BLOCK}>
+          <Stack gap={GAP_FIELD}>
+            <NumberField
+              label={t('resource.usageCost')}
+              digits={0}
+              min={0}
+              allowEmpty
+              value={selected.cost.usage}
+              onBlur={breakCoalescing}
+              onChange={(value) =>
+                send(
+                  'resource.setCost',
+                  'commands.resource.setCost',
+                  { resourceId: selected.id, cost: { ...selected.cost, usage: value } },
+                  `resource.setCost:${selected.id}`,
+                )
+              }
+            />
+
+            <NumberField
+              label={t('resource.hourlyCost')}
+              digits={0}
+              min={0}
+              allowEmpty
+              value={selected.cost.hourly}
+              onBlur={breakCoalescing}
+              onChange={(value) =>
+                send(
+                  'resource.setCost',
+                  'commands.resource.setCost',
+                  { resourceId: selected.id, cost: { ...selected.cost, hourly: value } },
+                  `resource.setCost:${selected.id}`,
+                )
+              }
+            />
+
+            <TextInputField
+              label={t('resource.currency')}
+              value={selected.cost.currency}
+              onBlur={breakCoalescing}
+              onChange={(currency) =>
+                send(
+                  'resource.setCost',
+                  'commands.resource.setCost',
+                  { resourceId: selected.id, cost: { ...selected.cost, currency } },
+                  `resource.setCost:${selected.id}`,
+                )
+              }
+            />
+          </Stack>
+
+          {/* 派生总计：**只读事实块**（§3.3）—— 数字过 format*，值/单位不再各自四舍五入。
+              改 StatRow 后「标签 / 值」分列（此前挤在一句「总使用次数：0」里），
+              与任务面板的投入 / 剩余 / 成本同一种读法。 */}
+          <StatList>
+            <StatRow
+              label={t('resource.totalAssignments')}
+              value={formatDays(totals.assignments) ?? '—'}
+              testId="resource-total-assignments"
+            />
+            <StatRow
+              label={t('resource.totalHours')}
+              value={formatHours(totals.hours) ?? '—'}
+              testId="resource-total-hours"
+            />
+            <StatRow
+              label={t('resource.totalCost')}
+              value={`${formatCost(totals.cost) ?? '—'} ${selected.cost.currency}`}
+              testId="resource-total-cost"
+            />
+          </StatList>
+        </Stack>
+      </Section>
+
+      {/* ── 分配 ── 复用 AssignmentSection（不重写）。 */}
+      <Section title={t('resource.groups.assignments')}>
+        <AssignmentSection scope={{ kind: 'resource', id: selected.id }} />
+      </Section>
+
+      {/* 删除：留在底部，但降噪 —— 静止中性、悬停才转危险色（§4.2 第 2 条）。
+          独占一行且与最后一个字段隔 24px，不会被误读成某个字段的附属动作。 */}
+      <Group>
+        <Button
+          variant="subtle"
+          size="sm"
+          className={styles.dangerAction}
+          leftSection={<IconTrash size={16} />}
+          onClick={handleDelete}
+        >
+          {t('resource.delete')}
+        </Button>
+      </Group>
     </Stack>
   )
 }
