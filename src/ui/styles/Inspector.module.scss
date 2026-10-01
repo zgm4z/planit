@@ -31,6 +31,12 @@
     // §1.4：中文不加字距
     letter-spacing: 0;
   }
+
+  // §5.1 / §6：折叠箭头 120ms（--dur-fast）旋转 —— Mantine 默认 200ms，与规范的
+  // 「120ms 旋转 90°」不符。翻的是 transform，不换字符。
+  :global(.mantine-Accordion-chevron) {
+    transition-duration: var(--planit-dur-fast);
+  }
 }
 
 // ── 分组（Accordion）──────────────────────────────────────
@@ -98,6 +104,52 @@
 // 展开后的内容区：标签到首行 12px（§2.1 组内 4–8 偏上限，给标题留呼吸）
 .accPanel {
   padding: var(--planit-sp-12) 0 0;
+}
+
+// Mantine 给 Accordion 的内层内容区默认加了 12px 左右内边距，会让「分组内的行」比
+// 「分组外的行」（项目面板置顶的「名称」）**向右错开一列** —— 竖列不再对齐，
+// 而 §3.4 要求全右栏共用同一套栅格。内容区的左右留白应由外层 Box 统一持有：
+// 这里把横向内边距清零（上下保留，负责分组内的纵向呼吸）。
+.accordion :global(.mantine-Accordion-content) {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+// ── 属性行：标签左 / 值右（§3.4）──────────────────────────
+//
+// 整条右栏共用这一套栅格 —— 可编辑控件与只读事实落在同一个固定宽标签列 + flex 值列
+// 上。标签宽度由 --planit-field-label-width 持有（唯一来源）：面板足够宽时 88px，
+// 窄于 320px 时降到 76px，否则标签会把值列挤到没法用（规范 §3.4）。
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  // 标签列到值列 8px —— 比组内的行间距（6px）略大，让「一对」读起来是一行。
+  gap: var(--planit-sp-8);
+}
+
+.fieldLabel {
+  // §3.4：固定宽标签列。标签过长宁可换行，绝不挤压值列。
+  flex: 0 0 var(--planit-field-label-width);
+  width: var(--planit-field-label-width);
+  font-size: var(--planit-fs-sm);
+  font-weight: 500;
+  // §1.4：中文行内紧凑处 1.35
+  line-height: 1.35;
+  color: var(--planit-text-muted);
+  letter-spacing: 0;
+}
+
+// 值列：可编辑控件填满它（Mantine 输入默认 width:100%），只读事实则靠右。
+.fieldValue {
+  flex: 1;
+  min-width: 0;
+}
+
+// 只读事实右对齐 —— 数字成列可比（§3.4）。
+.fieldValueEnd {
+  display: flex;
+  justify-content: flex-end;
 }
 
 // ── 只读事实（数据）───────────────────────────────────────

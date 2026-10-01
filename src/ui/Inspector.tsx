@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Accordion,
@@ -38,6 +38,7 @@ import { resolveScheduleDates } from './outlineColumns'
 import { AssignmentSection } from './AssignmentSection'
 import {
   DateField,
+  FieldRow,
   GAP_BLOCK,
   GAP_FIELD,
   GAP_INNER,
@@ -287,6 +288,7 @@ function BaselineGroup({ taskId, isSummary }: { taskId: TaskId; isSummary: boole
 
   const baselines = project.baselines
   const active = baselines.find((baseline) => baseline.id === project.activeBaselineId)
+  const baselineId = useId()
 
   // 基线里有、但项目里已不存在的任务 —— 逐个列出并标注「已删除」（spec §1.2 / 判据 2）。
   // **不级联删除**条目是刻意的：基线是历史记录。靠条目里存的 name 才能辨认（偏差 1 / D9）。
@@ -296,26 +298,28 @@ function BaselineGroup({ taskId, isSummary }: { taskId: TaskId; isSummary: boole
 
   return (
     <Stack gap={GAP_BLOCK} data-testid="inspector-baseline">
-      <Stack gap={GAP_FIELD}>
-        <Select
-          label={t('inspector.baseline.active')}
-          data-testid="baseline-select"
-          value={project.activeBaselineId}
-          disabled={baselines.length === 0}
-          data={[
-            { value: '', label: t('inspector.baseline.none') },
-            ...baselines.map((baseline) => ({ value: baseline.id, label: baseline.name })),
-          ]}
-          onChange={(value) => {
-            // 换基线是交互边界：打断合并，与 viewStore.selectTask 同惯例
-            useProjectStore.getState().breakCoalescing()
-            dispatch({
-              type: 'project.setActiveBaseline',
-              label: 'commands.project.setActiveBaseline',
-              payload: { baselineId: value ? value : null },
-            })
-          }}
-        />
+      <Stack gap={GAP_INNER}>
+        <FieldRow label={t('inspector.baseline.active')} controlId={baselineId}>
+          <Select
+            id={baselineId}
+            data-testid="baseline-select"
+            value={project.activeBaselineId}
+            disabled={baselines.length === 0}
+            data={[
+              { value: '', label: t('inspector.baseline.none') },
+              ...baselines.map((baseline) => ({ value: baseline.id, label: baseline.name })),
+            ]}
+            onChange={(value) => {
+              // 换基线是交互边界：打断合并，与 viewStore.selectTask 同惯例
+              useProjectStore.getState().breakCoalescing()
+              dispatch({
+                type: 'project.setActiveBaseline',
+                label: 'commands.project.setActiveBaseline',
+                payload: { baselineId: value ? value : null },
+              })
+            }}
+          />
+        </FieldRow>
 
         <Group gap="xs" wrap="nowrap">
           <Button
@@ -450,23 +454,27 @@ function InfoGroup({
   )
 
   const isGroup = task.kind === 'group'
+  const nameId = useId()
+  const kindId = useId()
 
   return (
     <Stack gap={GAP_BLOCK}>
-      <Stack gap={GAP_FIELD}>
-        <TextInput
-          label={t('inspector.name')}
-          value={task.name}
-          onBlur={breakCoalescing}
-          onChange={(event) =>
-            dispatch({
-              type: 'task.rename',
-              label: 'commands.task.rename',
-              payload: { taskId, name: event.target.value },
-              coalesceKey: `task.rename:${taskId}`,
-            })
-          }
-        />
+      <Stack gap={GAP_INNER}>
+        <FieldRow label={t('inspector.name')} controlId={nameId}>
+          <TextInput
+            id={nameId}
+            value={task.name}
+            onBlur={breakCoalescing}
+            onChange={(event) =>
+              dispatch({
+                type: 'task.rename',
+                label: 'commands.task.rename',
+                payload: { taskId, name: event.target.value },
+                coalesceKey: `task.rename:${taskId}`,
+              })
+            }
+          />
+        </FieldRow>
 
         {/* 为什么不给「分组」一条可点的路径（计划偏差 1，spec §3.1 散文才是事实）：
             `kind === 'group'` 是**结构事实的派生** —— deriveKind 里 `childIds.length > 0 ⟺ group`
@@ -474,9 +482,9 @@ function InfoGroup({
             「kind 是 group 却没有子任务」的畸形任务，破坏该不变式。全仓也只有加子任务（task.indent）
             能间接走到 group。所以：group 选项恒 disabled（仅作「当前值」的展示），
             已经是 group 的任务整个 Select disabled（没有任何命令能改分组的类型）。这不是漏做的功能。 */}
-        <Stack gap={GAP_INNER}>
+        <FieldRow label={t('inspector.kind')} controlId={kindId}>
           <Select
-            label={t('inspector.kind')}
+            id={kindId}
             value={task.kind}
             disabled={isGroup}
             data={[
@@ -495,12 +503,12 @@ function InfoGroup({
               }
             }}
           />
-          {isGroup && (
-            <Text fz="xs" c="dimmed">
-              {t('inspector.kindGroupHint')}
-            </Text>
-          )}
-        </Stack>
+        </FieldRow>
+        {isGroup && (
+          <Text fz="xs" c="dimmed">
+            {t('inspector.kindGroupHint')}
+          </Text>
+        )}
       </Stack>
 
       {isSummary ? (
@@ -509,8 +517,9 @@ function InfoGroup({
         </Text>
       ) : (
         <>
-          {/* 可编辑块：一眼看出「这些能改」—— 它们都是带边框的控件 */}
-          <Stack gap={GAP_FIELD}>
+          {/* 可编辑块：一眼看出「这些能改」—— 它们都是带边框的控件。
+              行距 6px（§3.4）—— 属性行是横向的，行间距比「标签在上」的堆叠紧一档。 */}
+          <Stack gap={GAP_INNER}>
             <NumberField
               label={t('inspector.duration')}
               digits={0}
@@ -545,13 +554,11 @@ function InfoGroup({
             />
 
             {/* 工作量模式：固定工期 ↔ 固定工作量。切换走 task.setEffortMode（点击驱动、不合并） */}
-            <Box>
-              <Text fz="xs" fw={500} mb={GAP_INNER} c="dimmed">
-                {t('inspector.effortMode')}
-              </Text>
+            <FieldRow label={t('inspector.effortMode')}>
               <SegmentedControl
                 size="xs"
                 fullWidth
+                aria-label={t('inspector.effortMode')}
                 value={task.effortMode}
                 data-testid="effort-mode"
                 onChange={(value) =>
@@ -578,7 +585,7 @@ function InfoGroup({
                   },
                 ]}
               />
-            </Box>
+            </FieldRow>
 
             {/* 固定工作量时才有「投入」输入 —— 它是反解的输入，改它才会改工期。
                 此时**不再另渲染派生只读的「投入」**：同一个量出现两个同名控件，
@@ -674,14 +681,16 @@ function ScheduleGroup({
   const finishEditable = !isSummary && finishType !== null
   const startValue = startType ? constraint!.date : (dates?.start ?? '')
   const finishValue = finishType ? constraint!.date : (dates?.finish ?? '')
+  const schedId = useId()
 
   return (
     <Stack gap={GAP_BLOCK}>
       <Stack gap={GAP_INNER}>
         {/* 合并的排期方式 Select（偏差 2）：一个控件同时设 mode 与 type。
             auto + 6 种 ConstraintType —— 它就是全 App 唯一在设置约束的控件。 */}
+        <FieldRow label={t('inspector.scheduling')} controlId={schedId}>
         <Select
-          label={t('inspector.scheduling')}
+          id={schedId}
           value={constraint ? constraint.type : 'auto'}
           // 摘要任务的日期由子任务汇总 —— task.setScheduling 对 group 本就是 no-op，
           // 这里禁用是为了不出现「点了没反应」的控件（分批原则）
@@ -715,6 +724,7 @@ function ScheduleGroup({
             })
           }}
         />
+        </FieldRow>
 
         {constraint && (
           <Text fz="xs" c="dimmed">
@@ -723,7 +733,7 @@ function ScheduleGroup({
         )}
       </Stack>
 
-      <Stack gap={GAP_FIELD}>
+      <Stack gap={GAP_INNER}>
         <DateField
           label={t('inspector.start')}
           value={startValue}
@@ -764,14 +774,12 @@ function ScheduleGroup({
         />
       </Stack>
 
-      <Box>
-        <Text fz="xs" fw={500} mb={GAP_INNER} c="dimmed">
-          {t('inspector.order')}
-        </Text>
+      <FieldRow label={t('inspector.order')}>
         {/* 点击驱动 → 不传合并键（命令层注释里登记的约定） */}
         <SegmentedControl
           size="xs"
           fullWidth
+          aria-label={t('inspector.order')}
           value={task.schedulingOrder}
           disabled={isSummary}
           data-testid="task-order"
@@ -787,7 +795,7 @@ function ScheduleGroup({
             { value: 'alap', label: <span data-testid="order-alap">{t('inspector.orderAlap')}</span> },
           ]}
         />
-      </Box>
+      </FieldRow>
 
       {/* 拆分排期尚未实现：渲染成禁用态并注明版本，而不是隐藏（分批原则） */}
       <Stack gap={GAP_INNER}>
@@ -957,6 +965,7 @@ function RelationSection({
   const project = useProjectStore((state) => state.project)!
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
+  const addSelectId = useId()
 
   return (
     <Stack gap={GAP_INNER} data-testid={testId}>
@@ -1029,12 +1038,13 @@ function RelationSection({
       })}
 
       {options.length > 0 && (
-        <Select
-          size="xs"
-          label={addLabel}
-          placeholder={t('inspector.relations.selectTask')}
-          value={null}
-          data={options}
+        <FieldRow label={addLabel} controlId={addSelectId}>
+          <Select
+            id={addSelectId}
+            size="xs"
+            placeholder={t('inspector.relations.selectTask')}
+            value={null}
+            data={options}
           // 两段下拉的候选集相同（同一个叶子任务在两个方向都可连），而 Mantine 把下拉渲染进
           // portal 且 keepMounted（关闭时仍在 DOM），单靠 role=option 会命中两个同名项。
           // 给这段的候选容器挂 testid，测试用 within(getByTestId(addTestId)) 精确定位 ——
@@ -1049,7 +1059,8 @@ function RelationSection({
               payload: { ...makePayload(otherId), type: 'FS' as DependencyType, lag: 0 },
             })
           }}
-        />
+          />
+        </FieldRow>
       )}
     </Stack>
   )

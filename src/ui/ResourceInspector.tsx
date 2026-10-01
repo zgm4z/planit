@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Alert, Button, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
@@ -18,8 +18,9 @@ import { useScheduleStore } from '../store/scheduleStore'
 import { AssignmentSection } from './AssignmentSection'
 import {
   DateField,
+  FieldRow,
   GAP_BLOCK,
-  GAP_FIELD,
+  GAP_INNER,
   NumberField,
   Section,
   StatList,
@@ -70,6 +71,8 @@ export function ResourceInspector() {
 
   const resources = Object.values(project.resources)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selectId = useId()
+  const kindId = useId()
   const selected = (selectedId ? project.resources[selectedId] : undefined) ?? resources[0]
 
   /** 统一 dispatch 辅助：泛型把 payload 与命令类型对上（见 ResourceCommandMap） */
@@ -141,18 +144,21 @@ export function ResourceInspector() {
       {/* 「选择资源」是面板的主体（它定义下面所有字段讲的是谁）；「新建」是它的
           尾部动作 —— 同排、同高、light 次级按钮。曾经那个通栏靛蓝实心方块是面板里
           最抢眼的东西，与内容抢注意力，与「先看清资源」的诉求相悖。 */}
-      <Group gap="xs" wrap="nowrap" align="flex-end">
-        <Select
-          label={t('resource.select')}
-          value={selected.id}
-          style={{ flex: 1 }}
-          data={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
-          onChange={(value) => {
-            // 换资源 = 交互边界：打断合并，否则跨资源的连续编辑会塌缩成一条撤销
-            breakCoalescing()
-            setSelectedId(value)
-          }}
-        />
+      <Group gap="xs" wrap="nowrap" align="center">
+        <div style={{ flex: 1 }}>
+          <FieldRow label={t('resource.select')} controlId={selectId}>
+            <Select
+              id={selectId}
+              value={selected.id}
+              data={resources.map((resource) => ({ value: resource.id, label: resource.name }))}
+              onChange={(value) => {
+                // 换资源 = 交互边界：打断合并，否则跨资源的连续编辑会塌缩成一条撤销
+                breakCoalescing()
+                setSelectedId(value)
+              }}
+            />
+          </FieldRow>
+        </div>
         <Button variant="light" size="sm" onClick={handleCreate}>
           {t('resource.create')}
         </Button>
@@ -181,7 +187,7 @@ export function ResourceInspector() {
           排序按「使用频率 × 重要性」：名称必填、类型（人员/设备/素材/群组）常改且
           影响语义，靠前；电子邮件**多数为空**，降到本组末位，不再占住第二行。 */}
       <Section title={t('resource.groups.info')}>
-        <Stack gap={GAP_FIELD}>
+        <Stack gap={GAP_INNER}>
           <TextInputField
             label={t('resource.name')}
             value={selected.name}
@@ -196,18 +202,20 @@ export function ResourceInspector() {
             }
           />
 
-          <Select
-            label={t('resource.kind')}
-            value={selected.kind}
-            data={KINDS.map((kind) => ({ value: kind, label: t(`resource.kind_${kind}`) }))}
-            onChange={(value) =>
-              value &&
-              send('resource.setKind', 'commands.resource.setKind', {
-                resourceId: selected.id,
-                kind: value as ResourceKind,
-              })
-            }
-          />
+          <FieldRow label={t('resource.kind')} controlId={kindId}>
+            <Select
+              id={kindId}
+              value={selected.kind}
+              data={KINDS.map((kind) => ({ value: kind, label: t(`resource.kind_${kind}`) }))}
+              onChange={(value) =>
+                value &&
+                send('resource.setKind', 'commands.resource.setKind', {
+                  resourceId: selected.id,
+                  kind: value as ResourceKind,
+                })
+              }
+            />
+          </FieldRow>
 
           <TextInputField
             label={t('resource.email')}
@@ -229,7 +237,7 @@ export function ResourceInspector() {
           这四个是「这台资源什么时候、以多大力气可用」的同一族输入，此前被拆成两个
           无名块（可用率+效率 / 起止日期）中间的层级断裂，现在合成一个语义组。 */}
       <Section title={t('resource.groups.availability')}>
-        <Stack gap={GAP_FIELD}>
+        <Stack gap={GAP_INNER}>
           <NumberField
             label={t('resource.availability')}
             digits={0}
@@ -309,7 +317,7 @@ export function ResourceInspector() {
           等宽、右对齐）—— §3.3 的「方块 = 能改，平排 = 事实」，一眼可分。 */}
       <Section title={t('resource.groups.cost')}>
         <Stack gap={GAP_BLOCK}>
-          <Stack gap={GAP_FIELD}>
+          <Stack gap={GAP_INNER}>
             <NumberField
               label={t('resource.usageCost')}
               digits={0}
@@ -406,7 +414,8 @@ export function ResourceInspector() {
 
 /**
  * 一个薄薄的文本输入框：把 onChange 的取值从 event 里剥出来，让调用点只描述
- * 「这个字段写回什么」—— 与 DateField / NumberField 三个形态同构，读起来一致。
+ * 「这个字段写回什么」—— 与 DateField / NumberField 三个形态同构，读起来一致；
+ * 并同样落在 FieldRow 栅格上（标签左 / 值右，§3.4）。
  */
 function TextInputField({
   label,
@@ -419,12 +428,15 @@ function TextInputField({
   onChange: (value: string) => void
   onBlur?: () => void
 }) {
+  const id = useId()
   return (
-    <TextInput
-      label={label}
-      value={value}
-      onChange={(event) => onChange(event.currentTarget.value)}
-      onBlur={onBlur}
-    />
+    <FieldRow label={label} controlId={id}>
+      <TextInput
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        onBlur={onBlur}
+      />
+    </FieldRow>
   )
 }

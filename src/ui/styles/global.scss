@@ -83,6 +83,9 @@
   --planit-ruler-day-height: 18px;
   --planit-outline-width: 320px;
   --planit-inspector-width: 300px;
+  // 属性行（§3.4）的固定标签列宽。88px 是常规档；右栏窄到 300px 时尚可用
+  // （值列仍容得下长选项与日期），故不随视口再降档 —— 见 §3.4 的 <320 说明。
+  --planit-field-label-width: 88px;
 }
 
 // ── 响应式（§7）：宽度档位 ────────────────────────────────
