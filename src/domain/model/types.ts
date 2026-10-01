@@ -212,6 +212,25 @@ export interface ResourceSummary {
   cost: number
 }
 
+/** 一处资源超载：某资源在某日负载 > 100%（spec §2 的「超载最严重的资源与日期」） */
+export interface ResourceOverload {
+  resourceId: ResourceId
+  date: DateStr
+  /** 该日负载（Σ assignmentUnits）。> 1 即超载 */
+  load: number
+}
+
+/** v0.6：资源平衡的派生结果。**不进 Project、不落盘**（与 ComputedSchedule 同类） */
+export interface LevelingResult {
+  /**
+   * 每个叶子被推迟的工作日数（含用户设的 `Task.delay`）。0 = 未被推。
+   * 摘要任务不在此表 —— 平衡只作用于叶子。
+   */
+  delays: Record<TaskId, number>
+  /** 平衡后**仍无法消除**的超载（浮时耗尽 / 无可推候选）。空数组 = 完全平衡 */
+  unresolved: ResourceOverload[]
+}
+
 export interface ScheduleResult {
   schedules: Record<TaskId, ComputedSchedule>
   conflicts: ConflictInfo[]
