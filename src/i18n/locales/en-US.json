@@ -21,6 +21,9 @@
     "language": "Language"
   },
   "outline": { "columnTitle": "Task" },
+  "gantt": {
+    "dragHint": "{{start}} → {{finish}} · {{days}} workdays"
+  },
   "inspector": {
     "title": "Task details",
     "name": "Name",
@@ -78,6 +81,7 @@
     "task.toggleMilestone": "Toggle milestone",
     "task.setScheduling": "Set scheduling constraint",
     "task.moveTo": "Move task",
+    "task.resize": "Resize task",
     "dependency.create": "Create dependency",
     "dependency.delete": "Delete dependency",
     "dependency.setType": "Change dependency type",

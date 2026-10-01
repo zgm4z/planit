@@ -38,8 +38,8 @@
   border-radius: 999px;
   background: var(--planit-accent-gradient);
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.35);
-  // 刻意**不**裁剪：连接柄（TaskBar 里 right: -5 的圆点）有一半落在条外，
-  // overflow: hidden 会切掉外侧一半，拖拽热区也随之减半。
+  // 刻意**不**裁剪：连接柄（TaskBar 里 right: -11 的圆点）整颗落在条外，
+  // overflow: hidden 会把它整个切掉，连线就再也拖不出来。
   // 圆角改由 .barProgress 自己用 border-radius: inherit 兜住。
   cursor: grab;
 }

@@ -21,6 +21,9 @@
     "language": "言語"
   },
   "outline": { "columnTitle": "タスク" },
+  "gantt": {
+    "dragHint": "{{start}} → {{finish}} · {{days}} 稼働日"
+  },
   "inspector": {
     "title": "タスクの詳細",
     "name": "名前",
@@ -78,6 +81,7 @@
     "task.toggleMilestone": "マイルストーン切替",
     "task.setScheduling": "制約を設定",
     "task.moveTo": "タスクを移動",
+    "task.resize": "期間を調整",
     "dependency.create": "依存関係を作成",
     "dependency.delete": "依存関係を削除",
     "dependency.setType": "依存タイプを変更",

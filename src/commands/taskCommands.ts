@@ -11,6 +11,7 @@ export interface TaskSetProgressPayload { taskId: TaskId; progress: number }
 export interface TaskToggleMilestonePayload { taskId: TaskId }
 export interface TaskSetSchedulingPayload { taskId: TaskId; scheduling: Scheduling }
 export interface TaskMoveToPayload { taskId: TaskId; startDate: DateStr }
+export interface TaskResizePayload { taskId: TaskId; startDate: DateStr; duration: number }
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
@@ -113,6 +114,20 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.childIds.length > 0) return
+    task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
+  },
+
+  // 拖拽左把手会同时改变「开始日期」与「工期」两个维度。
+  // 若拆成 task.setDuration + task.moveTo 两条命令，撤销栈里会留下两条记录 ——
+  // 按一次 Ctrl+Z 只退回半步（日期回来了、工期还留着）。
+  // 这条命令把两个字段放进**同一次**变更，因此只产生一条撤销记录、一次撤销即可完全复原。
+  'task.resize': (draft, payload: TaskResizePayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.childIds.length > 0) return // 摘要任务日期只读
+    if (task.isMilestone) return // 里程碑恒为 0 工期
+
+    task.duration = Math.max(1, Math.floor(payload.duration))
     task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
   },
 }

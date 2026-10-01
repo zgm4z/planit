@@ -138,6 +138,7 @@ export function ProjectView() {
   // 拖拽期间只更新影子预览；松手才 dispatch 命令 ——
   // 因此拖拽过程中 undoStack 长度必须保持不变。
   const drag = useBarDrag({
+    project,
     calendar,
     dayWidth,
     onCommit: (taskId, mode, preview) => {
@@ -150,21 +151,26 @@ export function ProjectView() {
         return
       }
 
+      // resizeStart 同时改变开始日期与工期。必须用**一条** task.resize 提交 ——
+      // 拆成 setDuration + moveTo 会在撤销栈里留下两条记录，按一次 Ctrl+Z
+      // 只退回半步（日期回来了、工期还留着）。
+      if (mode === 'resizeStart') {
+        dispatch({
+          type: 'task.resize',
+          label: 'commands.task.resize',
+          payload: { taskId, startDate: preview.startDate, duration: preview.duration },
+        })
+        return
+      }
+
+      // resizeEnd 只改工期。
+      // **不加 coalesceKey**：hook 已保证「一次 mouseup 只 dispatch 一次」，
+      // 合并只会把两次独立的手势并成一条撤销记录（一次 Ctrl+Z 撤两步）。
       dispatch({
         type: 'task.setDuration',
         label: 'commands.task.setDuration',
         payload: { taskId, duration: preview.duration },
-        coalesceKey: `task.setDuration:${taskId}`,
       })
-
-      // resizeStart 同时改变了开始日期，需要额外提交一次
-      if (mode === 'resizeStart') {
-        dispatch({
-          type: 'task.moveTo',
-          label: 'commands.task.moveTo',
-          payload: { taskId, startDate: preview.startDate },
-        })
-      }
     },
   })
 
@@ -236,6 +242,7 @@ export function ProjectView() {
                 conflictIds={conflictIds}
                 scale={scale}
                 dragOverride={drag.preview}
+                dragSchedules={drag.downstreamPreview}
                 onBarPointerDown={(event, taskId, mode) => {
                   // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，
                   // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。

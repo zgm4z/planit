@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { Calendar, ComputedSchedule, Task } from '../domain/model/types'
 import { addWorkdays } from '../domain/calendar/workdays'
 import {
@@ -20,6 +21,10 @@ interface TaskBarProps {
   hasConflict: boolean
   /** 拖拽期间的影子排期，非空时覆盖真实排期 */
   override?: { startDate: string; duration: number }
+  /** 影子态：半透明 + 虚线描边，表示「尚未提交」 */
+  ghost?: boolean
+  /** 是否显示浮动日期提示（只有被拖的那一根条需要） */
+  showHint?: boolean
   onBarPointerDown?: (event: React.PointerEvent, mode: BarDragMode) => void
   onStartLink?: (event: React.PointerEvent, fromX: number, fromY: number) => void
 }
@@ -31,9 +36,12 @@ export function TaskBar({
   calendar,
   hasConflict,
   override,
+  ghost = false,
+  showHint = false,
   onBarPointerDown,
   onStartLink,
 }: TaskBarProps) {
+  const { t } = useTranslation()
   const displayStart = override?.startDate ?? schedule.earlyStart
   const displayDuration = override?.duration ?? task.duration
 
@@ -51,7 +59,7 @@ export function TaskBar({
       <div
         className={`${styles.milestone} ${schedule.isCritical ? styles.milestoneCritical : ''} ${
           hasConflict ? styles.milestoneConflict : ''
-        } ${override ? styles.milestoneGhost : ''}`}
+        } ${ghost ? styles.milestoneGhost : ''}`}
         style={{
           // AABB 比方块大 √2 倍，把方块中心对齐到 AABB 中心
           left: rect.x + (rect.width - MILESTONE_SIZE) / 2,
@@ -77,7 +85,7 @@ export function TaskBar({
       //   但这里不为互斥写守卫 —— 将来放宽 isCritical 时守卫会静默吞掉关键色。）
       className={`${styles.bar} ${schedule.isCritical ? styles.barCritical : ''} ${
         hasConflict ? styles.barConflict : ''
-      } ${override ? styles.barGhost : ''}`}
+      } ${ghost ? styles.barGhost : ''}`}
       style={{ left: x, top: (ROW_HEIGHT - BAR_HEIGHT) / 2, width, height: BAR_HEIGHT }}
       title={`${task.name}\n${displayStart} → ${displayFinish}`}
       data-task-id={task.id}
@@ -90,9 +98,13 @@ export function TaskBar({
         data-testid={`task-bar-progress-${task.id}`}
       />
 
-      {override && (
+      {showHint && (
         <div className={styles.dragHint} data-testid={`drag-hint-${task.id}`}>
-          {`${displayStart} → ${displayFinish} · ${displayDuration}d`}
+          {t('gantt.dragHint', {
+            start: displayStart,
+            finish: displayFinish,
+            days: displayDuration,
+          })}
         </div>
       )}
 
@@ -105,12 +117,14 @@ export function TaskBar({
         onPointerDown={(event) => onBarPointerDown?.(event, 'resizeEnd')}
       />
 
-      {/* 连接柄：从它拖出依赖连线（Task 17 接线） */}
+      {/* 连接柄：从它拖出依赖连线（Task 17 接线）。
+          整体放在任务条**外侧**（右缘右侧 1px 起）—— 原先它压在右把手上，
+          只给把手留下约 3px 的可点区，用户几乎抓不到右把手。 */}
       <div
         aria-label="drag-to-link"
         style={{
           position: 'absolute',
-          right: -5,
+          right: -11,
           top: '50%',
           width: 10,
           height: 10,
@@ -122,12 +136,13 @@ export function TaskBar({
           zIndex: 3,
         }}
         onPointerDown={(event) => {
-          // 取柄的**中心**而不是外缘：柄的圆心正好落在任务条右缘上，
-          // 与 barRect 的右缘（也就是静态 FS 连线的起点）重合。
-          // 用 getBoundingClientRect().right 会多出半个柄宽（5px），
-          // 幽灵线就从柄外缘起步，与最终落笔的连线对不上。
-          const rect = event.currentTarget.getBoundingClientRect()
-          onStartLink?.(event, rect.left + rect.width / 2, event.clientY)
+          // 幽灵线起点锚在**任务条右缘** —— 与 barRect 的右缘（静态 FS 连线的
+          // 起点）重合。柄已挪到条外，不能再拿柄的中心当起点（会偏出 5px）。
+          const bar = event.currentTarget.parentElement
+          const x = bar
+            ? bar.getBoundingClientRect().right
+            : event.currentTarget.getBoundingClientRect().right
+          onStartLink?.(event, x, event.clientY)
         }}
       />
     </div>

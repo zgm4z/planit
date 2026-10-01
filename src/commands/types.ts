@@ -15,6 +15,7 @@ export type CommandType =
   | 'task.toggleMilestone'
   | 'task.setScheduling'
   | 'task.moveTo'
+  | 'task.resize'
   // 依赖
   | 'dependency.create'
   | 'dependency.delete'

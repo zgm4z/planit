@@ -16,6 +16,8 @@ interface GanttRowsProps {
   scale: TimelineScale
   /** 拖拽期间的影子排期 */
   dragOverride: { taskId: TaskId; startDate: string; duration: number } | null
+  /** 拖拽中被连带重排的下游任务影子排期（不含被拖任务） */
+  dragSchedules: Record<TaskId, ComputedSchedule> | null
   onBarPointerDown: (event: React.PointerEvent, taskId: TaskId, mode: BarDragMode) => void
   onStartLink: (event: React.PointerEvent, taskId: TaskId, x: number, y: number) => void
 }
@@ -30,6 +32,7 @@ export function GanttRows({
   conflictIds,
   scale,
   dragOverride,
+  dragSchedules,
   onBarPointerDown,
   onStartLink,
 }: GanttRowsProps) {
@@ -44,6 +47,25 @@ export function GanttRows({
 
         // 摘要任务不画条：其日期由子任务汇总，画出来会与子任务条重叠
         if (!task || !schedule || task.childIds.length > 0) return null
+
+        const isDragged = dragOverride?.taskId === task.id
+
+        // 被拖的那根条：几何取自拖拽预览（它才认得抓的是左缘、右缘还是中段）
+        const draggedOverride = isDragged
+          ? { startDate: dragOverride.startDate, duration: dragOverride.duration }
+          : undefined
+
+        // 下游影子：只有当这条任务在「假设排期」里**确实挪动了**才画成影子。
+        // 全量标影子会把没受影响的条也一起变灰，反而看不清重排的影响面。
+        const downstream = dragSchedules?.[task.id]
+        const downstreamOverride =
+          downstream !== undefined &&
+          (downstream.earlyStart !== schedule.earlyStart ||
+            downstream.earlyFinish !== schedule.earlyFinish)
+            ? { startDate: downstream.earlyStart, duration: task.duration }
+            : undefined
+
+        const override = draggedOverride ?? downstreamOverride
 
         return (
           <div
@@ -62,7 +84,9 @@ export function GanttRows({
               scale={scale}
               calendar={calendar}
               hasConflict={conflictIds.has(task.id)}
-              override={dragOverride?.taskId === task.id ? dragOverride : undefined}
+              override={override}
+              ghost={override !== undefined}
+              showHint={isDragged}
               onBarPointerDown={(event, mode) => onBarPointerDown(event, task.id, mode)}
               onStartLink={(event, x, y) => onStartLink(event, task.id, x, y)}
             />

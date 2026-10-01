@@ -214,6 +214,69 @@ describe('task.setScheduling / task.moveTo', () => {
   })
 })
 
+describe('task.resize', () => {
+  beforeEach(setup)
+
+  it('一次命令同时改变开始日期与工期，且产生 patch（一条撤销记录）', () => {
+    const p1 = run(project, 'task.create', { name: 'A' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.setDuration', { taskId: id, duration: 5 })
+    expect(p2.tasks[id].duration).toBe(5)
+
+    const result = execute(p2, {
+      type: 'task.resize',
+      label: '调整工期',
+      payload: { taskId: id, startDate: '2026-03-04', duration: 3 },
+    })
+
+    // 两个维度在同一条命令里改掉 —— 这是「一次 Ctrl+Z 完全复原」的前提
+    expect(result.project.tasks[id].duration).toBe(3)
+    expect(result.project.tasks[id].scheduling).toEqual({
+      mode: 'constraint',
+      type: 'startOn',
+      date: '2026-03-04',
+    })
+    // 非空 patch 才会入撤销栈；且必须只有一条记录的数据来源
+    expect(result.patches.length).toBeGreaterThan(0)
+  })
+
+  it('工期被夹到至少 1 个工作日', () => {
+    const p1 = run(project, 'task.create', { name: 'A' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.resize', { taskId: id, startDate: '2026-03-04', duration: 0 })
+    expect(p2.tasks[id].duration).toBe(1)
+  })
+
+  it('对摘要任务不生效，patches 为空（不入撤销栈）', () => {
+    const p1 = run(project, 'task.create', { name: '父' })
+    const parentId = firstRoot(p1)
+    const p2 = run(p1, 'task.create', { name: '子', parentId })
+
+    const result = execute(p2, {
+      type: 'task.resize',
+      label: '调整工期',
+      payload: { taskId: parentId, startDate: '2026-04-01', duration: 9 },
+    })
+
+    expect(result.patches).toHaveLength(0)
+    expect(result.project.tasks[parentId].scheduling).toEqual({ mode: 'auto' })
+  })
+
+  it('对里程碑不生效，patches 为空', () => {
+    const p1 = run(project, 'task.create', { name: 'M' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.toggleMilestone', { taskId: id })
+
+    const result = execute(p2, {
+      type: 'task.resize',
+      label: '调整工期',
+      payload: { taskId: id, startDate: '2026-04-01', duration: 5 },
+    })
+
+    expect(result.patches).toHaveLength(0)
+  })
+})
+
 describe('摘要任务保护', () => {
   beforeEach(setup)
 
