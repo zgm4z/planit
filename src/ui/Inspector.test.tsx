@@ -148,15 +148,17 @@ describe('Inspector 任务面板的 7 个分组', () => {
     }
   })
 
-  it('默认展开状态符合 spec §5：前三组展开、后四组折叠', () => {
+  it('默认展开状态符合 spec §5：基线解禁后共五组展开、两个占位组折叠', () => {
     renderInspector()
     const expanded = (label: string) =>
       screen.getByRole('button', { name: label }).getAttribute('aria-expanded')
 
+    // 不变式「默认展开的 ⟺ 非占位组」：基线组解禁后必须进默认展开集，
+    // 否则 inspectorGroups.test.ts 的守卫会红（也见 DEFAULT_OPEN_GROUPS）。
     expect(expanded('任务信息')).toBe('true')
     expect(expanded('日程安排')).toBe('true')
+    expect(expanded('基线')).toBe('true')
     expect(expanded('相关性')).toBe('true')
-    expect(expanded('基线')).toBe('false')
     expect(expanded('分配的资源')).toBe('true')
     expect(expanded('资源分配')).toBe('false')
     expect(expanded('预计的工作量')).toBe('false')
@@ -173,14 +175,172 @@ describe('Inspector 任务面板的 7 个分组', () => {
     expect(info).toHaveAttribute('aria-expanded', 'true')
   })
 
+  // 「基线」组在 v1.0 已解禁，不再是占位组 —— 本用例改用**仍是占位**的「资源分配」组。
   it('占位组展开后是禁用态且有说明文案（不是隐藏）', async () => {
     const user = userEvent.setup()
     renderInspector()
 
-    await user.click(screen.getByRole('button', { name: '基线' }))
-    expect(screen.getByTestId('placeholder-baseline')).toBeInTheDocument()
-    expect(screen.getByLabelText('未设置基线')).toBeDisabled()
-    expect(screen.getByText(/基线对比将在 v1\.0 提供/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '资源分配' }))
+    expect(screen.getByTestId('placeholder-allocation')).toBeInTheDocument()
+    expect(screen.getByText(/分配变更时的自动调整尚未排期/)).toBeInTheDocument()
+  })
+})
+
+// v1.0 Task 5：「基线」组从占位组解禁为活组件（保存 / 切换 / 删除 / 看差异 / 已删除条目）。
+// 断言全部落在**真实派生数据**上（project.baselines + 引擎的 result.baselineDiffs），
+// 而不是外观 —— 这样实现一旦把「当前 − 基线」偷偷在 UI 里重算就会红。
+describe('基线分组（v1.0 解禁）', () => {
+  // 基线组解禁后进了 DEFAULT_OPEN_GROUPS（默认展开），所以不再需要点开——
+  // 点它反而会把它折叠起来（Accordion 的默认展开是「已展开」）。
+  it('未设置基线时显示「未设置基线」而不是占位说明', () => {
+    renderInspector()
+
+    expect(screen.getByTestId('inspector-baseline')).toBeInTheDocument()
+    expect(screen.getByText('未设置基线')).toBeInTheDocument()
+    // 占位态彻底消失：不再有「将在 v1.0 提供」的说明（那门组件已经真的到了）
+    expect(screen.queryByText(/v1\.0/)).not.toBeInTheDocument()
+  })
+
+  it('「保存当前排期为基线」把快照交给命令层（不落 UI 拼的 payload）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await user.click(screen.getByTestId('baseline-save'))
+
+    const project = useProjectStore.getState().project!
+    expect(project.baselines).toHaveLength(1)
+    // 快照只含叶子任务：写文档 / 写代码 —— 不含摘要「阶段一」
+    expect(Object.keys(project.baselines[0].entries).sort()).toEqual([taskId, siblingId].sort())
+    // 保存即设为活动基线（命令层的契约）
+    expect(project.activeBaselineId).toBe(project.baselines[0].id)
+  })
+
+  it('切换基线写回 activeBaselineId；选「不对比」则归零', async () => {
+    const user = userEvent.setup()
+    // 造两条基线（用真实命令，保证形状合法）
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 1' },
+      }),
+    )
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 2' },
+      }),
+    )
+    const first = useProjectStore.getState().project!.baselines[0]
+
+    renderInspector()
+    // 第二条是保存后的活动基线
+    expect(screen.getByTestId('baseline-select')).toHaveValue('基线 2')
+
+    await chooseOption(user, '对比基线', '基线 1')
+    expect(useProjectStore.getState().project!.activeBaselineId).toBe(first.id)
+
+    await chooseOption(user, '对比基线', '不对比')
+    expect(useProjectStore.getState().project!.activeBaselineId).toBeNull()
+  })
+
+  it('删除活动基线后清空 activeBaselineId（不留悬空引用）', async () => {
+    const user = userEvent.setup()
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 1' },
+      }),
+    )
+
+    renderInspector()
+    await user.click(screen.getByTestId('baseline-delete'))
+
+    const project = useProjectStore.getState().project!
+    expect(project.baselines).toHaveLength(0)
+    expect(project.activeBaselineId).toBeNull()
+  })
+
+  it('显示引擎派生的基线与差异（工作日口径），不在 UI 重算', () => {
+    // 保存一份「此刻」的基线，之后把工期改长，再看差异 —— 差异由引擎派生，不由 UI 重算
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 1' },
+      }),
+    )
+    // 基线拍完后把工期 +2（写文档 3 → 5）→ 结束日应比基线晚 2 个工作日
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'task.setDuration',
+        label: 'commands.task.setDuration',
+        payload: { taskId, duration: 5 },
+      }),
+    )
+
+    renderInspector()
+
+    const diff = useScheduleStore.getState().result.baselineDiffs[taskId]
+    expect(diff.baselineStart).toBe('2026-03-02')
+    expect(diff.baselineFinish).toBe('2026-03-04')
+    // 断言渲染值 = 引擎派生值（不是 UI 算出来的另一份）
+    expect(screen.getByTestId('baseline-start-variance')).toHaveTextContent(`开始差异: ${diff.startVariance} 天`)
+    expect(screen.getByTestId('baseline-finish-variance')).toHaveTextContent(
+      `结束差异: ${diff.finishVariance} 天`,
+    )
+    expect(diff.finishVariance).toBe(2)
+  })
+
+  it('摘要任务在基线组里不显示差异（快照只含叶子），而是给汇总说明', async () => {
+    act(() =>
+      useProjectStore.getState().dispatch({
+        type: 'project.setBaseline',
+        label: 'commands.project.setBaseline',
+        payload: { name: '基线 1' },
+      }),
+    )
+    act(() => useViewStore.setState({ selectedTaskId: parentId }))
+
+    renderInspector()
+    // 限定到基线组内 —— 「任务信息」组对摘要行也渲染同一句 summaryHint，
+    // 不限定就会命中两个（那不是被测代码的问题）
+    const baseline = screen.getByTestId('inspector-baseline')
+    expect(within(baseline).getByText(/日期由子任务汇总/)).toBeInTheDocument()
+  })
+
+  it('基线里含已删除任务时，该条目仍显示且标注「已删除」（不消失、不崩溃）', () => {
+    const project = useProjectStore.getState().project!
+
+    // 手工构造一条活动基线，其条目里混入一个已不在 project.tasks 中的 id ——
+    // 「删任务不级联删基线条目」是命令层刻意保证的（见 Task 3 反向用例），
+    // 这里是该契约在 UI 上的后果：必须靠条目里存的 name 才能辨认（偏差 1 / D9）。
+    useProjectStore.setState({
+      project: {
+        ...project,
+        baselines: [
+          {
+            id: 'bl-test',
+            name: '基线 1',
+            createdAt: '2026-03-02T00:00:00.000Z',
+            entries: {
+              [siblingId]: { name: '写代码', start: '2026-03-05', finish: '2026-03-06' },
+              ghost: { name: '被删掉的任务', start: '2026-03-05', finish: '2026-03-06' },
+            },
+          },
+        ],
+        activeBaselineId: 'bl-test',
+      },
+    })
+
+    renderInspector()
+
+    // 已删除的条目仍在，且用存的 name 明确标注「已删除」——既不是空白也不是崩溃
+    expect(screen.getByTestId('baseline-deleted-entry')).toHaveTextContent('被删掉的任务（已删除）')
+    // 区分性：**未**删除的条目不能被一并倒进「已删除」告警里 —— 否则这条断言恒真
+    expect(screen.queryByText(/写代码（已删除）/)).not.toBeInTheDocument()
   })
 })
 

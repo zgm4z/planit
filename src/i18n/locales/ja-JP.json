@@ -36,7 +36,7 @@
       "titleLocked": "タイトル列は常に表示され、非表示にできません"
     },
     "disabledReason": {
-      "baseline": "基準とアーンドバリューの機能（v1.0）が必要です"
+      "actualCost": "実コストの入力が必要です（未定）"
     },
     "columns": {
       "kind": "種類",
@@ -86,9 +86,22 @@
       "allocation": "リソース配分",
       "expectedEffort": "見込み工数"
     },
+    "baseline": {
+      "active": "比較する基準",
+      "none": "比較しない",
+      "save": "現在のスケジュールを基準として保存",
+      "name": "基準 {{n}}",
+      "delete": "この基準を削除",
+      "start": "基準開始",
+      "finish": "基準終了",
+      "startVariance": "開始の差異",
+      "finishVariance": "終了の差異",
+      "noBaseline": "基準は未設定",
+      "noEntry": "このタスクは基準に含まれていません",
+      "deletedCount": "基準エントリのうち {{count}} 件のタスクが削除済み",
+      "deletedEntry": "{{name}}（削除済み）"
+    },
     "placeholder": {
-      "baseline": "基準は未設定",
-      "baselineHint": "基準との比較は v1.0 で提供されます。",
       "allocationHint": "配分変更時の自動調整は未定です。",
       "expectedEffortHint": "工数は最小値・最大値・期待値の加重平均として計算でき、Monte Carlo シミュレーションの変動性にも用いられます。期待工数は未定です。",
       "allocationOnChange": "リソース配分が変更されたとき",
@@ -161,7 +174,9 @@
       "taskCount": "タスク数：{{count}}",
       "format": "書式",
       "currency": "通貨",
-      "currencyHint": "プロジェクト単位の通貨と書式は v1.0 で提供されます",
+      "currencyHint": "プロジェクト単位の通貨と書式は未定です。",
+      "statusDate": "基準日",
+      "statusDateHint": "アーンドバリュー（PV / SV）は基準日時点で計算されます",
       "unitConversion": "工数単位の換算",
       "hoursPerDay": "1 稼働日 = {{hours}} 時間"
     }
@@ -244,6 +259,10 @@
     "project.setDirection": "スケジュール方向を設定",
     "project.setStartDate": "プロジェクト開始日を設定",
     "project.setEndDate": "プロジェクト終了日を設定",
+    "project.setBaseline": "基準を保存",
+    "project.setActiveBaseline": "基準を切り替え",
+    "project.deleteBaseline": "基準を削除",
+    "project.setStatusDate": "基準日を設定",
     "assignment.create": "リソースを割り当て",
     "assignment.delete": "割り当てを解除",
     "assignment.setUnits": "単位を設定",

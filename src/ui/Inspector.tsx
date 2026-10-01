@@ -5,6 +5,7 @@ import {
   ActionIcon,
   Alert,
   Box,
+  Button,
   Checkbox,
   Group,
   NumberInput,
@@ -153,14 +154,7 @@ function TaskPanel({ taskId }: { taskId: TaskId }) {
       case 'relations':
         return <RelationsGroup task={task} taskId={taskId} isSummary={isSummary} />
       case 'baseline':
-        return (
-          <PlaceholderGroup
-            testId="placeholder-baseline"
-            reasonKey="inspector.placeholder.baselineHint"
-          >
-            <TextInput label={t('inspector.placeholder.baseline')} disabled value="" />
-          </PlaceholderGroup>
-        )
+        return <BaselineGroup taskId={taskId} isSummary={isSummary} />
       case 'assignments':
         // 任务侧入口：与 Task 7 的资源面板共用同一个 AssignmentSection（spec §4.2）
         return <AssignmentSection scope={{ kind: 'task', id: taskId }} />
@@ -242,6 +236,133 @@ function PlaceholderGroup({
       <Text fz="xs" c="dimmed">
         {t(reasonKey)}
       </Text>
+    </Stack>
+  )
+}
+
+/**
+ * 基线分组（v1.0 解禁）。**注意这是项目级的操作** —— 保存 / 切换 / 删除基线作用于
+ * 整个项目，只是按 spec §3 的指定落在任务面板的「基线」组里。
+ *
+ * 数据源一律是引擎派生的 `result.baselineDiffs`（Task 2）与 `project.baselines` 本身，
+ * 绝不在 UI 里重算「当前 − 基线」的工作日数（那是同一条规则的第二份实现）。
+ */
+function BaselineGroup({ taskId, isSummary }: { taskId: TaskId; isSummary: boolean }) {
+  const { t } = useTranslation()
+  const project = useProjectStore((state) => state.project)!
+  const dispatch = useProjectStore((state) => state.dispatch)
+  const diff = useScheduleStore((state) => state.result.baselineDiffs[taskId])
+
+  const baselines = project.baselines
+  const active = baselines.find((baseline) => baseline.id === project.activeBaselineId)
+
+  // 基线里有、但项目里已不存在的任务 —— 逐个列出并标注「已删除」（spec §1.2 / 判据 2）。
+  // **不级联删除**条目是刻意的：基线是历史记录。靠条目里存的 name 才能辨认（偏差 1 / D9）。
+  const deletedEntries = active
+    ? Object.entries(active.entries).filter(([id]) => !project.tasks[id])
+    : []
+
+  return (
+    <Stack gap="sm" data-testid="inspector-baseline">
+      <Select
+        label={t('inspector.baseline.active')}
+        data-testid="baseline-select"
+        value={project.activeBaselineId}
+        disabled={baselines.length === 0}
+        data={[
+          { value: '', label: t('inspector.baseline.none') },
+          ...baselines.map((baseline) => ({ value: baseline.id, label: baseline.name })),
+        ]}
+        onChange={(value) => {
+          // 换基线是交互边界：打断合并，与 viewStore.selectTask 同惯例
+          useProjectStore.getState().breakCoalescing()
+          dispatch({
+            type: 'project.setActiveBaseline',
+            label: 'commands.project.setActiveBaseline',
+            payload: { baselineId: value ? value : null },
+          })
+        }}
+      />
+
+      <Group gap="xs" wrap="nowrap">
+        <Button
+          size="xs"
+          variant="light"
+          data-testid="baseline-save"
+          onClick={() =>
+            dispatch({
+              type: 'project.setBaseline',
+              label: 'commands.project.setBaseline',
+              // 名称由 UI 按当前语言给出 —— 领域层不产出自然语言
+              payload: { name: t('inspector.baseline.name', { n: baselines.length + 1 }) },
+            })
+          }
+        >
+          {t('inspector.baseline.save')}
+        </Button>
+        {active && (
+          <ActionIcon
+            size="sm"
+            variant="subtle"
+            color="red"
+            aria-label={t('inspector.baseline.delete')}
+            data-testid="baseline-delete"
+            onClick={() =>
+              dispatch({
+                type: 'project.deleteBaseline',
+                label: 'commands.project.deleteBaseline',
+                payload: { baselineId: active.id },
+              })
+            }
+          >
+            <IconTrash size={14} />
+          </ActionIcon>
+        )}
+      </Group>
+
+      {!active ? (
+        <Text fz="xs" c="dimmed">
+          {t('inspector.baseline.noBaseline')}
+        </Text>
+      ) : isSummary ? (
+        // 快照只含叶子 → 摘要行没有差异（与 duration/progress 对摘要的惯例一致）
+        <Text fz="xs" c="dimmed">
+          {t('inspector.summaryHint')}
+        </Text>
+      ) : !diff ? (
+        <Text fz="xs" c="dimmed">
+          {t('inspector.baseline.noEntry')}
+        </Text>
+      ) : (
+        <>
+          <Text fz="xs" c="dimmed">
+            {t('inspector.baseline.start')}: {diff.baselineStart}
+          </Text>
+          <Text fz="xs" c="dimmed">
+            {t('inspector.baseline.finish')}: {diff.baselineFinish}
+          </Text>
+          <Text fz="xs" c="dimmed" data-testid="baseline-start-variance">
+            {t('inspector.baseline.startVariance')}:{' '}
+            {t('outline.cell.days', { count: diff.startVariance ?? 0 })}
+          </Text>
+          <Text fz="xs" c="dimmed" data-testid="baseline-finish-variance">
+            {t('inspector.baseline.finishVariance')}:{' '}
+            {t('outline.cell.days', { count: diff.finishVariance ?? 0 })}
+          </Text>
+        </>
+      )}
+
+      {deletedEntries.length > 0 && (
+        <Alert color="yellow" p="xs" data-testid="baseline-deleted">
+          <Text fz="xs">{t('inspector.baseline.deletedCount', { count: deletedEntries.length })}</Text>
+          {deletedEntries.map(([id, entry]) => (
+            <Text key={id} fz="xs" data-testid="baseline-deleted-entry">
+              {t('inspector.baseline.deletedEntry', { name: entry.name })} · {entry.start} →{' '}
+              {entry.finish}
+            </Text>
+          ))}
+        </Alert>
+      )}
     </Stack>
   )
 }
