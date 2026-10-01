@@ -42,8 +42,20 @@ export interface LayoutMode {
 /**
  * 当前布局档位（spec §7）。`isCompact` 蕴含 `isNarrow`（两个查询是嵌套的）。
  *
- * 断点数值从 `outlineColumns`（列与断点的权威、且刻意不依赖 React）取，避免
- * 「一处 1099、一处 1100」这类 off-by-one 在 CSS 与 JS 之间静默分歧。
+ * ─────────────────────────────────────────────────────────────────────────
+ * **1100 / 900 这两个断点，全项目只有一份定义**：`outlineColumns.ts` 的
+ * `NARROW_LAYOUT_WIDTH`（1100）/ `COMPACT_LAYOUT_WIDTH`（900）。
+ * 本文件的 `useLayoutMode()` 是它们的**唯一消费点**（把它们翻成媒体查询）。
+ *
+ * **不要在工具栏、面板、或任何别处再写一个 1100 / 900 / matchMedia**：
+ * 两份阈值一旦漂移（一处 1099、一处 1100），CSS 的命中与 JS 的判断就会静默分歧，
+ * 表现为「工具栏收了、列没藏」这类只有肉眼能发现的 bug。
+ * 这正是本项目 v0.2 栽过的「同一条规则两份实现」那一类病（`reconcileKind` 与
+ * `migrateTaskV1ToV2`）—— 新加响应式逻辑时，先回到这里。
+ *
+ * （CSS 侧 global.scss 的 `@media (max-width: 1099px)` 是同一组数值的镜像，
+ *   因为 SCSS 无法 import TS 常量 —— 改动时两处必须一起看。）
+ * ─────────────────────────────────────────────────────────────────────────
  */
 export function useLayoutMode(): LayoutMode {
   // `max-width: W-1` 表达「严格小于 W」，与 SCSS 里的 `max-width` 写法一致

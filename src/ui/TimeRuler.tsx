@@ -101,7 +101,14 @@ export function TimeRuler({ scale, totalDays }: TimeRulerProps) {
             data-testid="ruler-month-band"
             data-month={band.label}
           >
-            {band.width >= MIN_MONTH_LABEL_WIDTH ? band.label : ''}
+            {/* 月名单独包一层，好让它能 sticky（钉在甘特区左缘）——
+                直接 sticky 在带自身上做不到：带要按 left/width 绝对定位占位。
+                放不下月名的窄月（< MIN_MONTH_LABEL_WIDTH）仍然留空，不钉。 */}
+            {band.width >= MIN_MONTH_LABEL_WIDTH && (
+              <span className={styles.rulerMonthLabel} data-testid="ruler-month-label">
+                {band.label}
+              </span>
+            )}
           </div>
         ))}
       </div>

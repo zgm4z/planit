@@ -3,13 +3,18 @@
 
 // 标尺的两行容器（§4.2 落地）。总高 = --planit-ruler-height（32px）：
 // 上行月份带 14px + 下行日号 18px。ruler 自身有 1px 下边框，属于那 32px，
-// 因此这里 overflow:hidden —— 被裁掉的 1px 落在日号行底部（数字行内垂直居中，
-// 感知不到），换来的是「月份带 / 日号各归其行、互不遮盖」。
+// 因此这里要裁掉溢出的 1px。
+//
+// 用 `overflow: clip` 而**不是** `hidden`：hidden 会把这个盒子变成**滚动容器**，
+// 于是月份标签（.rulerMonthLabel）的 position:sticky 会以它、而不是以真正的滚动
+// 容器（ProjectView 的 .scroll）为参照 —— 钉住当场失效。clip 只裁剪、不建立滚动
+// 容器，sticky 因此能一路找到 .scroll。被裁的仍是日号行底部那 1px（数字垂直居中，
+// 感知不到），「月份带 / 日号各归其行、互不遮盖」的性质不变。
 .rulerInner {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow: clip;
 }
 
 // ── 上行：月份带 ──
@@ -23,6 +28,10 @@
 
 // 单片月份带。左缘一条强描边标出「月从这里开始」—— 它落在列边界上，
 // 与下行同日号的日刻度对齐，两行合成一条更清晰的月分隔线。
+//
+// 注意**不能**给带加 overflow:hidden —— 那会把带变成滚动容器，里面的
+// .rulerMonthLabel 的 sticky 就失效了（见 .rulerMonthLabel 的注释）。
+// 窄月名溢出的风险已由 TSX 的 MIN_MONTH_LABEL_WIDTH 门槛挡在渲染之外。
 .rulerMonthBand {
   @include tabular-nums;
   position: absolute;
@@ -30,9 +39,7 @@
   bottom: 0;
   display: flex;
   align-items: center;
-  padding-left: 6px;
   border-left: 1px solid var(--planit-border-strong);
-  overflow: hidden;
   font-size: var(--planit-fs-micro);
   font-weight: 500;
   text-transform: uppercase; // §1.2：大写的拉丁列头才加字距；月名同属这一族
@@ -40,6 +47,19 @@
   color: var(--planit-text-muted);
   white-space: nowrap;
   pointer-events: none;
+}
+
+// 月份标签（OmniPlan 做法）：滚动到月中时，当前月的名字**钉在甘特区左缘**，
+// 让用户任何时候都看得到「这是几月」——否则上行一整条是空的。
+//
+// 为什么 left 是 --planit-outline-width 而不是 0：0 会把标签钉在滚动口最左，
+// 那里被 sticky 的左列（.outline）盖着、且 z 更高的是标尺（2 > 1），标签会**画在
+// 任务名列上面**。钉在左列右缘（= 甘特区左缘）才是对的位置。
+.rulerMonthLabel {
+  position: sticky;
+  left: var(--planit-outline-width);
+  z-index: 1; // 压过后面的月份带，钉住时不与相邻月名叠字
+  padding-left: 6px;
 }
 
 // ── 下行：日号 ──
@@ -122,10 +142,19 @@
 //     background-image 只是叠在最左 2px 的深红覆盖层。
 .barCritical {
   background-color: var(--planit-critical-mid);
+  // 左缘宽度 = min(2px, 15%)，而不是固定 2px：月视图下 1～2 天的关键条只有 4～8px
+  // 宽，固定 2px 会占掉 25%～50%，读起来「一半深红一半红」——左缘喧宾夺主，条本身
+  // 反而看不出是条。min() 让左缘随条宽收缩：宽条仍是 2px（信号强度不变），窄条最多
+  // 只占 15%（信号仍在，但不再压过中红底）。
+  //
+  // 为什么允许 min() 出现在 gradient 的色标位上：已实测浏览器支持（CSS.supports 为
+  // true，computed style 原样保留 min()，见本轮报告）。若不支持的旧浏览器遇到它，
+  // 整条 background-image 声明会被丢弃 → 退化为纯 --critical-mid 红底：左缘消失，
+  // 但「关键=红 + 略高 2px」两条信号仍在，是最安全的降级方向。
   background-image: linear-gradient(
     to right,
-    var(--planit-critical-dark) 0 2px,
-    transparent 2px 100%
+    var(--planit-critical-dark) 0 min(2px, 15%),
+    transparent min(2px, 15%) 100%
   );
 }
 
