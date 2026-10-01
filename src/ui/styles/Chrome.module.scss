@@ -155,13 +155,11 @@
   font-size: var(--planit-fs-xs);
 }
 
-// ── 日历设置块（「项目」Tab 内的一个区块）───────────────────
-// 与 Inspector 同一套排版（区块标题 lg/600 + 下沿；组内 6；组间 16；区块 24），
-// 因此它读作「项目配置区的又一个区块」，而不是一块贴在角落的小控件。
-//
-// 它**不再**是右栏底部的一条，所以没有 border-top / 外内边距 / 底色 —— 那些是
-// 「钉在底部的一条」才需要的分隔。现在它与上方的项目字段同处一个 Stack，
-// 间距由 GAP_BLOCK(24) 与标题的下沿承担；左右内边距由 Inspector Box 的 p="md" 统一持有。
+// ── 日历设置块（「项目」Tab 的「工作日历」分组内）───────────
+// 它现在是项目面板 Accordion 的一个**分组内容**：分组标题（lg/600 + 下沿，见
+// Inspector.module.scss 的 .accControl）由外部给出，本文件只负责分组**内部**的两小节
+// （工作日 / 例外日期）—— 它们是子标签（md/500/muted），不再自带 lg 级标题与下沿，
+// 否则会与分组标题同重、读成同级。左右留白由 Inspector Box 的 p="md" 统一持有。
 
 .calendar {
   width: 100%;
@@ -186,27 +184,27 @@
   }
 }
 
-// 区块标题：§1.2 的 lg / 600 / --text-strong + 一条极淡下沿（扫描锚点）。
-// 与 Inspector 的 .accControl 同一形态 —— 这就是「与上面面板并列的区块」的视觉证据。
+// 子标签：日历设置现在是「工作日历」分组**内部**的两小节（工作日 / 例外日期）。
+// 它不能再和分组标题同重（lg / 600 / 下沿）—— 那会把两小节读成与分组同级。
+// 降一档到 md / 500 / --text-muted（无下沿），层级因此变成：
+//   分组标题（.accControl，lg/600/strong） > 子标签（这里） > 字段（FieldRow 标签列）。
 .blockTitle {
   margin: 0;
-  padding-bottom: var(--planit-sp-8);
-  font-size: var(--planit-fs-lg);
-  font-weight: 600;
+  font-size: var(--planit-fs-md);
+  font-weight: 500;
   line-height: 1.4;
-  color: var(--planit-text-strong);
+  color: var(--planit-text-muted);
   letter-spacing: 0;
-  border-bottom: 1px solid var(--planit-border);
 }
 
-// 两个区块之间 24px（§2.1 区块间）
+// 两小节之间 16px（§2.1 组间）—— 它们是同一分组内的两段，不是两个区块。
 .blockGap {
-  margin-top: var(--planit-sp-24);
+  margin-top: var(--planit-sp-16);
 }
 
-// 标题到内容 16px（组间）
+// 子标签到内容 8px（§2.1 组内）—— 比小节间距（16）紧一半，标签因此绑定到它的内容
 .blockBody {
-  margin-top: var(--planit-sp-16);
+  margin-top: var(--planit-sp-8);
 }
 
 // 工作日复选框组：7 个标签等距铺开。

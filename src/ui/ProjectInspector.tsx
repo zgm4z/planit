@@ -1,13 +1,22 @@
-import { NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { useId } from 'react'
+import { Accordion, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 
 import type { SchedulingDirection } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
 import { useScheduleStore } from '../store/scheduleStore'
 import { CalendarSettings } from './CalendarSettings'
-import { DateField, GAP_BLOCK, GAP_FIELD, Section, StatList, StatRow } from './InspectorFields'
+import { DateField, FieldRow, GAP_BLOCK, GAP_INNER, StatList, StatRow } from './InspectorFields'
 import { formatDate, formatDays } from './format'
 import { computeProjectSummary } from './projectSummary'
+import styles from './styles/Inspector.module.scss'
+
+/**
+ * 项目面板（spec §4）的默认展开分组（§3.5）：**主分组**（时间线 / 摘要）默认展开，
+ * **次要分组**（格式 / 工作日历）默认收起 —— 收起态仍显示分组名与 ▼，用户知道那里
+ * 有东西，只是先不占屏。
+ */
+const PROJECT_OPEN_GROUPS = ['timeline', 'summary']
 
 /**
  * 项目面板（spec §4）。宽度由 ProjectView 的右侧栏容器统一持有，这里只填满它。
@@ -16,11 +25,18 @@ import { computeProjectSummary } from './projectSummary'
  *   forward  —— startDate 是正推起点（可编辑）；endDate 是可选期限（也可编辑）
  *   backward —— endDate 是逆推终点（可编辑）；startDate 是引擎推导值 → 只读
  *
- * 排版（§2.1）：可编辑字段按「区块」分组，块内 16px、块间 24px；摘要是一个
- * **只读事实块**（平排的规格表），与上方带边框的控件形成对照 —— 方块 = 可改，平排 = 事实。
+ * 信息架构（对齐 OmniPlan 的「项目」检查器）：
+ *   名称（不分组，置顶）—— 它是「这份排期叫什么」，属于面板身份而非某个分组
+ *   ▼ 时间线   排期方向 · 开始日期 · 结束日期 · 基准日
+ *   ▼ 摘要     项目跨度 · 总工作日 · 任务数
+ *   ▼ 格式     货币 · 投入单位转换
+ *   ▼ 工作日历 工作日 · 例外日期
  *
- * 本面板末尾挂入 **CalendarSettings**（工作日 / 例外日期）：工作日历是**项目级配置**，
- * 与排期方向、基准日同类，因此与它们并列在「项目」Tab —— 不再常驻右栏底部。
+ * 排版（§3.4）：字段一律走 FieldRow —— 标签固定在左列、值填满右列，只读事实右对齐。
+ * 分组用 Accordion（与任务面板同构，§3.5），组内 6px、组间 24px。
+ *
+ * 工作日历（CalendarSettings）是**项目级配置**，与排期方向 / 基准日同类，
+ * 因此归「工作日历」分组 —— 它不再常驻右栏底部（见 CalendarSettings 的 IA 注释）。
  */
 export function ProjectInspector() {
   const { t } = useTranslation()
@@ -28,6 +44,11 @@ export function ProjectInspector() {
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
   const result = useScheduleStore((state) => state.result)
+
+  // 属性行要把 <label> 关联到控件 —— id 在这里生成，同时交给 FieldRow 与控件。
+  const nameId = useId()
+  const directionId = useId()
+  const hoursId = useId()
 
   const backward = project.schedulingDirection === 'backward'
   const calendar = project.calendars[project.calendarId]
@@ -38,9 +59,10 @@ export function ProjectInspector() {
 
   return (
     <Stack gap={GAP_BLOCK}>
-      <Stack gap={GAP_FIELD}>
+      {/* 名称：不分组、置顶。它标识「这是哪个项目」，不属于时间线 / 摘要任何一组。 */}
+      <FieldRow label={t('inspector.project.name')} controlId={nameId}>
         <TextInput
-          label={t('inspector.project.name')}
+          id={nameId}
           value={project.name}
           onBlur={breakCoalescing}
           onChange={(event) =>
@@ -52,161 +74,191 @@ export function ProjectInspector() {
             })
           }
         />
+      </FieldRow>
 
-        <Select
-          label={t('inspector.project.direction')}
-          value={project.schedulingDirection}
-          data={[
-            { value: 'forward', label: t('inspector.project.directionForward') },
-            { value: 'backward', label: t('inspector.project.directionBackward') },
-          ]}
-          onChange={(value) =>
-            value &&
-            dispatch({
-              type: 'project.setDirection',
-              label: 'commands.project.setDirection',
-              payload: { direction: value as SchedulingDirection },
-            })
-          }
-        />
-      </Stack>
+      <Accordion
+        multiple
+        variant="default"
+        defaultValue={PROJECT_OPEN_GROUPS}
+        className={styles.accordion}
+        classNames={{
+          item: styles.accItem,
+          control: styles.accControl,
+          label: styles.accLabel,
+          panel: styles.accPanel,
+        }}
+      >
+        <Accordion.Item value="timeline">
+          <Accordion.Control>{t('inspector.project.groupTimeline')}</Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap={GAP_INNER}>
+              <FieldRow label={t('inspector.project.direction')} controlId={directionId}>
+                <Select
+                  id={directionId}
+                  value={project.schedulingDirection}
+                  data={[
+                    { value: 'forward', label: t('inspector.project.directionForward') },
+                    { value: 'backward', label: t('inspector.project.directionBackward') },
+                  ]}
+                  onChange={(value) =>
+                    value &&
+                    dispatch({
+                      type: 'project.setDirection',
+                      label: 'commands.project.setDirection',
+                      payload: { direction: value as SchedulingDirection },
+                    })
+                  }
+                />
+              </FieldRow>
 
-      <Stack gap={GAP_FIELD}>
-        <DateField
-          label={t('inspector.project.startDate')}
-          value={backward ? derivedStart : project.startDate}
-          disabled={backward}
-          onBlur={breakCoalescing}
-          onChange={(next) =>
-            dispatch({
-              type: 'project.setStartDate',
-              label: 'commands.project.setStartDate',
-              payload: { startDate: next },
-              coalesceKey: 'project.setStartDate',
-            })
-          }
-        />
-        {backward && (
-          <Text fz="xs" c="dimmed">
-            {t('inspector.project.startDerivedHint')}
-          </Text>
-        )}
+              <DateField
+                label={t('inspector.project.startDate')}
+                value={backward ? derivedStart : project.startDate}
+                disabled={backward}
+                onBlur={breakCoalescing}
+                onChange={(next) =>
+                  dispatch({
+                    type: 'project.setStartDate',
+                    label: 'commands.project.setStartDate',
+                    payload: { startDate: next },
+                    coalesceKey: 'project.setStartDate',
+                  })
+                }
+              />
+              {backward && (
+                <Text fz="xs" c="dimmed">
+                  {t('inspector.project.startDerivedHint')}
+                </Text>
+              )}
 
-        <DateField
-          label={t('inspector.project.endDate')}
-          value={project.endDate ?? ''}
-          clearable
-          onBlur={breakCoalescing}
-          onChange={(next) =>
-            dispatch({
-              type: 'project.setEndDate',
-              label: 'commands.project.setEndDate',
-              // 清空 = 无期限（forward）/ 退回正推完成日（backward）
-              payload: { endDate: next || undefined },
-              coalesceKey: 'project.setEndDate',
-            })
-          }
-        />
-      </Stack>
+              <DateField
+                label={t('inspector.project.endDate')}
+                value={project.endDate ?? ''}
+                clearable
+                onBlur={breakCoalescing}
+                onChange={(next) =>
+                  dispatch({
+                    type: 'project.setEndDate',
+                    label: 'commands.project.setEndDate',
+                    // 清空 = 无期限（forward）/ 退回正推完成日（backward）
+                    payload: { endDate: next || undefined },
+                    coalesceKey: 'project.setEndDate',
+                  })
+                }
+              />
 
-      {/* 摘要：**只读事实块**。日期一律 formatDate（YYYY-MM-DD），
-          数字一律 formatDays / formatPlain —— 组件里不再出现第二份四舍五入。
-          标题体例：与「工作日 / 例外日期」（CalendarSettings）及任务面板 Accordion 头
-          共用同一角色（§1.2「区块标题」：lg / 600 + 下沿），因此直接用共用的 <Section>
-          （产出 <h3>，不是 <p>）。它此前是 micro / 大写 / 弱化的**列头**档，与同面板的
-          「工作日」撞出两套层级 —— 一个面板只应有一套区块标题。 */}
-      <Section title={t('inspector.project.summary')}>
-        {summary ? (
-          <StatList>
-            {/* 一律拼成「标签：值」的单行事实 —— 数字过 formatDate / formatDays
-                （日期保持 YYYY-MM-DD，数值不再各自 Math.round） */}
-            <Text fz="sm" c="dimmed" data-testid="project-summary-span">
-              {t('inspector.project.span', {
-                start: formatDate(summary.start) ?? '—',
-                finish: formatDate(summary.finish) ?? '—',
-              })}
-            </Text>
-            <Text fz="sm" c="dimmed" data-testid="project-summary-workdays">
-              {t('inspector.project.totalWorkdays', {
-                count: formatDays(summary.totalWorkdays) ?? '—',
-              })}
-            </Text>
-            <Text fz="sm" c="dimmed" data-testid="project-summary-tasks">
-              {t('inspector.project.taskCount', { count: formatDays(summary.taskCount) ?? '—' })}
-            </Text>
-          </StatList>
-        ) : (
-          // 算不出来（§3.3）：一个可排的任务都没有 → 弱化 —
-          <Text fz="sm" data-testid="project-summary-empty" style={{ color: 'var(--planit-text-faint)' }}>
-            —
-          </Text>
-        )}
-      </Section>
+              {/* 基准日（挣值的「到某日为止」）：项目级设置。输入框驱动 → 合并键
+                  `project.setStatusDate` + onBlur 打断合并。说明紧随其后（组内 6px）。 */}
+              <DateField
+                label={t('inspector.project.statusDate')}
+                testId="project-status-date"
+                value={project.statusDate ?? ''}
+                clearable
+                onBlur={breakCoalescing}
+                onChange={(next) =>
+                  dispatch({
+                    type: 'project.setStatusDate',
+                    label: 'commands.project.setStatusDate',
+                    // 清空 = 未设基准日（PV / SV 不可算）—— 必须给 undefined，不能留空串
+                    payload: { statusDate: next || undefined },
+                    coalesceKey: 'project.setStatusDate',
+                  })
+                }
+              />
+              <Text fz="xs" c="dimmed">
+                {t('inspector.project.statusDateHint')}
+              </Text>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
 
-      {/* 基准日（挣值的「到某日为止」）：项目级设置，落在项目面板（偏差 3 / 偏差 7）。
-          输入框驱动 → 合并键 `project.setStatusDate` + onBlur 打断合并。 */}
-      <Stack gap={GAP_FIELD}>
-        <DateField
-          label={t('inspector.project.statusDate')}
-          testId="project-status-date"
-          value={project.statusDate ?? ''}
-          clearable
-          onBlur={breakCoalescing}
-          onChange={(next) =>
-            dispatch({
-              type: 'project.setStatusDate',
-              label: 'commands.project.setStatusDate',
-              // 清空 = 未设基准日（PV / SV 不可算）—— 必须给 undefined，不能留空串
-              payload: { statusDate: next || undefined },
-              coalesceKey: 'project.setStatusDate',
-            })
-          }
-        />
-        <Text fz="xs" c="dimmed">
-          {t('inspector.project.statusDateHint')}
-        </Text>
-      </Stack>
+        {/* 摘要：**只读事实块**。日期一律 formatDate（YYYY-MM-DD），数字一律
+            formatDays —— 组件里不再出现第二份四舍五入。每行是 FieldRow（值右对齐）。 */}
+        <Accordion.Item value="summary">
+          <Accordion.Control>{t('inspector.project.summary')}</Accordion.Control>
+          <Accordion.Panel>
+            {summary ? (
+              <StatList>
+                <StatRow
+                  label={t('inspector.project.spanLabel')}
+                  value={t('inspector.project.spanValue', {
+                    start: formatDate(summary.start) ?? '—',
+                    finish: formatDate(summary.finish) ?? '—',
+                  })}
+                  testId="project-summary-span"
+                />
+                <StatRow
+                  label={t('inspector.project.workdaysLabel')}
+                  value={t('outline.cell.days', { count: formatDays(summary.totalWorkdays) ?? '—' })}
+                  testId="project-summary-workdays"
+                />
+                <StatRow
+                  label={t('inspector.project.taskCountLabel')}
+                  value={formatDays(summary.taskCount) ?? '—'}
+                  testId="project-summary-tasks"
+                />
+              </StatList>
+            ) : (
+              // 算不出来（§3.3）：一个可排的任务都没有 → 弱化 —
+              <Text
+                fz="sm"
+                data-testid="project-summary-empty"
+                style={{ color: 'var(--planit-text-faint)' }}
+              >
+                —
+              </Text>
+            )}
+          </Accordion.Panel>
+        </Accordion.Item>
 
-      <Section title={t('inspector.project.format')}>
-        {/* §3.3：货币曾是一个**禁用的空 Select** —— 典型的「用控件表达数据」。
-            改为只读事实块的一行（标签 + 弱化的 `—`），版本注记仍由下方 hint 承担
-            （分批原则：渲染出来并注明「尚未排期」，而不是删掉）。 */}
-        <Stack gap={GAP_FIELD}>
-          <Stack gap={GAP_FIELD}>
-            <StatList>
+        <Accordion.Item value="format">
+          <Accordion.Control>{t('inspector.project.format')}</Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap={GAP_INNER}>
+              {/* §3.3：货币是一个**未配置**的值 —— 用说明性文字（「未指定」）而不是 `—`，
+                  它告诉用户这里为什么空。版本注记由下方 hint 承担（分批原则：渲染出来
+                  并注明「尚未排期」，而不是删掉）。 */}
               <StatRow
                 label={t('inspector.project.currency')}
                 value={null}
+                unset={t('inspector.project.currencyUnset')}
                 testId="project-currency"
               />
-            </StatList>
-            <Text fz="xs" c="dimmed">
-              {t('inspector.project.currencyHint')}
-            </Text>
-          </Stack>
+              <Text fz="xs" c="dimmed">
+                {t('inspector.project.currencyHint')}
+              </Text>
 
-          <NumberInput
-            label={t('inspector.project.unitConversion')}
-            min={1}
-            value={calendar.hoursPerDay}
-            onBlur={breakCoalescing}
-            onChange={(value) =>
-              dispatch({
-                type: 'calendar.setHoursPerDay',
-                label: 'commands.calendar.setHoursPerDay',
-                payload: { hoursPerDay: Number(value) || 1 },
-                coalesceKey: 'calendar.setHoursPerDay',
-              })
-            }
-          />
-        </Stack>
-      </Section>
+              <FieldRow label={t('inspector.project.unitConversion')} controlId={hoursId}>
+                <NumberInput
+                  id={hoursId}
+                  min={1}
+                  value={calendar.hoursPerDay}
+                  onBlur={breakCoalescing}
+                  onChange={(value) =>
+                    dispatch({
+                      type: 'calendar.setHoursPerDay',
+                      label: 'commands.calendar.setHoursPerDay',
+                      payload: { hoursPerDay: Number(value) || 1 },
+                      coalesceKey: 'calendar.setHoursPerDay',
+                    })
+                  }
+                />
+              </FieldRow>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
 
-      {/* 工作日历：**项目配置**，与上面的 名称 / 排期方向 / 基准日 / 格式 并列。
-          IA 修正 —— 它此前被钉在右栏底部（所有 Tab 之下的公共位置），切到「资源」
-          Tab 时底下仍挂着项目日历设置，属信息架构错位。现在它归「项目」Tab。
-          详见 CalendarSettings 顶部的归属说明（含对「全局设置应常驻」那条论证的回应）。 */}
-      <CalendarSettings />
+        {/* 工作日历：**项目配置**（工作日 / 例外日期）。归「项目」Tab 的最后一个分组，
+            详见 CalendarSettings 顶部的归属说明。 */}
+        <Accordion.Item value="calendar">
+          <Accordion.Control data-testid="project-group-calendar">
+            {t('inspector.project.groupCalendar')}
+          </Accordion.Control>
+          <Accordion.Panel>
+            <CalendarSettings />
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
     </Stack>
   )
 }

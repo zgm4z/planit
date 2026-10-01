@@ -93,10 +93,36 @@ describe('ProjectInspector', () => {
 
   it('摘要显示项目跨度、总工作日与任务数', () => {
     renderProjectInspector()
+    // 摘要改为属性行（标签左 / 值右，§3.4）后，标签与值**分列**：
+    // 值按 testid 定位那一格（比匹配拼成一句「标签：值」更精确 —— 不依赖拼接方式），
+    // 标签单独按其文本断言（证明这一格确实属于哪个事实，而不是随便一个「5」）。
     // A: 03-02..03-04，B: 03-05..03-06 → 03-02..03-06 = 5 个工作日
-    expect(screen.getByText(/项目跨度：2026-03-02 → 2026-03-06/)).toBeInTheDocument()
-    expect(screen.getByText(/总工作日：5/)).toBeInTheDocument()
-    expect(screen.getByText(/任务数：2/)).toBeInTheDocument()
+    expect(screen.getByText('项目跨度')).toBeInTheDocument()
+    expect(screen.getByTestId('project-summary-span')).toHaveTextContent('2026-03-02 → 2026-03-06')
+    expect(screen.getByText('总工作日')).toBeInTheDocument()
+    // 工作日按 §1.3 带「天」单位
+    expect(screen.getByTestId('project-summary-workdays')).toHaveTextContent('5 天')
+    expect(screen.getByText('任务数')).toBeInTheDocument()
+    expect(screen.getByTestId('project-summary-tasks')).toHaveTextContent('2')
+  })
+
+  it('分组结构：名称置顶 + 四组，主分组（时间线 / 摘要）默认展开、次要分组（格式 / 工作日历）默认收起', () => {
+    renderProjectInspector()
+
+    // 名称不分组，置顶（存在即可见，不套 Accordion）
+    expect(screen.getByLabelText('名称')).toHaveValue('测试项目')
+
+    // 四个分组头都是可折叠按钮（§3.5）
+    const expanded = (label: string) =>
+      screen.getByRole('button', { name: label }).getAttribute('aria-expanded')
+    for (const label of ['时间线', '摘要', '格式', '工作日历']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+    // 默认展开主分组、收起次要分组 —— 写反就会红
+    expect(expanded('时间线')).toBe('true')
+    expect(expanded('摘要')).toBe('true')
+    expect(expanded('格式')).toBe('false')
+    expect(expanded('工作日历')).toBe('false')
   })
 
   it('投入单位换算可编辑并写回 hoursPerDay；货币是只读事实行而非禁用控件', () => {
@@ -112,8 +138,9 @@ describe('ProjectInspector', () => {
     // §3.3：货币曾是一个禁用的空 Select（「用控件表达数据」），现为只读事实行。
     // 区分性断言：一旦有人把它改回 Select，这条 queryByRole 就会命中、立刻变红。
     expect(screen.queryByRole('combobox', { name: '货币' })).not.toBeInTheDocument()
-    // 无此概念 → 弱化的 `—`（不是空 Select 的空白，也不是「0」）
-    expect(screen.getByTestId('project-currency')).toHaveTextContent('—')
+    // 未配置 → **说明性文字**「未指定」（§3.3：能说出原因就给原因，比一个 `—` 有用）。
+    // 断言更具体了（此前只要求它不是空、不是「0」）——「未指定」把「为什么空」也说清楚。
+    expect(screen.getByTestId('project-currency')).toHaveTextContent('未指定')
     // v1.0 是路线图最后一版，货币与格式再也指不出一个真实版本 → 写「尚未排期」（偏差 6）
     expect(screen.getByText(/尚未排期/)).toBeInTheDocument()
     expect(screen.queryByText(/v1\.0/)).not.toBeInTheDocument()

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Group, NumberInput, Text, TextInput } from '@mantine/core'
+import { NumberInput, Text, TextInput } from '@mantine/core'
 
 import { formatDate, formatPlain, isDateInput } from './format'
 import styles from './styles/Inspector.module.scss'
@@ -24,8 +24,56 @@ export const GAP_BLOCK = 'xl' as const
  *
  *   表单控件（可编辑）  → DateField / NumberField
  *   只读事实（数据）    → StatRow / StatLine（等宽数字、右对齐，读作「规格表」）
- *   空值                → StatRow 收 `null` 时渲染弱化的 `—`
+ *   空值                → StatRow 收 `null` 时渲染弱化的 `—` 或说明性文字
+ *
+ * **它们共用同一套栅格（FieldRow）**：标签固定在左列 88px、值填满右列 —— 于是
+ * 「方块 = 能改、纯文字 = 事实」落在同一列上，一眼可分（§3.4 的最后一条）。
  */
+
+/* ───────────────────── 属性行（标签左 / 值右，§3.4）───────────────────── */
+
+/**
+ * 属性行：标签左 / 值右。这是属性检查器的标准形态（macOS 检查器、VS Code 设置、
+ * OmniPlan 自己的右栏都是如此），扫描效率远高于「标签在上、控件在下」的堆叠 ——
+ * 后者每个字段占两行，一屏放不下几个，且标签与值的从属关系靠垂直距离表达，本就弱。
+ *
+ * **controlId 是 label↔控件关联的唯一入口**：给了就渲染真正的 `<label htmlFor>`，
+ * 于是 `getByLabelText` / `getByRole(..., { name })` / 屏幕阅读器都照常工作。
+ * 这**不能**用一个纯文本标签替代 —— 那会把可访问名悄悄丢掉（单测与 a11y 都会红）。
+ * 只读事实行没有控件，render 成 `<span>`（label 无处可指）。
+ *
+ * align：'end' = 只读事实**右对齐**（数字成列可比）；'start' = 可编辑控件填满值列。
+ */
+export function FieldRow({
+  label,
+  controlId,
+  align = 'start',
+  children,
+}: {
+  label: ReactNode
+  /** 关联控件用的 id（与控件自身的 id 相同）。给了才是「可编辑行」 */
+  controlId?: string
+  /** 'end' = 只读事实右对齐；'start' = 可编辑控件填满值列 */
+  align?: 'start' | 'end'
+  children: ReactNode
+}) {
+  return (
+    <div className={styles.fieldRow}>
+      {controlId ? (
+        <label className={styles.fieldLabel} htmlFor={controlId}>
+          {label}
+        </label>
+      ) : (
+        <span className={styles.fieldLabel}>{label}</span>
+      )}
+      <div
+        className={align === 'end' ? `${styles.fieldValue} ${styles.fieldValueEnd}` : styles.fieldValue}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
 
 /* ───────────────────────── 日期 ───────────────────────── */
 
@@ -68,6 +116,7 @@ export function DateField({
   onChange,
   onBlur,
 }: DateFieldProps) {
+  const id = useId()
   // 展示值一律过 formatDate（§1.3）—— 即使 store 里存着带时间的 ISO 串，
   // 输入框里也只出现 YYYY-MM-DD。draft 是**可编辑草稿**，允许出现半截输入。
   const normalized = formatDate(value) ?? ''
@@ -78,9 +127,9 @@ export function DateField({
     setDraft(normalized)
   }, [normalized])
 
-  return (
+  const input = (
     <TextInput
-      label={label}
+      id={id}
       // ariaLabel 用于「标签已由区块标题给出」的场合：只给可访问名、不渲染可见标签，
       // 避免同一段文字在页面上出现两次（标题 + 字段标签）。
       aria-label={ariaLabel}
@@ -102,6 +151,15 @@ export function DateField({
         onBlur?.()
       }}
     />
+  )
+
+  // 无可见标签（标签由区块标题给出，只有 ariaLabel）时不套属性行 —— 控件直接铺满
+  // 调用处给的容器（日历块的「例外日期」与内联的相关性行都靠这个保持原布局）。
+  if (!label) return input
+  return (
+    <FieldRow label={label} controlId={id}>
+      {input}
+    </FieldRow>
   )
 }
 
@@ -151,6 +209,7 @@ export function NumberField({
   onChange,
   onBlur,
 }: NumberFieldProps) {
+  const id = useId()
   const [draft, setDraft] = useState(() => display(value, digits))
   const [focused, setFocused] = useState(false)
 
@@ -158,9 +217,9 @@ export function NumberField({
     if (!focused) setDraft(display(value, digits))
   }, [value, digits, focused])
 
-  return (
+  const input = (
     <NumberInput
-      label={label}
+      id={id}
       value={draft}
       min={min}
       max={max}
@@ -187,14 +246,29 @@ export function NumberField({
       }}
     />
   )
+
+  // 与 DateField 同理：无可见标签（相关性行的内联 lag 输入）时不套属性行，
+  // 保留调用处给的固定宽度（w）与内联布局。
+  if (!label) return input
+  return (
+    <FieldRow label={label} controlId={id}>
+      {input}
+    </FieldRow>
+  )
 }
 
 /* ───────────────────── 只读事实（数据） ───────────────────── */
 
 interface StatRowProps {
   label: ReactNode
-  /** `null` = **算不出来**（§3.3）→ 显示弱化 `—`；`'0'` 是真的 0，照常显示 */
+  /** `null` = **无值**（§3.3）→ 由 `unset` 决定呈现。`'0'` 是真的 0，照常显示 */
   value: string | null
+  /**
+   * 「未配置」时的说明性文字（§3.3 的中间一类）：它能**说出原因**、告诉用户去哪里补
+   * （「未设置基线」「未指定」），比一个 `—` 有用得多。不给则退回弱化的 `—`
+   * （那是「算不出来」—— 只是没有值，说不出原因）。
+   */
+  unset?: string
   testId?: string
 }
 
@@ -207,16 +281,13 @@ interface StatRowProps {
  *
  * 三种「空」在本组件里有了唯一的分界：
  *   · 无此概念 → 调用方**根本不渲染**这一行
- *   · 算不出来 → `value === null` → 弱化 `—`
+ *   · 未配置   → `unset` 说明性文字（说出原因）/ 算不出来 → 弱化 `—`
  *   · 真的是 0 → `value === '0'` → 正常显示
  */
-export function StatRow({ label, value, testId }: StatRowProps) {
+export function StatRow({ label, value, unset, testId }: StatRowProps) {
   const empty = value === null
   return (
-    <Group justify="space-between" gap={12} wrap="nowrap" align="baseline">
-      <Text fz="xs" c="dimmed" style={{ flexShrink: 0 }}>
-        {label}
-      </Text>
+    <FieldRow label={label} align="end">
       <Text
         fz="md"
         fw={500}
@@ -224,9 +295,9 @@ export function StatRow({ label, value, testId }: StatRowProps) {
         className={styles.statValue}
         style={{ color: empty ? 'var(--planit-text-faint)' : undefined }}
       >
-        {empty ? '—' : value}
+        {empty ? (unset ?? '—') : value}
       </Text>
-    </Group>
+    </FieldRow>
   )
 }
 
