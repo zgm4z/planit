@@ -33,6 +33,10 @@ interface ViewState {
   setZoom: (zoom: ZoomLevel) => void
   selectTask: (taskId: TaskId | null) => void
   toggleCollapsed: (taskId: TaskId) => void
+  /** 折叠全部（只折叠有子任务的行）。纯 UI 状态，不入撤销栈 —— 与 toggleCollapsed 同族 */
+  collapseAll: () => void
+  /** 展开全部（清空 collapsedIds） */
+  expandAll: () => void
   setDayWidth: (dayWidth: number) => void
   setActiveView: (view: ActiveView) => void
   setVisibleColumns: (keys: readonly unknown[]) => void
@@ -130,6 +134,27 @@ export const useViewStore = create<ViewState>((set, get) => ({
     else next.add(taskId)
     set({ collapsedIds: next })
   },
+
+  // 折叠全部 / 展开全部（§10.2「视图」菜单）。
+  //
+  // 折叠的是**有子任务的行**：叶子任务折叠没有意义（它没有子任务，折了也只把箭头
+  // 换个朝向，行数一行不少）。判定沿用 `flattenVisibleRows` 的同一数据源
+  // （`project.tasks` 的 `childIds`）—— 不在这里另立一套「什么算分组」的规则。
+  //
+  // 与 toggleCollapsed 一样是**纯 UI 状态**：折叠是「怎么看」，不写进 Project，
+  // 也不产生 patch，因此不进撤销栈、Ctrl+Z 撤不回来。这也是 §10 里「视图」菜单
+  // 与「编辑」菜单的分界。
+  collapseAll: () => {
+    const project = useProjectStore.getState().project
+    if (!project) return
+    const next = new Set<TaskId>()
+    for (const task of Object.values(project.tasks)) {
+      if (task.childIds.length > 0) next.add(task.id)
+    }
+    set({ collapsedIds: next })
+  },
+
+  expandAll: () => set({ collapsedIds: new Set<TaskId>() }),
 
   setDayWidth: (dayWidth) => set({ dayWidth: Math.max(2, dayWidth) }),
 }))
