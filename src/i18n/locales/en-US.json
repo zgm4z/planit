@@ -169,7 +169,7 @@
     "orderAsap": "As soon as possible",
     "orderAlap": "As late as possible",
     "allowSplitting": "Allow splitting",
-    "allowSplittingHint": "Split scheduling is not yet implemented (after v0.5)",
+    "allowSplittingHint": "Task splitting is not implemented (not scheduled yet)",
     "priority": "Priority",
     "priorityHint": "Takes effect during resource leveling (higher = more important)",
     "delay": "Delay",

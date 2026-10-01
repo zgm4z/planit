@@ -169,7 +169,7 @@
     "orderAsap": "できるだけ早く",
     "orderAlap": "できるだけ遅く",
     "allowSplitting": "分割を許可",
-    "allowSplittingHint": "分割スケジューリングは未実装です（v0.5 以降）",
+    "allowSplittingHint": "タスク分割は未実装です（未定）",
     "priority": "優先度",
     "priorityHint": "リソース平準化時に有効（数値が大きいほど優先）",
     "delay": "遅延",

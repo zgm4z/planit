@@ -802,7 +802,7 @@ describe('日程安排组', () => {
     expect(currentTask().delay).toBe(2)
 
     expect(screen.getByLabelText('允许拆分')).toBeDisabled()
-    expect(screen.getByText(/拆分排期尚未实现/)).toBeInTheDocument()
+    expect(screen.getByText(/任务拆分尚未实现/)).toBeInTheDocument()
   })
 
   it('摘要任务下「延迟」禁用、「优先级」可编辑（不对称是有意的）', () => {

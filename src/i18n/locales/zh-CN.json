@@ -172,7 +172,7 @@
     "orderAsap": "尽快",
     "orderAlap": "尽晚",
     "allowSplitting": "允许拆分",
-    "allowSplittingHint": "拆分排期尚未实现（v0.5 之后）",
+    "allowSplittingHint": "任务拆分尚未实现（尚未排期）",
     "priority": "优先级",
     "priorityHint": "资源平衡时生效（数值越大越优先）",
     "delay": "延迟",

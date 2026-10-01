@@ -804,7 +804,7 @@ function ScheduleGroup({
         />
       </FieldRow>
 
-      {/* 拆分排期尚未实现：渲染成禁用态并注明版本，而不是隐藏（分批原则） */}
+      {/* 拆分尚未实现：渲染成禁用态并注明「尚未排期」，而不是隐藏（分批原则） */}
       <Stack gap={GAP_INNER}>
         <Checkbox
           label={t('inspector.allowSplitting')}
