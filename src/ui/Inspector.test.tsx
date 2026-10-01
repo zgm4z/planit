@@ -176,13 +176,37 @@ describe('Inspector 任务面板的 7 个分组', () => {
   })
 
   // 「基线」组在 v1.0 已解禁，不再是占位组 —— 本用例改用**仍是占位**的「资源分配」组。
-  it('占位组展开后是禁用态且有说明文案（不是隐藏）', async () => {
+  it('占位组展开后是只读事实块 + 说明文案，且不含任何禁用控件（§3.3）', async () => {
     const user = userEvent.setup()
     renderInspector()
 
     await user.click(screen.getByRole('button', { name: '资源分配' }))
-    expect(screen.getByTestId('placeholder-allocation')).toBeInTheDocument()
+    const group = screen.getByTestId('placeholder-allocation')
+    expect(group).toBeInTheDocument()
     expect(screen.getByText(/分配变更时的自动调整尚未排期/)).toBeInTheDocument()
+
+    // 区分性断言（§3.3「绝不用灰掉的禁用输入框表达数据」）：占位组改为只读事实行后，
+    // 组内**不能再有任何表单控件**。一旦有人把禁用 Select 加回来，这两条立刻变红。
+    expect(within(group).queryAllByRole('combobox')).toHaveLength(0)
+    expect(within(group).queryAllByRole('textbox')).toHaveLength(0)
+    // 字段名仍以**可读文本**呈现（规格表的标签列），而不是被吸附在控件上
+    expect(within(group).getByText('当资源分配更改时')).toBeInTheDocument()
+    expect(within(group).getByText('任务进度需要')).toBeInTheDocument()
+  })
+
+  // 「预计的工作量」同属占位组，此前没有用例覆盖 —— 补一条，防止 NumberInput 回归。
+  it('「预计的工作量」占位组同样是只读事实块，无 NumberInput', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await user.click(screen.getByRole('button', { name: '预计的工作量' }))
+    const group = screen.getByTestId('placeholder-expected-effort')
+    expect(group).toBeInTheDocument()
+    expect(screen.getByText(/预计工作量尚未排期/)).toBeInTheDocument()
+    // 三个量（最小 / 最大 / 期望）曾是三个禁用的 NumberInput —— 现在是三行事实文本
+    expect(within(group).queryAllByRole('spinbutton')).toHaveLength(0)
+    expect(within(group).getByText('最小值')).toBeInTheDocument()
+    expect(within(group).getByText('期望值')).toBeInTheDocument()
   })
 })
 
@@ -286,12 +310,18 @@ describe('基线分组（v1.0 解禁）', () => {
     const diff = useScheduleStore.getState().result.baselineDiffs[taskId]
     expect(diff.baselineStart).toBe('2026-03-02')
     expect(diff.baselineFinish).toBe('2026-03-04')
-    // 断言渲染值 = 引擎派生值（不是 UI 算出来的另一份）
-    expect(screen.getByTestId('baseline-start-variance')).toHaveTextContent(`开始差异: ${diff.startVariance} 天`)
-    expect(screen.getByTestId('baseline-finish-variance')).toHaveTextContent(
-      `结束差异: ${diff.finishVariance} 天`,
-    )
     expect(diff.finishVariance).toBe(2)
+    // 差异改为「只读事实块」后，标签与数值各占一格（结构变化），断言强度不变：
+    // 渲染值必须逐字等于引擎派生值 —— UI 若自己重算一遍「当前 − 基线」这里就会红。
+    expect(screen.getByText('开始差异')).toBeInTheDocument()
+    expect(screen.getByText('结束差异')).toBeInTheDocument()
+    expect(screen.getByTestId('baseline-start-variance')).toHaveTextContent(`${diff.startVariance} 天`)
+    expect(screen.getByTestId('baseline-finish-variance')).toHaveTextContent(
+      `${diff.finishVariance} 天`,
+    )
+    // 基线起止日期也一律 YYYY-MM-DD（§1.3）
+    expect(screen.getByTestId('baseline-start')).toHaveTextContent('2026-03-02')
+    expect(screen.getByTestId('baseline-finish')).toHaveTextContent('2026-03-04')
   })
 
   it('摘要任务在基线组里不显示差异（快照只含叶子），而是给汇总说明', async () => {
@@ -438,7 +468,7 @@ describe('任务信息组', () => {
     expect(screen.getByText(/分组的类型由子任务决定/)).toBeInTheDocument()
   })
 
-  it('投入 / 剩余 / 三种成本显示引擎派生的真实值（不是占位）', () => {
+  it('投入 / 剩余显示引擎派生的真实值，且是只读文本而非禁用输入框', () => {
     const project = useProjectStore.getState().project!
     const resource = createResource({ name: '张三' })
     const assignment = createAssignment({ taskId, resourceId: resource.id, units: 1 })
@@ -453,16 +483,65 @@ describe('任务信息组', () => {
     renderInspector()
 
     // duration 3 天 × Σunits(1) = 3 人日（fixedDuration 正算）；progress=0 → 剩余 = 投入
-    expect(screen.getByLabelText('投入')).toHaveValue('3')
-    expect(screen.getByLabelText('剩余')).toHaveValue('3')
-    expect(screen.getByLabelText('任务成本')).toBeDisabled()
-    expect(screen.getByLabelText('资源成本')).toBeDisabled()
-    expect(screen.getByLabelText('总成本')).toBeDisabled()
+    expect(screen.getByTestId('stat-effort')).toHaveTextContent('3')
+    expect(screen.getByTestId('stat-remaining')).toHaveTextContent('3')
+    // 区分性断言（§3.3「绝不用灰掉的禁用输入框表达数据」）：这两个量不再是表单控件 ——
+    // 一旦有人把它们改回 NumberInput，getByLabelText 就会命中、这条立刻变红。
+    expect(screen.queryByLabelText('投入')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('剩余')).not.toBeInTheDocument()
+    // 未设费率 → 成本概念未启用 → 整块收起（不是三个恒为 0 的灰框占三行）
+    expect(screen.queryByTestId('inspector-costs')).not.toBeInTheDocument()
     // 旧的「v0.5 提供」占位文案必须消失 —— 它们现在有真实值了，再标版本就是说谎。
-    // 注：只针对投入/成本这两条，不能笼统查 /v0\.5 提供/ —— 「资源分配」组仍是占位组，
-    // 它的 hint 里同样有「v0.5 提供」字样（那是另一件事，不在本任务范围）。
     expect(screen.queryByText(/投入与剩余将在 v0\.5 提供/)).not.toBeInTheDocument()
     expect(screen.queryByText(/成本将在 v0\.5 提供/)).not.toBeInTheDocument()
+  })
+
+  it('投入按 §1.3 格式化：0.8889 显示为 0.9（绝不放原始浮点）', () => {
+    const project = useProjectStore.getState().project!
+    const resource = createResource({ name: '张三' })
+    // units = 1/9、工期 8 → 投入 = 8/9 = 0.8888…
+    const assignment = createAssignment({ taskId, resourceId: resource.id, units: 1 / 9 })
+    useProjectStore.setState({
+      project: {
+        ...project,
+        resources: { [resource.id]: resource },
+        tasks: {
+          ...project.tasks,
+          [taskId]: { ...project.tasks[taskId], effortMode: 'fixedDuration', duration: 8 },
+        },
+        assignments: { [assignment.id]: assignment },
+      },
+    })
+    renderInspector()
+
+    // 引擎给的是 0.888888…，渲染必须是「0.9」—— 写错（用原始值 / toFixed(4)）就会红
+    expect(screen.getByTestId('stat-effort')).toHaveTextContent('0.9')
+    expect(screen.getByTestId('stat-effort')).not.toHaveTextContent('0.8889')
+  })
+
+  it('启用成本概念后，三种成本合并成一行只读文本（不是三个灰框）', () => {
+    const project = useProjectStore.getState().project!
+    // 一次性使用成本 1000 → 任务成本 = 1000；无小时费率 → 资源成本 0
+    // （工厂不接受 cost 覆盖，故先建后补 —— 与命令层写回的形状一致）
+    const resource = { ...createResource({ name: '张三' }), cost: { currency: 'CNY', usage: 1000 } }
+    const assignment = createAssignment({ taskId, resourceId: resource.id, units: 1 })
+    useProjectStore.setState({
+      project: {
+        ...project,
+        resources: { [resource.id]: resource },
+        assignments: { [assignment.id]: assignment },
+      },
+    })
+    renderInspector()
+
+    // 一行只读文本，含千分位（§1.3：成本 0 位 + 千分位）
+    expect(screen.getByTestId('inspector-costs')).toHaveTextContent(
+      '任务成本 1,000 · 资源成本 0 · 总成本 1,000',
+    )
+    // 区分性：三个独立控件必须不复存在 —— 否则「用控件表达数据」的缺陷又回来了
+    expect(screen.queryByLabelText('任务成本')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('资源成本')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('总成本')).not.toBeInTheDocument()
   })
 
   // 以下两条是 v0.4 Task 2 重写测试文件时误删的既有用例（覆盖倒退），
@@ -735,6 +814,29 @@ describe('日程安排组', () => {
     // 但 task.setPriority 对摘要**生效**（备注与优先级对摘要同样有意义）→ 绝不能禁用。
     // 这条断言就是防止下一个人来「统一」这个刻意的对称缺口。
     expect(screen.getByLabelText('优先级')).not.toBeDisabled()
+  })
+
+  it('日期输入不依赖原生 type=date —— 显示始终 YYYY-MM-DD（§1.3）', () => {
+    renderInspector()
+    const start = screen.getByLabelText('开始')
+
+    // 原生 <input type="date"> 会按浏览器 locale 渲染成 2026/03/02；改用文本框后
+    // 值只可能是 YYYY-MM-DD。写回 type="date" 这条立刻变红（那正是规范点名的缺陷）。
+    expect(start).not.toHaveAttribute('type', 'date')
+    expect(start).toHaveValue('2026-03-02')
+    expect(start).toHaveAttribute('placeholder', 'YYYY-MM-DD')
+  })
+
+  it('没有排期时：日期留空，浮时是弱化的 —（不是空白、也不是 0）', () => {
+    const result = useScheduleStore.getState().result
+    useScheduleStore.setState({ result: { ...result, schedules: {} } })
+
+    renderInspector()
+
+    // §3.3 的「算不出来」：显 —，而不是把 undefined 兜成 0 天
+    expect(screen.getByTestId('inspector-slack')).toHaveTextContent('—')
+    expect(screen.getByTestId('inspector-slack')).not.toHaveTextContent('0 天')
+    expect(screen.getByLabelText('开始')).toHaveValue('')
   })
 
   it('手动模式下显示手动安排提示', async () => {

@@ -18,8 +18,10 @@
     "undoWithLabel": "Undo: {{label}}",
     "redo": "Redo",
     "zoom": { "day": "Day", "week": "Week", "month": "Month" },
+    "zoomLabel": "Zoom",
     "view": { "gantt": "Gantt", "outline": "Task list" },
-    "language": "Language"
+    "language": "Language",
+    "more": "More"
   },
   "outline": {
     "columnTitle": "Task",
@@ -148,7 +150,7 @@
     "priorityHint": "Takes effect during resource leveling (higher = more important)",
     "delay": "Delay",
     "delayHint": "At least this many workdays this task should be delayed during resource leveling.",
-    "slack": "Slack: {{count}} workdays",
+    "slack": "Slack: {{days}} days",
     "critical": "on critical path",
     "relations": {
       "predecessors": "Predecessors (blocking me)",

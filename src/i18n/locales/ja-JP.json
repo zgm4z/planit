@@ -18,8 +18,10 @@
     "undoWithLabel": "元に戻す：{{label}}",
     "redo": "やり直す",
     "zoom": { "day": "日", "week": "週", "month": "月" },
+    "zoomLabel": "ズーム",
     "view": { "gantt": "ガント", "outline": "タスクリスト" },
-    "language": "言語"
+    "language": "言語",
+    "more": "その他"
   },
   "outline": {
     "columnTitle": "タスク",
@@ -148,7 +150,7 @@
     "priorityHint": "リソース平準化時に有効（数値が大きいほど優先）",
     "delay": "遅延",
     "delayHint": "リソース平準化時にこのタスクを遅延させる稼働日数（最低限）。",
-    "slack": "余裕：{{count}} 稼働日",
+    "slack": "余裕：{{days}} 日",
     "critical": "クリティカルパス上",
     "relations": {
       "predecessors": "先行（自分を妨げるもの）",

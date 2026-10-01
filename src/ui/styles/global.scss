@@ -4,44 +4,129 @@
 @use './tokens' as *;
 
 // ── 运行时 CSS 变量 ──────────────────────────────────────
-// Mantine 主题（theme.ts）读同一批变量，
+// Mantine 主题（theme.ts）读同一批数值（字号 / 间距），
 // 因此「改主题 = 改这批变量」在两边同时生效。
+//
+// 命名纪律（设计规范 §4.1）：颜色按**角色**命名，不按色相。
+//   · 结构用中性（bg-* / border-* / text-*）
+//   · 工作用靛蓝（work / work-soft）
+//   · 信号用红 / 琥珀 / 绿（critical / warning / positive）
+// 一屏之内高饱和色 ≤ 2 种（§4.2）。
 
 :root {
-  // 表面
-  --planit-bg-app: #f8fafc;
+  // ── 表面 ──
+  --planit-bg-app: #f7f8fa; /* 比旧值略暖略深，让白色卡片浮起来 */
   --planit-bg-surface: #ffffff;
-  --planit-bg-subtle: #f1f5f9;
-  --planit-bg-hover: #f1f5f9;
+  --planit-bg-subtle: #f1f2f6;
+  --planit-bg-hover: #eef0f5;
+  --planit-bg-structure: #f4f5f9; /* 摘要行底带（§2.2 的第一视觉特征） */
 
-  // 描边
-  --planit-border: #e2e8f0;
+  // ── 描边 ──
+  --planit-border: #e4e6ec;
+  --planit-border-strong: #d3d7e0; /* 表头下沿、面板分隔、行悬停预览竖条 */
 
-  // 文字
-  --planit-text: #0f172a;
-  --planit-text-muted: #94a3b8;
+  // ── 文字（四级，拉开对比；正文对背景 ≥ 7:1，元数据 ≥ 4.5:1）──
+  --planit-text-strong: #12151c; /* 标题 */
+  --planit-text: #2b303b; /* 正文 */
+  // 实测值（scripts/contrast.mjs，非手算）：
+  --planit-text-muted: #5b6270; /* 次要 · 对白 6.13:1 / 对摘要带 5.63:1 · 达标 */
+  // 上一轮那条「未达 4.5:1」的警告已过时：当时的值（#6a7280 一档）确不达标，
+  // 但本轮已把 faint 调暗到 #666e7c，最差前景（悬停带）实测 4.51:1 —— **已达标**，
+  // 故删去旧警告，避免与实际值自相矛盾（值达标、注释却仍在告警）。
+  --planit-text-faint: #666e7c; /* 元数据/空值 · 最差前景（悬停带）实测 4.51:1 · 达标 */
 
-  // 强调
-  --planit-accent: #6366f1;
-  --planit-accent-strong: #4f46e5;
-  --planit-accent-soft: #eef2ff;
-  --planit-accent-gradient: linear-gradient(90deg, #6366f1, #8b5cf6);
+  // ── 角色色 ──
+  --planit-work: #6366f1; /* 工作 · 靛蓝（降饱和，不与关键红抢注意力） */
+  --planit-work-soft: #eef0fe; /* 选中底 */
+  --planit-critical: #e5484d; /* 信号 · 关键路径 / 冲突（用于描边、里程碑、连线等小面积处） */
+  // 关键任务**条**的填充（§4.2 第 6 条）：成片时不整条铺满高饱和红，
+  // 改为「中等红底 + 左侧 2px 深红实边」，满屏时读作一个区块而非一片警报。
+  --planit-critical-mid: #d96165; /* 中等红 · 关键条底 */
+  --planit-critical-dark: #8f1b1f; /* 深红 · 关键条左侧 2px 实边 */
+  --planit-warning: #d97706; /* 信号 · 资源超载 */
+  --planit-positive: #16a34a; /* 信号 · 已完成 */
+  --planit-neutral: #8b93a3; /* 非活跃 */
 
-  // 语义
-  --planit-critical: #ef4444;
+  // ── 字号阶（§1.1：10 / 11 / 12 / 13 / 15 / 18）──
+  // 相邻小步、隔级大步，让「标题 / 正文 / 元数据」三层一眼可辨。
+  --planit-fs-micro: 10px; /* 列头、分组小标题（大写 + 字距 0.06em） */
+  --planit-fs-xs: 11px; /* 次要元数据（ID、单位、时间戳） */
+  --planit-fs-sm: 12px; /* 表格正文、缩略文案 */
+  --planit-fs-md: 13px; /* 甘特任务名、右栏输入值（基准字号） */
+  --planit-fs-lg: 15px; /* 区块标题 */
+  --planit-fs-xl: 18px; /* 工具栏项目名 */
 
-  // 尺寸（甘特图布局用）。**行高不在此列** —— 行高只由 JS 的
+  // ── 间距阶（§2.1：2 / 4 / 6 / 8 / 12 / 16 / 24 / 32）──
+  --planit-sp-2: 2px;
+  --planit-sp-4: 4px;
+  --planit-sp-6: 6px;
+  --planit-sp-8: 8px;
+  --planit-sp-12: 12px;
+  --planit-sp-16: 16px; /* 组间 */
+  --planit-sp-24: 24px; /* 区块间 */
+  --planit-sp-32: 32px;
+
+  // ── 动效（§5.1：一套曲线、三档时长）──
+  --planit-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1); /* 进入、悬停 */
+  --planit-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /* 位移 */
+  --planit-dur-fast: 120ms; /* 悬停、按下 */
+  --planit-dur-base: 180ms; /* 面板、折叠 */
+  --planit-dur-slow: 240ms; /* 视图切换 */
+
+  // ── 尺寸（甘特图布局用）。**行高不在此列** —— 行高只由 JS 的
   // useSharedVirtualizer.ROW_HEIGHT 决定（虚拟化器用它算位置、行用它作内联 height），
   // CSS 不持有对应变量，因此没有「两处要同步」的问题。
   --planit-ruler-height: 32px;
+  // 标尺两行（§4.2 落地）：上行月份带 14px + 下行日号 18px = 32px。
+  // 月份带只占上行、横跨整月，**绝不覆盖任何日列** —— 现在的日号不会被压住。
+  --planit-ruler-month-height: 14px;
+  --planit-ruler-day-height: 18px;
   --planit-outline-width: 320px;
   --planit-inspector-width: 300px;
+}
+
+// ── 响应式（§7）：宽度档位 ────────────────────────────────
+// 左列按档收缩（320 → 300 → 280 → 240）。**断点顺序即优先级**：三条规则在小屏上
+// 都会命中，靠源码顺序让最后一条（最窄档）胜出 —— 因此必须由宽到窄书写。
+// 这几档与 `outlineColumns.ts` 的 NARROW/COMPACT_LAYOUT_WIDTH 是同一组数值，
+// 那里驱动「哪些列该隐藏」，这里驱动「左列多宽」，改动时两处要一起看。
+@media (max-width: 1439px) {
+  :root {
+    --planit-outline-width: 300px;
+  }
+}
+
+@media (max-width: 1099px) {
+  :root {
+    --planit-outline-width: 280px;
+  }
+}
+
+@media (max-width: 899px) {
+  :root {
+    --planit-outline-width: 240px;
+  }
+}
+
+// ── 动效降级（§5.3）─────────────────────────────────────
+// 用户在系统层表达「减少动态效果」时，把全部时长压到 0.01ms、位移瞬时。
+// 只保留状态变化（颜色 / 透明度仍会变），去掉运动本身。
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 // ── 项目列表条目 ─────────────────────────────────────────
 // UnstyledButton 不自带悬停反馈，这里补上，让条目看起来可点。
 .planit-project-item {
-  transition: background-color 120ms ease;
+  transition: background-color var(--planit-dur-fast) var(--planit-ease-out);
 
   &:hover {
     background: var(--planit-bg-hover);

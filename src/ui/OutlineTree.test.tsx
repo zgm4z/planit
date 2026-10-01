@@ -179,6 +179,76 @@ describe('OutlineTree', () => {
     expect(screen.getByTestId(`outline-cell-duration-${milestone.id}`)).toHaveTextContent('—')
   })
 
+  it('数字与日期走 format.ts：成本千分位、工期带「天」、日期 YYYY-MM-DD', () => {
+    const rows = flattenVisibleRows(project, new Set())
+    render(
+      <MantineProvider>
+        <OutlineTree
+          project={project}
+          rows={rows}
+          virtualItems={virtualItems(rows.length)}
+          schedules={{ [childId]: schedule('2026-03-04', '2026-03-06') }}
+          efforts={{}}
+          costs={{ [childId]: { task: 1234, resource: 0, total: 1234 } }}
+          earnedValues={{}}
+          baselineDiffs={{}}
+          columns={OUTLINE_COLUMNS.filter((c) =>
+            ['title', 'start', 'duration', 'taskCost'].includes(c.key),
+          )}
+          selectedTaskId={null}
+          onSelect={() => {}}
+          onToggleCollapse={() => {}}
+        />
+      </MantineProvider>,
+    )
+
+    // §1.3：成本 0 位 + 千分位
+    expect(screen.getByTestId(`outline-cell-taskCost-${childId}`)).toHaveTextContent('1,234')
+    // 工期 0 位 + 「天」
+    expect(screen.getByTestId(`outline-cell-duration-${childId}`)).toHaveTextContent('3 天')
+    // 日期一律 YYYY-MM-DD（date 变体过 formatDate）
+    expect(screen.getByTestId(`outline-cell-start-${childId}`)).toHaveTextContent('2026-03-04')
+  })
+
+  it('三种「空」视觉可分（§3.3）：真实 0 显示 0、算不出来弱化 —、无此概念也是 —', () => {
+    const rows = flattenVisibleRows(project, new Set())
+    render(
+      <MantineProvider>
+        <OutlineTree
+          project={project}
+          rows={rows}
+          virtualItems={virtualItems(rows.length)}
+          schedules={{ [childId]: schedule('2026-03-04', '2026-03-06') }}
+          efforts={{}}
+          costs={{}}
+          // bcwp = 0 是**真实数据**（进度为 0）；bcws = null 是「算不出来」
+          earnedValues={{ [childId]: { bac: 1000, ev: 0, pv: null, sv: null } }}
+          baselineDiffs={{}}
+          columns={OUTLINE_COLUMNS.filter((c) =>
+            ['title', 'bcwp', 'bcws', 'duration'].includes(c.key),
+          )}
+          selectedTaskId={null}
+          onSelect={() => {}}
+          onToggleCollapse={() => {}}
+        />
+      </MantineProvider>,
+    )
+
+    // 真的是 0 → 显示 0（不是 —，也不是空白）
+    expect(screen.getByTestId(`outline-cell-bcwp-${childId}`)).toHaveTextContent('0')
+    // 算不出来（缺基准日）→ 弱化 `—` 而不是 0
+    expect(screen.getByTestId(`outline-cell-bcws-${childId}`)).toHaveTextContent('—')
+    expect(screen.getByTestId(`outline-cell-bcws-${childId}`)).not.toHaveTextContent('0')
+    // 无此概念（摘要行的工期）→ 也是 `—`（§6：空单元格不是空白）
+    expect(screen.getByTestId(`outline-cell-duration-${parentId}`)).toHaveTextContent('—')
+  })
+
+  it('空备注也渲染弱化的 —（整列为空时一眼可辨「还没填」而不是「坏了」）', () => {
+    renderTree(OUTLINE_COLUMNS.filter((c) => ['title', 'note'].includes(c.key)))
+    // 夹具里 child 的 note 为空串 → 只读态渲染 `—`
+    expect(screen.getByTestId(`outline-note-${childId}`)).toHaveTextContent('—')
+  })
+
   it('备注列：双击进编辑态，回车提交 task.setNote', async () => {
     const user = userEvent.setup()
     renderTree(OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'note'))

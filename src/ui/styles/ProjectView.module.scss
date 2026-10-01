@@ -44,12 +44,12 @@
   padding: 0 12px;
   background: var(--planit-bg-surface);
   border-right: 1px solid var(--planit-border);
-  border-bottom: 1px solid var(--planit-border);
-  font-size: 11px;
-  font-weight: 600;
+  border-bottom: 1px solid var(--planit-border-strong);
+  font-size: var(--planit-fs-micro);
+  font-weight: 500;
   color: var(--planit-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em; // §1.2：只有大写的拉丁列头才加字距
 }
 
 .ruler {
@@ -57,7 +57,7 @@
   top: 0;
   z-index: 2;
   background: var(--planit-bg-surface);
-  border-bottom: 1px solid var(--planit-border);
+  border-bottom: 1px solid var(--planit-border-strong); // §2.2：标尺下方 1px 分隔
 }
 
 // 左列在水平滚动时固定
@@ -89,17 +89,35 @@
   border-bottom: 1px solid var(--planit-border);
   cursor: default;
   user-select: none;
+  // §6：行首出现 2px 竖条的**预览**（--border-strong，中性）——
+  // 与选中态的左 2px --work 竖条区分：前者是「将选中」，后者是「已选中」。
+  transition: background-color var(--planit-dur-fast) var(--planit-ease-out);
+
+  &:hover {
+    background: var(--planit-bg-hover);
+    box-shadow: inset 2px 0 0 var(--planit-border-strong);
+  }
+}
+
+// 摘要行底带（§2.2）：横贯整行的 --bg-structure —— 全 App 的第一视觉特征。
+// 与甘特侧 GanttPane.summaryRow 同色，两侧连成一条贯穿的带。
+.outlineRowSummary {
+  background: var(--planit-bg-structure);
 
   &:hover {
     background: var(--planit-bg-hover);
   }
 }
 
+// 选中行（§4.2）：--work-soft 底 + 左 2px --work 竖条（不是整行深蓝）。
+// 竖条用 inset box-shadow 而非 border —— 不改变盒模型，行高与列宽都不受影响。
 .outlineRowSelected {
-  background: var(--planit-accent-soft);
+  background: var(--planit-work-soft);
+  box-shadow: inset 2px 0 0 var(--planit-work);
 
   &:hover {
-    background: var(--planit-accent-soft);
+    background: var(--planit-work-soft);
+    box-shadow: inset 2px 0 0 var(--planit-work);
   }
 }
 
@@ -133,10 +151,11 @@
 
 .outlineNameSummary {
   font-weight: 600;
+  color: var(--planit-text-strong); // §1.2 摘要任务名：md / 600 / --text-strong
 }
 
 .milestoneGlyph {
-  color: var(--planit-accent-strong);
+  color: var(--planit-work);
   font-size: 10px;
 }
 
@@ -145,6 +164,7 @@
 // 单元格的**共用**外观（两个视图都读它）。表格化的部分（列分隔线、12px 字号）
 // 见下方只作用于大纲视图的规则。
 .outlineCell {
+  @include tabular-nums; // §1.3：一切数字等宽（ID / 工期 / 进度 / 成本列都不许跳动）
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -169,11 +189,22 @@
 
 // 标题列：横向滚动时钉在左缘（spec §4.4）。甘特视图里左列整体已经 sticky，
 // 这里是 no-op；大纲视图里才真正生效。
+//
+// §7：**标题列有 160px 下限，绝不参与等比压缩**。flex-basis 是 240px，窄屏时
+// 允许收缩，但绝不越过 160 —— 越过就意味着「任务名看不见了」，而保住的却是
+// 已经被响应式砍掉的那些低价值列（正是 spec §7 点名的当前缺陷）。
 .outlineCellTitle {
   position: sticky;
   left: 0;
   z-index: 1;
+  min-width: 160px;
   gap: 4px;
+}
+
+// 空值 / 算不出来：弱化的 `—`（§3.3 / §6）。比正文 `--text` 低一档，
+// 让「真的是 0」（正常 `--text`）与「这一格没有数字」在灰度上可分辨。
+.outlineCellEmpty {
+  color: var(--planit-text-faint);
 }
 
 // 不透明垫底**只在大纲视图**需要 —— 否则横向滚动时下方的单元格会透上来。
@@ -184,8 +215,20 @@
     background: var(--planit-bg-surface);
   }
 
-  .outlineRowSelected .outlineCellTitle {
-    background: var(--planit-accent-soft);
+  // 摘要行底带必须穿过 title 列（§2.2「横贯整行」）——
+  // 这一格是缩进与任务名所在，若保持白底，底带会在最该连续的地方断开。
+  .outlineRowSummary .outlineCellTitle {
+    background: var(--planit-bg-structure);
+  }
+
+  .outlineRowSummary:hover .outlineCellTitle {
+    background: var(--planit-bg-hover);
+  }
+
+  // 选中态放最后：它要压过摘要行底带（选中优先于结构底带）
+  .outlineRowSelected .outlineCellTitle,
+  .outlineRowSelected:hover .outlineCellTitle {
+    background: var(--planit-work-soft);
   }
 }
 
@@ -228,12 +271,12 @@
   width: max-content;
   min-width: 100%;
   background: var(--planit-bg-surface);
-  border-bottom: 1px solid var(--planit-border);
-  font-size: 11px;
-  font-weight: 600;
+  border-bottom: 1px solid var(--planit-border-strong); // §2.2：表头下沿用强描边
+  font-size: var(--planit-fs-micro);
+  font-weight: 500;
   color: var(--planit-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   user-select: none;
 }
 
@@ -254,6 +297,8 @@
   position: sticky;
   left: 0;
   z-index: 4;
+  // 与行的 title 单元格同一份下限 —— 表头与行必须逐列对齐（§4.4 的不变量）
+  min-width: 160px;
   background: var(--planit-bg-surface);
 }
 

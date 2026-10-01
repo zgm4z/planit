@@ -1,21 +1,34 @@
 import { useCallback, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
+import { Drawer } from '@mantine/core'
 
 import { flattenVisibleRows } from './flattenRows'
 import { DependencyLayer } from './DependencyLayer'
 import { GanttRows } from './GanttRows'
 import { Inspector } from './Inspector'
 import { OutlineTree } from './OutlineTree'
-import { GANTT_OUTLINE_COLUMNS, OUTLINE_COLUMNS } from './outlineColumns'
+import {
+  GANTT_OUTLINE_COLUMNS,
+  OUTLINE_COLUMNS,
+  responsiveHiddenColumns,
+} from './outlineColumns'
 import { OutlineTable } from './OutlineTable'
 import { TimeRuler } from './TimeRuler'
 import { dragCommitCommands } from './barDrag'
-import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
+import {
+  BAR_HEIGHT,
+  BAR_HEIGHT_CRITICAL,
+  barRect,
+  createScale,
+  milestoneRect,
+  type Rect,
+} from './timeline'
 import { Toolbar } from './Toolbar'
 import { StatusBar } from './StatusBar'
 import { CalendarSettings } from './CalendarSettings'
 import { useBarDrag } from './useBarDrag'
 import { useDependencyLink } from './useDependencyLink'
+import { useLayoutMode } from './useBreakpoints'
 import { useSharedVirtualizer, ROW_HEIGHT } from './useSharedVirtualizer'
 import { createCalendar } from '../domain/model/factories'
 import { useProjectStore } from '../store/projectStore'
@@ -25,6 +38,17 @@ import { useTranslation } from 'react-i18next'
 import { addDays, formatDate, isWorkday } from '../domain/calendar/workdays'
 import styles from './styles/ProjectView.module.scss'
 import ganttStyles from './styles/GanttPane.module.scss'
+
+/**
+ * 右栏内容的纵向布局 —— **常驻面板与抽屉共用**（§7）。宽度与左边框**不在这里**：
+ * 常驻面板由外层容器持有（见下），抽屉由 Mantine 的 Drawer 自己持有。
+ */
+const inspectorColumnStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  minHeight: 0,
+}
 
 export function ProjectView() {
   const { t } = useTranslation()
@@ -47,12 +71,20 @@ export function ProjectView() {
     [project, collapsedIds],
   )
 
+  const { isNarrow, isCompact } = useLayoutMode()
+
   // 可见列 —— 顺序由注册表决定，visibleColumns 只表达 membership。
   // 两个视图共用这一份，绝不各自 filter 一遍。
-  const outlineColumns = useMemo(
-    () => OUTLINE_COLUMNS.filter((column) => visibleColumns.includes(column.key)),
-    [visibleColumns],
-  )
+  //
+  // §7 的响应式隐藏**叠加在用户偏好之上**，而不是改写它：`visibleColumns` 仍是
+  // 用户在列菜单里配的那一份（并已落盘），窄屏只是**临时**再减掉几列。
+  // 这样回到宽屏时，用户的列配置原封不动 —— 响应式**绝不**写回 store 或 localStorage。
+  const outlineColumns = useMemo(() => {
+    const hidden = new Set(responsiveHiddenColumns(isNarrow, isCompact))
+    return OUTLINE_COLUMNS.filter(
+      (column) => visibleColumns.includes(column.key) && !hidden.has(column.key),
+    )
+  }, [visibleColumns, isNarrow, isCompact])
 
   // 两侧列消费同一份 virtualItems —— 行永远对齐
   const virtualItems = useSharedVirtualizer(scrollRef, rows.length)
@@ -131,11 +163,13 @@ export function ProjectView() {
         map.set(row.taskId, { ...rect, y: rect.y + rowTop })
       } else {
         const bar = barRect(scale, schedule.scheduledStart, schedule.scheduledFinish)
+        // 关键条高 2px（§3.2），与 TaskBar 用同一条规则 —— 端点才会落在条的中线上。
+        const barHeight = schedule.isCritical ? BAR_HEIGHT_CRITICAL : BAR_HEIGHT
         map.set(row.taskId, {
           x: bar.x,
-          y: rowTop + (ROW_HEIGHT - BAR_HEIGHT) / 2,
+          y: rowTop + (ROW_HEIGHT - barHeight) / 2,
           width: bar.width,
-          height: BAR_HEIGHT,
+          height: barHeight,
         })
       }
     })
@@ -292,25 +326,44 @@ export function ProjectView() {
           )}
         </div>
 
-        {/* 右侧栏分成上下两段：Inspector 自负滚动，日历设置钉在底部。
-            宽度与左边框由**这个容器**统一持有（唯一来源）—— Inspector 与
-            CalendarSettings 都只填 100%，否则改宽度时要同时改三处，
-            漏改一处就会静默错位。 */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: 'var(--planit-inspector-width)',
-            minHeight: 0,
-            flexShrink: 0,
-            borderLeft: '1px solid var(--planit-border)',
-          }}
-        >
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            <Inspector />
+        {/* 右栏内容分上下两段：Inspector 自负滚动，日历设置钉在底部。
+            **常驻面板与窄屏抽屉共用同一份内容** —— 两处各写一遍的话，将来给右栏
+            加一块，漏改一处就会「宽屏有、窄屏没有」。 */}
+        {isNarrow ? (
+          // §7：< 1100 右栏改为抽屉（覆盖在右侧、带遮罩与关闭）。宽 300 与常驻一致。
+          <Drawer
+            opened={selectedTaskId !== null}
+            onClose={() => selectTask(null)}
+            position="right"
+            size={300}
+            padding={0}
+            data-testid="inspector-drawer"
+          >
+            <div data-testid="inspector-drawer-body" style={inspectorColumnStyle}>
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                <Inspector />
+              </div>
+              <CalendarSettings />
+            </div>
+          </Drawer>
+        ) : (
+          // 常驻右栏：宽度与左边框由**这个容器**统一持有（唯一来源）——
+          // Inspector 与 CalendarSettings 都只填 100%，否则改宽度时要同时改三处，
+          // 漏改一处就会静默错位。
+          <div
+            style={{
+              ...inspectorColumnStyle,
+              width: 'var(--planit-inspector-width)',
+              flexShrink: 0,
+              borderLeft: '1px solid var(--planit-border)',
+            }}
+          >
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <Inspector />
+            </div>
+            <CalendarSettings />
           </div>
-          <CalendarSettings />
-        </div>
+        )}
       </div>
 
       <StatusBar />
@@ -332,7 +385,7 @@ export function ProjectView() {
             y1={link.draft.fromY}
             x2={link.draft.toX}
             y2={link.draft.toY}
-            stroke="var(--planit-accent)"
+            stroke="var(--planit-work)"
             strokeWidth={1.6}
             strokeDasharray="4 3"
           />

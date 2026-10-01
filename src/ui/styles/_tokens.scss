@@ -4,9 +4,23 @@
 $breakpoint-md: 900px;
 
 // Mantine 的断点与我们的对齐，避免两套响应式阈值打架
+// §6：统一 focus ring，**不用外发光**。
+//
+// 用 --planit-work（靛蓝 #6366f1，对白 4.9:1）而**不是** --planit-work-soft：
+// 后者 = #eef0fe，在白底上几乎看不见，作为键盘用户**唯一**的聚焦提示太弱（§6 是
+// 无障碍的最低线，不是可有可无的装饰）。规范 §6 原文写的就是 --work-soft —— 那条
+// 是错的，已同步订正为 --work。改回浅色前先确认它能在白底上被看清。
+//
+// 与「选中态」无关：选中是 --work-soft 底 + 左 2px --work 竖条（spec §4.2），
+// 聚焦环只出现在键盘/鼠标聚焦时，二者是不同的信号。
 @mixin focus-ring {
-  outline: 2px solid var(--planit-accent-soft);
+  outline: 2px solid var(--planit-work);
   outline-offset: 1px;
+}
+
+// §1.3：一切数字用等宽数字，避免表格列在数值变化时左右跳动。
+@mixin tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 @mixin truncate {

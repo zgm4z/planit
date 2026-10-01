@@ -6,7 +6,7 @@ import type { RefObject } from 'react'
  * 内联 height，CSS 侧不持有对应的自定义属性（早期那个 `--planit-row-height`
  * 并无任何 CSS 消费方，已删除）。改这里即可，不存在「两处同步」。
  */
-export const ROW_HEIGHT = 28
+export const ROW_HEIGHT = 30
 
 /**
  * 左侧任务表与右侧甘特图共用的虚拟化器。

@@ -44,10 +44,25 @@ export function GanttRows({
         if (!row) return null
 
         const task = project.tasks[row.taskId]
-        const schedule = schedules[row.taskId]
+        if (!task) return null
 
-        // 摘要任务不画条：其日期由子任务汇总，画出来会与子任务条重叠
-        if (!task || !schedule || task.childIds.length > 0) return null
+        // 摘要任务（有子任务）：不画条，但**要占一层底带** ——
+        // 底带横贯整行是本 App 的第一视觉特征（§2.2），左列与甘特侧都上色，
+        // 视觉上连成一条。它把 85 行的长表切成可读的块，靠的是「给结构以形状」。
+        if (task.childIds.length > 0) {
+          return (
+            <div
+              key={item.key}
+              className={`${styles.row} ${styles.summaryRow}`}
+              style={{ top: 0, height: item.size, transform: `translateY(${item.start}px)` }}
+              data-gantt-row={row.taskId}
+              aria-hidden
+            />
+          )
+        }
+
+        const schedule = schedules[row.taskId]
+        if (!schedule) return null
 
         // 影子来自「假设项目解出来的排期」，被拖的那根条也走同一个来源 ——
         // 这样影子与松手后真正落盘的结果天然一致（含 finishOn 这类约束）。

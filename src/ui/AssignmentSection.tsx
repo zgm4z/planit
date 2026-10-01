@@ -1,9 +1,10 @@
-import { ActionIcon, Group, NumberInput, Select, Stack, Text } from '@mantine/core'
+import { ActionIcon, Group, Select, Stack, Text } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
 import type { ResourceId, TaskId } from '../domain/model/types'
 import { useProjectStore } from '../store/projectStore'
+import { GAP_INNER, NumberField } from './InspectorFields'
 
 /**
  * 分配区（spec §4.2）—— **两个入口共用这一个组件**。
@@ -55,7 +56,7 @@ export function AssignmentSection({ scope }: { scope: AssignmentScope }) {
   }
 
   return (
-    <Stack gap={4} data-testid={`assignments-${scope.kind}-${scope.id}`}>
+    <Stack gap={GAP_INNER} data-testid={`assignments-${scope.kind}-${scope.id}`}>
       {relevant.length === 0 && (
         <Text fz="xs" c="dimmed">
           {t('inspector.assignments.none')}
@@ -69,19 +70,21 @@ export function AssignmentSection({ scope }: { scope: AssignmentScope }) {
             <Text fz="xs" truncate style={{ flex: 1 }}>
               {name}
             </Text>
-            <NumberInput
+            {/* 单元是百分比量纲（§1.3：0 位）—— 失焦后按 0 位归一显示 */}
+            <NumberField
               size="xs"
               w={72}
+              digits={0}
               min={0}
               max={100}
-              aria-label={`${t('inspector.assignments.units')} ${name}`}
+              ariaLabel={`${t('inspector.assignments.units')} ${name}`}
               value={Math.round(assignment.units * 100)}
               onBlur={breakCoalescing}
               onChange={(value) =>
                 dispatch({
                   type: 'assignment.setUnits',
                   label: 'commands.assignment.setUnits',
-                  payload: { assignmentId: assignment.id, units: (Number(value) || 0) / 100 },
+                  payload: { assignmentId: assignment.id, units: (value ?? 0) / 100 },
                   coalesceKey: `assignment.setUnits:${assignment.id}`,
                 })
               }

@@ -3,6 +3,7 @@ import type { Calendar, ComputedSchedule, Task } from '../domain/model/types'
 import { taskFinish } from '../domain/calendar/workdays'
 import {
   BAR_HEIGHT,
+  BAR_HEIGHT_CRITICAL,
   MILESTONE_SIZE,
   barRect,
   milestoneRect,
@@ -79,6 +80,9 @@ export function TaskBar({
   // 横向定位走 barRect() —— DependencyLayer 复用同一个函数，端点才不会错位
   const { x, width } = barRect(scale, displayStart, displayFinish)
 
+  // 关键条高 2px（§3.2），仍垂直居中 —— 两种高度的纵向中心都是 ROW_HEIGHT / 2。
+  const barHeight = schedule.isCritical ? BAR_HEIGHT_CRITICAL : BAR_HEIGHT
+
   return (
     <div
       // 关键与冲突可以并存：barConflict 用的是 outline，与 background 不冲突。
@@ -87,7 +91,12 @@ export function TaskBar({
       className={`${styles.bar} ${schedule.isCritical ? styles.barCritical : ''} ${
         hasConflict ? styles.barConflict : ''
       } ${ghost ? styles.barGhost : ''}`}
-      style={{ left: x, top: (ROW_HEIGHT - BAR_HEIGHT) / 2, width, height: BAR_HEIGHT }}
+      style={{
+        left: x,
+        top: (ROW_HEIGHT - barHeight) / 2,
+        width,
+        height: barHeight,
+      }}
       title={`${task.name}\n${displayStart} → ${displayFinish}`}
       data-task-id={task.id}
       data-testid={`task-bar-${task.id}`}
@@ -141,7 +150,7 @@ export function TaskBar({
           height: 10,
           marginTop: -5,
           borderRadius: '50%',
-          background: 'var(--planit-accent-strong)',
+          background: 'var(--planit-work)',
           border: '2px solid #fff',
           cursor: 'crosshair',
           zIndex: 3,

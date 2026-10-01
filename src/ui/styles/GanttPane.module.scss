@@ -1,26 +1,98 @@
 // 甘特图区域（刻度、网格、任务条）的样式。
 // 变量与 mixin 由 vite.config.ts 的 additionalData 自动注入，无需 @use。
 
-.rulerTick {
+// 标尺的两行容器（§4.2 落地）。总高 = --planit-ruler-height（32px）：
+// 上行月份带 14px + 下行日号 18px。ruler 自身有 1px 下边框，属于那 32px，
+// 因此这里要裁掉溢出的 1px。
+//
+// 用 `overflow: clip` 而**不是** `hidden`：hidden 会把这个盒子变成**滚动容器**，
+// 于是月份标签（.rulerMonthLabel）的 position:sticky 会以它、而不是以真正的滚动
+// 容器（ProjectView 的 .scroll）为参照 —— 钉住当场失效。clip 只裁剪、不建立滚动
+// 容器，sticky 因此能一路找到 .scroll。被裁的仍是日号行底部那 1px（数字垂直居中，
+// 感知不到），「月份带 / 日号各归其行、互不遮盖」的性质不变。
+.rulerInner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: clip;
+}
+
+// ── 上行：月份带 ──
+// 整条 --bg-subtle 底，让月份成为一个横贯的「带」；每片横跨该月全部列。
+.rulerMonths {
+  position: relative;
+  flex: none;
+  height: var(--planit-ruler-month-height);
+  background: var(--planit-bg-subtle);
+}
+
+// 单片月份带。左缘一条强描边标出「月从这里开始」—— 它落在列边界上，
+// 与下行同日号的日刻度对齐，两行合成一条更清晰的月分隔线。
+//
+// 注意**不能**给带加 overflow:hidden —— 那会把带变成滚动容器，里面的
+// .rulerMonthLabel 的 sticky 就失效了（见 .rulerMonthLabel 的注释）。
+// 窄月名溢出的风险已由 TSX 的 MIN_MONTH_LABEL_WIDTH 门槛挡在渲染之外。
+.rulerMonthBand {
+  @include tabular-nums;
   position: absolute;
   top: 0;
   bottom: 0;
-  border-left: 1px solid var(--planit-border);
-  padding-left: 4px;
-  font-size: 10px;
-  color: var(--planit-text-muted);
   display: flex;
   align-items: center;
-  pointer-events: none;
+  border-left: 1px solid var(--planit-border-strong);
+  font-size: var(--planit-fs-micro);
+  font-weight: 500;
+  text-transform: uppercase; // §1.2：大写的拉丁列头才加字距；月名同属这一族
+  letter-spacing: 0.06em;
+  color: var(--planit-text-muted);
   white-space: nowrap;
+  pointer-events: none;
 }
 
+// 月份标签（OmniPlan 做法）：滚动到月中时，当前月的名字**钉在甘特区左缘**，
+// 让用户任何时候都看得到「这是几月」——否则上行一整条是空的。
+//
+// 为什么 left 是 --planit-outline-width 而不是 0：0 会把标签钉在滚动口最左，
+// 那里被 sticky 的左列（.outline）盖着、且 z 更高的是标尺（2 > 1），标签会**画在
+// 任务名列上面**。钉在左列右缘（= 甘特区左缘）才是对的位置。
+.rulerMonthLabel {
+  position: sticky;
+  left: var(--planit-outline-width);
+  z-index: 1; // 压过后面的月份带，钉住时不与相邻月名叠字
+  padding-left: 6px;
+}
+
+// ── 下行：日号 ──
+// 等宽数字（§1.3），弱化到 faint，作为月份带下方的「底噪」。
+.rulerDays {
+  position: relative;
+  flex: none;
+  height: var(--planit-ruler-day-height);
+}
+
+.rulerDayTick {
+  @include tabular-nums;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  border-left: 1px solid var(--planit-border);
+  font-size: var(--planit-fs-xs);
+  color: var(--planit-text-faint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+// 今天线：中性色 1px 虚线（§3.2）。红色留给关键路径 —— 今天线若也用红，
+// 会与关键链撞色且更抢眼，是明确的缺陷。虚线让它像「刻度」而不是「数据」。
 .todayLine {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
-  background: var(--planit-critical);
+  width: 0;
+  border-left: 1px dashed var(--planit-text-faint);
   pointer-events: none;
   z-index: 1;
 }
@@ -35,17 +107,55 @@
 
 .bar {
   position: absolute;
-  border-radius: 999px;
-  background: var(--planit-accent-gradient);
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.35);
+  border-radius: 3px; // §3.1：实心条 + 圆角 3px（不再是无意义的胶囊形）
+  background: var(--planit-work);
   // 刻意**不**裁剪：连接柄（TaskBar 里 right: -11 的圆点）整颗落在条外，
   // overflow: hidden 会把它整个切掉，连线就再也拖不出来。
   // 圆角改由 .barProgress 自己用 border-radius: inherit 兜住。
   cursor: grab;
+  // §6：悬停抬升、按下下沉 —— 只做「有目的」的反馈（§5.2），无静态阴影。
+  transition:
+    box-shadow var(--planit-dur-fast) var(--planit-ease-out),
+    transform var(--planit-dur-fast) var(--planit-ease-out);
+
+  &:hover {
+    box-shadow: 0 2px 6px rgba(18, 21, 28, 0.18);
+  }
+
+  // 按下下沉 1px，且无阴影 —— 与悬停的「抬起」形成明确的对立
+  &:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
 }
 
+// 关键路径（§4.2 第 6 条）：**不整条铺满高饱和红**。
+// 三条信号叠在一起：
+//   1) 中等红底（--critical-mid）—— 满屏关键任务时读作「一个区块」而非「一片警报」；
+//   2) 左侧 2px 深红实边（--critical-dark）—— 零星关键任务时靠它一眼可寻；
+//   3) 高 2px（高度由 TaskBar 内联给，§3.2）—— 色觉障碍下也能扫到。
+//
+// 深红左缘用 background 渐变实现，而非 border/::before：
+//   · 不改盒模型 —— barRect 的宽度与依赖端点几何不受影响；
+//   · 不与 hover/active 的 box-shadow 抢属性；
+//   · background-color 仍持有 mid 红（便于样式断言读到有意义的值），
+//     background-image 只是叠在最左 2px 的深红覆盖层。
 .barCritical {
-  background: var(--planit-accent-strong);
+  background-color: var(--planit-critical-mid);
+  // 左缘宽度 = min(2px, 15%)，而不是固定 2px：月视图下 1～2 天的关键条只有 4～8px
+  // 宽，固定 2px 会占掉 25%～50%，读起来「一半深红一半红」——左缘喧宾夺主，条本身
+  // 反而看不出是条。min() 让左缘随条宽收缩：宽条仍是 2px（信号强度不变），窄条最多
+  // 只占 15%（信号仍在，但不再压过中红底）。
+  //
+  // 为什么允许 min() 出现在 gradient 的色标位上：已实测浏览器支持（CSS.supports 为
+  // true，computed style 原样保留 min()，见本轮报告）。若不支持的旧浏览器遇到它，
+  // 整条 background-image 声明会被丢弃 → 退化为纯 --critical-mid 红底：左缘消失，
+  // 但「关键=红 + 略高 2px」两条信号仍在，是最安全的降级方向。
+  background-image: linear-gradient(
+    to right,
+    var(--planit-critical-dark) 0 min(2px, 15%),
+    transparent min(2px, 15%) 100%
+  );
 }
 
 // 只加描边，不覆盖 background —— 关键色与冲突标记可以并存
@@ -59,7 +169,7 @@
 .barGhost,
 .milestoneGhost {
   opacity: 0.55;
-  outline: 2px dashed var(--planit-accent-strong);
+  outline: 2px dashed var(--planit-work);
   outline-offset: 2px;
   cursor: grabbing;
 }
@@ -88,6 +198,8 @@
   pointer-events: none;
 }
 
+// §6：把手在悬停时淡入。命中区（width: 8px）始终存在、cursor 始终生效，
+// 只是**视觉**上不出现 —— 静态态保持干净，悬停才提示「这里可拉伸」。
 .barHandle {
   position: absolute;
   top: 0;
@@ -95,6 +207,24 @@
   width: 8px;
   cursor: ew-resize;
   z-index: 2;
+  opacity: 0;
+  transition: opacity var(--planit-dur-fast) var(--planit-ease-out);
+
+  // 可见的那条竖线：白色短杠，落在把手的水平中心
+  &::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: 2px;
+    border-radius: 1px;
+    background: rgba(255, 255, 255, 0.85);
+  }
+}
+
+.bar:hover .barHandle {
+  opacity: 1;
 }
 
 .barHandleLeft {
@@ -107,9 +237,10 @@
 
 // 尺寸与位置由 TaskBar 内联给（来自 timeline.ts 的 MILESTONE_SIZE / milestoneRect），
 // 这里只管观感。rotate 与 timeline.ts 的 √2 外接盒公式是配对的，改一处必须改另一处。
+// 里程碑与叶子任务同层（§2.2）：非关键用工作色，关键用信号红。
 .milestone {
   position: absolute;
-  background: var(--planit-accent-strong);
+  background: var(--planit-work);
   transform: rotate(45deg);
   cursor: grab;
 }
@@ -130,4 +261,10 @@
   left: 0;
   right: 0;
   border-bottom: 1px solid var(--planit-border);
+}
+
+// 摘要行底带（§2.2）：横贯整行的 --bg-structure，是本 App 的第一视觉特征。
+// 甘特侧与左列（OutlineTree.outlineRowSummary）同色，视觉上连成一条贯穿的带。
+.summaryRow {
+  background: var(--planit-bg-structure);
 }
