@@ -110,6 +110,10 @@ function assignmentCost(
   hoursPerDay: number,
 ): { usage: number; hourly: number; hours: number } {
   const hours = assignmentUnits(resource, assignment) * duration * hoursPerDay
+  // 费率字段必须兜底 0：createResource 的默认成本是 `{ currency: 'CNY' }`，
+  // 两个费率字段都缺省，而**默认资源是最常见的路径**。不兜底会让
+  // `undefined * hours` 算出 NaN，再顺着 collectCosts 的 `+=` 把
+  // 摘要任务与资源总计整列污染成 NaN —— 一个 NaN 就毁掉整张成本表。
   return {
     usage: resource.cost.usage ?? 0,
     hourly: hours * (resource.cost.hourly ?? 0),

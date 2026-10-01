@@ -35,7 +35,7 @@ export interface CpmInput {
 }
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
-  const { tasks, dependencies, calendar, direction, projectStart, projectEnd } = input
+  const { tasks, dependencies, calendar, direction, projectStart, projectEnd, resourceBounds } = input
 
   const graph = buildGraph(tasks, dependencies) // 可能抛出 CycleError
   const byId = new Map(tasks.map((task) => [task.id, task]))
@@ -50,6 +50,10 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
     for (const id of graph.order) {
       const task = byId.get(id)!
       let start = constraintLowerBound(task, calendar, anchor)
+
+      // 资源可用期的开始下界（availableFrom）—— 与任务自身的约束取较晚者
+      const earliest = resourceBounds?.[id]?.earliestStart
+      if (earliest && earliest > start) start = earliest
 
       for (const dep of graph.incoming.get(id) ?? []) {
         const bound = forwardBound({
@@ -78,6 +82,10 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
     for (const id of [...graph.order].reverse()) {
       const task = byId.get(id)!
       let finish = constraintUpperBound(task, calendar, anchor)
+
+      // 资源可用期的结束上界（availableUntil）—— 与任务自身的约束取较早者
+      const latest = resourceBounds?.[id]?.latestFinish
+      if (latest && latest < finish) finish = latest
 
       for (const dep of graph.outgoing.get(id) ?? []) {
         const bound = backwardBound({

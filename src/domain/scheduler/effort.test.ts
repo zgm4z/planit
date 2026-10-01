@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createProject, createTask, createResource, createAssignment } from '../model/factories'
 import type { Project } from '../model/types'
 import { assignmentUnits, sumUnits } from '../model/units'
-import { effectiveDuration, taskEffort, resourceBounds } from './effort'
+import { effectiveDuration, taskEffort, resourceBounds, collectCosts } from './effort'
 
 function project(): Project {
   return createProject('资源测试', '2026-03-02')
@@ -108,5 +108,28 @@ describe('resourceBounds（可用期 → 排期边界）', () => {
     const asg = createAssignment({ taskId: t, resourceId: r.id })
     p.assignments[asg.id] = asg
     expect(resourceBounds(p, t)).toEqual({})
+  })
+})
+
+describe('collectCosts（成本派生）', () => {
+  it('无费率资源 → 成本 0，而不是 NaN', () => {
+    const p = project()
+    const task = createTask({ name: 'T', duration: 3 })
+    const t = addTask(p, task)
+    // createResource 的默认成本是 `{ currency: 'CNY' }`，usage / hourly 都缺省。
+    // 默认资源是最常见路径 —— 缺了 `?? 0` 的兜底，hours × undefined 会算出
+    // NaN 并顺着集计污染整列成本。这里把「有工时、但费率为 0 → 成本 0」钉死。
+    const r = createResource({ name: '无费率' })
+    p.resources[r.id] = r
+    const asg = createAssignment({ taskId: t, resourceId: r.id, units: 1 })
+    p.assignments[asg.id] = asg
+
+    const { costs, resourceTotals } = collectCosts(p, [task], new Map([[t, 3]]), p.calendars.default)
+
+    expect(costs[t]).toEqual({ task: 0, resource: 0, total: 0 })
+    // 工时照常派生（1 × 3 天 × 8 小时 = 24）—— 证明「0」来自「无费率」，
+    // 而不是引擎什么都没算。这一条让上面的 toEqual 不至于恒真。
+    expect(resourceTotals[r.id]).toEqual({ assignments: 1, hours: 24, cost: 0 })
+    expect(Number.isNaN(costs[t].total)).toBe(false)
   })
 })

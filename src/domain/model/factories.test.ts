@@ -4,6 +4,8 @@ import {
   createProject,
   createTask,
   createDependency,
+  createResource,
+  createAssignment,
   __resetIdCounterForTests,
   seedIdCounterFromProject,
   DEFAULT_CALENDAR_ID,
@@ -78,6 +80,39 @@ describe('createDependency', () => {
     expect(d.toTaskId).toBe('b')
     expect(d.type).toBe('FS')
     expect(d.lag).toBe(0)
+  })
+})
+
+describe('createResource', () => {
+  it('默认：staff、可用率 1、parentId null、成本只有货币（无费率）', () => {
+    const r = createResource({ name: '张三' })
+    expect(r.name).toBe('张三')
+    expect(r.kind).toBe('staff')
+    expect(r.availability).toBe(1)
+    expect(r.parentId).toBeNull()
+    // 费率缺省是有意的：成本派生必须对「无费率」兜底成 0（见 effort.ts collectCosts）
+    expect(r.cost).toEqual({ currency: 'CNY' })
+  })
+
+  it('kind / parentId / availability 可覆盖', () => {
+    const r = createResource({ name: '吊车', kind: 'equipment', parentId: 'res_x', availability: 0.5 })
+    expect(r.kind).toBe('equipment')
+    expect(r.parentId).toBe('res_x')
+    expect(r.availability).toBe(0.5)
+  })
+})
+
+describe('createAssignment', () => {
+  it('默认 units 为 1（100% 投入）', () => {
+    const a = createAssignment({ taskId: 't1', resourceId: 'r1' })
+    expect(a.taskId).toBe('t1')
+    expect(a.resourceId).toBe('r1')
+    expect(a.units).toBe(1)
+  })
+
+  it('units 可覆盖', () => {
+    const a = createAssignment({ taskId: 't1', resourceId: 'r1', units: 0.5 })
+    expect(a.units).toBe(0.5)
   })
 })
 
