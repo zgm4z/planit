@@ -39,8 +39,18 @@ export function createScale(startDate: DateStr, dayWidth: number): TimelineScale
 /** 任务条最小宽度占一天的比例 —— 缩放很小或工期极短时，条不能细到看不见 */
 export const MIN_BAR_WIDTH_RATIO = 0.6
 
-/** 任务条高度 */
-export const BAR_HEIGHT = 16
+/** 普通任务条高度（§3.2：`--bar-height: 18`） */
+export const BAR_HEIGHT = 18
+
+/**
+ * 关键任务条高度（§3.2：`--bar-height-critical: 20`）。
+ *
+ * 关键路径必须有独立身份 —— 只靠颜色不够（密集视图里相邻条几乎贴在一起，
+ * 色块扫读不如高度差异明显）。高 2px 让关键链在没有颜色时也能被认出来。
+ * 两条都**在行内垂直居中**，所以纵向中心恒为 ROW_HEIGHT / 2，
+ * DependencyLayer 的端点（走 y + height/2）对两种高度都落在同一条中线上。
+ */
+export const BAR_HEIGHT_CRITICAL = 20
 
 /** 里程碑菱形的边长（旋转前那个方块的边长）。渲染与几何都读它，不要再写字面量 */
 export const MILESTONE_SIZE = 12

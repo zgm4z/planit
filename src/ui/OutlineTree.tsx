@@ -69,11 +69,15 @@ export function OutlineTree({
 
         const selected = row.taskId === selectedTaskId
         const schedule = schedules[row.taskId]
+        // 摘要行（有子任务）= 结构层（§2.2 §3.1）：底带横贯整行 + 名字 600 字重。
+        const isSummary = row.hasChildren
 
         return (
           <div
             key={item.key}
-            className={`${styles.outlineRow} ${selected ? styles.outlineRowSelected : ''}`}
+            className={`${styles.outlineRow} ${isSummary ? styles.outlineRowSummary : ''} ${
+              selected ? styles.outlineRowSelected : ''
+            }`}
             style={{ transform: `translateY(${item.start}px)`, height: item.size }}
             onClick={() => onSelect(row.taskId)}
             data-testid={`outline-row-${row.taskId}`}

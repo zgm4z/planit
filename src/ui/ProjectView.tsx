@@ -10,7 +10,14 @@ import { GANTT_OUTLINE_COLUMNS, OUTLINE_COLUMNS } from './outlineColumns'
 import { OutlineTable } from './OutlineTable'
 import { TimeRuler } from './TimeRuler'
 import { dragCommitCommands } from './barDrag'
-import { BAR_HEIGHT, barRect, createScale, milestoneRect, type Rect } from './timeline'
+import {
+  BAR_HEIGHT,
+  BAR_HEIGHT_CRITICAL,
+  barRect,
+  createScale,
+  milestoneRect,
+  type Rect,
+} from './timeline'
 import { Toolbar } from './Toolbar'
 import { StatusBar } from './StatusBar'
 import { CalendarSettings } from './CalendarSettings'
@@ -131,11 +138,13 @@ export function ProjectView() {
         map.set(row.taskId, { ...rect, y: rect.y + rowTop })
       } else {
         const bar = barRect(scale, schedule.scheduledStart, schedule.scheduledFinish)
+        // 关键条高 2px（§3.2），与 TaskBar 用同一条规则 —— 端点才会落在条的中线上。
+        const barHeight = schedule.isCritical ? BAR_HEIGHT_CRITICAL : BAR_HEIGHT
         map.set(row.taskId, {
           x: bar.x,
-          y: rowTop + (ROW_HEIGHT - BAR_HEIGHT) / 2,
+          y: rowTop + (ROW_HEIGHT - barHeight) / 2,
           width: bar.width,
-          height: BAR_HEIGHT,
+          height: barHeight,
         })
       }
     })
@@ -332,7 +341,7 @@ export function ProjectView() {
             y1={link.draft.fromY}
             x2={link.draft.toX}
             y2={link.draft.toY}
-            stroke="var(--planit-accent)"
+            stroke="var(--planit-work)"
             strokeWidth={1.6}
             strokeDasharray="4 3"
           />
