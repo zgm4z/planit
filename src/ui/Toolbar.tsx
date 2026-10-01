@@ -6,7 +6,7 @@ import {
   IconArrowLeft,
   IconIndentIncrease,
   IconIndentDecrease,
-  IconAdjustmentsHorizontal,
+  IconDotsVertical,
   IconCheck,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
@@ -16,7 +16,7 @@ import { useScheduleStore } from '../store/scheduleStore'
 import { useViewStore, type ActiveView, type ZoomLevel } from '../store/viewStore'
 import { canIndent, canOutdent } from './outlineActions'
 import { LanguageSwitcher } from './LanguageSwitcher'
-import { SUPPORTED_LANGUAGES } from '../i18n'
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from '../i18n'
 import { useLayoutMode } from './useBreakpoints'
 import styles from './styles/Chrome.module.scss'
 
@@ -38,6 +38,9 @@ import styles from './styles/Chrome.module.scss'
  *
  * 「相关的靠近、无关的拉开」：6px 只出现在**同一功能**的控件之间，16px 一律
  * 出现在**跨功能**处。旧版处处 8px 因此读不出任何分组。
+ *
+ * §7 窄屏（< 1100）：编辑组 / 缩放 / 语言收进「更多」溢出菜单 —— 溢出入口带
+ * **可感知指示器**（⋯ 图标 + tooltip，非默认状态时点亮小圆点），见 OverflowMenu。
  */
 export function Toolbar() {
   const { t } = useTranslation()
@@ -245,6 +248,15 @@ export function Toolbar() {
  *
  * 菜单项**复用**主条上同名控件的 data-testid —— 两条分支都靠 `!narrow` 条件渲染，
  * 任何时刻只有一份在 DOM 里，因此 e2e 在宽窄两种视口下都能按同一个 testid 命中。
+ *
+ * 溢出指示器（§7 / §9 响应式）——**「此处还有内容」必须可感知**：
+ *   1) 图标用 IconDotsVertical（⋯）——它是跨平台公认的「更多 / 溢出」约定符号，
+ *      比 IconAdjustmentsHorizontal（读作「筛选 / 设置」）更明确地表达「藏着东西」；
+ *      并保留 tooltip（`toolbar.more`）作为文字兜底。这两者共同构成「有东西被收起」的
+ *      常驻提示 —— 一个纯图标按钮（旧形态）看不出还有内容，是本条要修的缺陷。
+ *   2) 当**被收进菜单的控件里有非默认值**时（缩放不是「日」、语言不是默认中文），
+ *      右上角点亮一个小圆点 —— 否则用户会以为自己的设置丢了（§9：窄屏下不该悄悄
+ *      改变用户看到的状态）。这是「指示器能反映非默认状态」的落点。
  */
 function OverflowMenu({
   createTask,
@@ -267,12 +279,28 @@ function OverflowMenu({
 
   const zoomLevels: ZoomLevel[] = ['day', 'week', 'month']
 
+  // 被收进菜单的控件里存在「非默认状态」吗？—— 用于点亮溢出指示器。
+  //   · 缩放：默认「日」（viewStore 的初值 dayWidth = day）。
+  //   · 语言：默认中文（i18n 的 fallbackLng / DEFAULT_LANGUAGE）。resolvedLanguage
+  //     在 init 前可能为 undefined，用 ?? 兜成默认，避免误亮。
+  // 编辑组（新建 / 缩进 / 反缩进）没有持久状态，故不参与判断。
+  const hasNonDefault =
+    zoom !== 'day' || (i18n.resolvedLanguage ?? DEFAULT_LANGUAGE) !== DEFAULT_LANGUAGE
+
   return (
     <Menu position="bottom-end" withinPortal>
       <Menu.Target>
         <Tooltip label={t('toolbar.more')}>
-          <ActionIcon variant="subtle" aria-label={t('toolbar.more')} data-testid="toolbar-overflow">
-            <IconAdjustmentsHorizontal size={16} />
+          <ActionIcon
+            variant="subtle"
+            aria-label={t('toolbar.more')}
+            data-testid="toolbar-overflow"
+            // data-* 而不是内联样式：CSS Module 里按属性选择器点亮角标（见 Chrome.module.scss
+            // 的 .overflow）。值为 'true' 时出现，false/undefined 时属性整体不输出。
+            data-has-hidden={hasNonDefault || undefined}
+            className={styles.overflow}
+          >
+            <IconDotsVertical size={16} />
           </ActionIcon>
         </Tooltip>
       </Menu.Target>
