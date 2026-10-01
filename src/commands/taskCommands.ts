@@ -1,6 +1,13 @@
 import type { Draft } from 'immer'
-import type { DateStr, Project, Scheduling, TaskId } from '../domain/model/types'
+import type {
+  DateStr,
+  Project,
+  Scheduling,
+  SchedulingOrder,
+  TaskId,
+} from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
+import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
 
 export interface TaskCreatePayload { name: string; parentId?: TaskId | null }
@@ -12,6 +19,11 @@ export interface TaskToggleMilestonePayload { taskId: TaskId }
 export interface TaskSetSchedulingPayload { taskId: TaskId; scheduling: Scheduling }
 export interface TaskMoveToPayload { taskId: TaskId; startDate: DateStr }
 export interface TaskResizePayload { taskId: TaskId; startDate: DateStr; duration: number }
+export interface TaskSetSchedulingOrderPayload { taskId: TaskId; order: SchedulingOrder }
+export interface TaskSetNotePayload { taskId: TaskId; note: string }
+export interface TaskSetPriorityPayload { taskId: TaskId; priority: number }
+export interface TaskSetDelayPayload { taskId: TaskId; delay: number }
+export interface TaskSetAllowSplittingPayload { taskId: TaskId; allowSplitting: boolean }
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
@@ -34,14 +46,18 @@ function detachTask(draft: Draft<Project>, taskId: TaskId): void {
 export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.create': (draft, payload: TaskCreatePayload) => {
     const task = createTask({ name: payload.name })
-    // parentId 指向的任务不存在时（悬空 id）回退到根层，不留下悬空的 parentId。
+    // 里程碑不能当父任务 —— 与 task.indent 的守卫是同一条规则。
+    // 两条路径必须一致：indent 拒绝的事，create 也不该换个方式做成。
+    // 不可用的 parentId（悬空 id / 里程碑）一律回退到根层，不留下悬空的 parentId。
     // createTask 已把 parentId 默认为 null，因此回退分支无需再赋值。
-    const parent = payload.parentId ? draft.tasks[payload.parentId] : undefined
+    const candidate = payload.parentId ? draft.tasks[payload.parentId] : undefined
+    const parent = candidate && candidate.kind !== 'milestone' ? candidate : undefined
 
     draft.tasks[task.id] = task
     if (parent) {
       task.parentId = parent.id
       parent.childIds.push(task.id)
+      reconcileKind(draft, parent.id)
     } else {
       draft.rootIds.push(task.id)
     }
@@ -64,7 +80,9 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     if (subtree.length === 0) return // 任务不存在，no-op
 
     // 先摘掉根节点（更新父节点的 childIds / rootIds），再逐个删
+    const parentId = draft.tasks[payload.taskId]?.parentId ?? null
     detachTask(draft, payload.taskId)
+    if (parentId) reconcileKind(draft, parentId)
 
     // 清理整棵子树的依赖 —— 只清理根节点会留下指向已删除任务的孤儿依赖，
     // 这些孤儿会被持久化、污染统计，且因不在 patch 里而无法被撤销恢复
@@ -83,8 +101,8 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.setDuration': (draft, payload: TaskSetDurationPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务由汇总决定
-    if (task.isMilestone) return // 里程碑恒为 0
+    if (task.kind === 'group') return // 摘要任务由汇总决定
+    if (task.kind === 'milestone') return // 里程碑恒为 0
     task.duration = Math.max(0, Math.floor(payload.duration))
   },
 
@@ -94,26 +112,29 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     task.progress = clamp(Math.round(payload.progress), 0, 100)
   },
 
+  // 名称保留 toggleMilestone：它切换的是 `kind` 在 task / milestone 之间，
+  // 命令 id 已出现在既有 UI 与测试里，改名是纯粹的噪音。
   'task.toggleMilestone': (draft, payload: TaskToggleMilestonePayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务不能是里程碑
+    if (task.kind === 'group') return // 摘要任务不能是里程碑
 
-    task.isMilestone = !task.isMilestone
-    task.duration = task.isMilestone ? 0 : 1
+    const toMilestone = task.kind !== 'milestone'
+    task.kind = toMilestone ? 'milestone' : 'task'
+    task.duration = toMilestone ? 0 : 1
   },
 
   'task.setScheduling': (draft, payload: TaskSetSchedulingPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务日期只读
+    if (task.kind === 'group') return // 摘要任务日期只读
     task.scheduling = payload.scheduling
   },
 
   'task.moveTo': (draft, payload: TaskMoveToPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return
+    if (task.kind === 'group') return
     task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
   },
 
@@ -124,10 +145,50 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.resize': (draft, payload: TaskResizePayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
-    if (task.childIds.length > 0) return // 摘要任务日期只读
-    if (task.isMilestone) return // 里程碑恒为 0 工期
+    if (task.kind === 'group') return // 摘要任务日期只读
+    if (task.kind === 'milestone') return // 里程碑恒为 0 工期
 
     task.duration = Math.max(1, Math.floor(payload.duration))
     task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
+  },
+
+  // ── v0.2 新增 ─────────────────────────────────────────
+  // 合并键约定（v0.4 的 Inspector 按此传参，命令层不登记）：
+  //   setNote / setPriority / setDelay 是输入框驱动 → 传 `task.setX:<taskId>`
+  //     必须带任务 id：否则「改 A 的备注 → 改 B 的备注」会因相邻且 key 相同
+  //     并进同一条撤销记录，一次 Ctrl+Z 连 A 一起退回。
+  //   setSchedulingOrder / setAllowSplitting 是点击驱动 → 不传
+  'task.setSchedulingOrder': (draft, payload: TaskSetSchedulingOrderPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.kind === 'group') return // 摘要任务的日期由子任务汇总
+    task.schedulingOrder = payload.order
+  },
+
+  // 备注与优先级对摘要任务同样有意义 —— 不动它们。
+  'task.setNote': (draft, payload: TaskSetNotePayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    task.note = payload.note
+  },
+
+  'task.setPriority': (draft, payload: TaskSetPriorityPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    task.priority = Math.round(payload.priority)
+  },
+
+  'task.setDelay': (draft, payload: TaskSetDelayPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    if (task.kind === 'group') return // 同 setSchedulingOrder：摘要不单独挪
+    // 负延迟是 lag 的职责，这里只接受非负工作日
+    task.delay = Math.max(0, Math.round(payload.delay))
+  },
+
+  'task.setAllowSplitting': (draft, payload: TaskSetAllowSplittingPayload) => {
+    const task = draft.tasks[payload.taskId]
+    if (!task) return
+    task.allowSplitting = payload.allowSplitting
   },
 }

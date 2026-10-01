@@ -14,7 +14,10 @@ import type {
  *   earlyFinish = max(children.earlyFinish)
  *   lateStart   = min(children.lateStart)
  *   lateFinish  = max(children.lateFinish)
+ *   scheduledStart  = min(children.scheduledStart)
+ *   scheduledFinish = max(children.scheduledFinish)
  *   totalSlack  = min(children.totalSlack)   ← 最紧的子任务决定整个摘要
+ *   freeSlack   = min(children.freeSlack)    ← 同 totalSlack 口径
  *   isCritical  = any(children.isCritical)
  *
  * 前提：childIds 构成一棵树（无环）。树形不变量由命令层保证，
@@ -47,7 +50,10 @@ export function summarizeParents(
       earlyFinish: maxOf(children.map((c) => c.earlyFinish)),
       lateStart: minOf(children.map((c) => c.lateStart)),
       lateFinish: maxOf(children.map((c) => c.lateFinish)),
+      scheduledStart: minOf(children.map((c) => c.scheduledStart)),
+      scheduledFinish: maxOf(children.map((c) => c.scheduledFinish)),
       totalSlack: Math.min(...children.map((c) => c.totalSlack)),
+      freeSlack: Math.min(...children.map((c) => c.freeSlack)),
       isCritical: children.some((c) => c.isCritical),
     }
     result[id] = summary

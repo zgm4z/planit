@@ -63,7 +63,7 @@ export function OutlineTree({
                 <span style={{ width: 14 }} />
               )}
 
-              {task.isMilestone && (
+              {task.kind === 'milestone' && (
                 <span className={styles.milestoneGlyph} aria-hidden>
                   ◆
                 </span>

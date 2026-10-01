@@ -16,6 +16,11 @@ export type CommandType =
   | 'task.setScheduling'
   | 'task.moveTo'
   | 'task.resize'
+  | 'task.setSchedulingOrder'
+  | 'task.setNote'
+  | 'task.setPriority'
+  | 'task.setDelay'
+  | 'task.setAllowSplitting'
   // 依赖
   | 'dependency.create'
   | 'dependency.delete'
@@ -27,6 +32,9 @@ export type CommandType =
   | 'calendar.removeException'
   // 项目
   | 'project.rename'
+  | 'project.setDirection'
+  | 'project.setStartDate'
+  | 'project.setEndDate'
 
 /**
  * 一次数据变更的完整描述。`payload` 必须是可序列化的普通数据

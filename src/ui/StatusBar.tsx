@@ -35,12 +35,12 @@ export function StatusBar() {
   }
 
   const start = leafSchedules.reduce(
-    (acc, s) => (s.earlyStart < acc ? s.earlyStart : acc),
-    leafSchedules[0].earlyStart,
+    (acc, s) => (s.scheduledStart < acc ? s.scheduledStart : acc),
+    leafSchedules[0].scheduledStart,
   )
   const finish = leafSchedules.reduce(
-    (acc, s) => (s.earlyFinish > acc ? s.earlyFinish : acc),
-    leafSchedules[0].earlyFinish,
+    (acc, s) => (s.scheduledFinish > acc ? s.scheduledFinish : acc),
+    leafSchedules[0].scheduledFinish,
   )
 
   const calendar = project.calendars[project.calendarId]

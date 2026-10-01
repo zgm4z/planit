@@ -20,7 +20,7 @@ beforeEach(() => {
   const a = createTask({ name: '一' })
   const b = createTask({ name: '二' })
   const c = createTask({ name: '三' })
-  const m = createTask({ name: '里程碑', isMilestone: true })
+  const m = createTask({ name: '里程碑', kind: 'milestone' })
   const aChild = createTask({ name: '一之子', parentId: a.id })
   const bChild = createTask({ name: '二之子', parentId: b.id })
 

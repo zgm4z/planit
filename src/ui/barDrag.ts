@@ -199,7 +199,7 @@ export function buildShadowTasks(
   for (const [id, schedule] of Object.entries(schedules)) {
     const task = hypothetical.tasks[id]
     if (!task) continue
-    shadows[id] = { startDate: schedule.earlyStart, duration: task.duration }
+    shadows[id] = { startDate: schedule.scheduledStart, duration: task.duration }
   }
   return shadows
 }

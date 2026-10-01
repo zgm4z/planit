@@ -116,7 +116,7 @@ describe('Inspector', () => {
     await user.click(screen.getByLabelText('里程碑'))
 
     const task = currentTask()
-    expect(task.isMilestone).toBe(true)
+    expect(task.kind).toBe('milestone')
     expect(task.duration).toBe(0)
   })
 
@@ -153,7 +153,11 @@ describe('Inspector', () => {
     expect(scheduling.mode).toBe('constraint')
     if (scheduling.mode !== 'constraint') throw new Error('unreachable')
     expect(scheduling.type).toBe('startOn')
-    expect(scheduling.date).toBe(useScheduleStore.getState().result.schedules[taskId].earlyStart)
+    // 这条断言测的是「UI 把用户看到的开始日写进约束日期」——属于派生取值，
+    // 应与 Inspector 取同一个字段（scheduledStart），而不是引擎原始输出 earlyStart。
+    expect(scheduling.date).toBe(
+      useScheduleStore.getState().result.schedules[taskId].scheduledStart,
+    )
   })
 
   it('排期方式切到固定结束日期会写入 finishOn 约束', async () => {

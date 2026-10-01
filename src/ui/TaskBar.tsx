@@ -42,17 +42,17 @@ export function TaskBar({
   onStartLink,
 }: TaskBarProps) {
   const { t } = useTranslation()
-  const displayStart = override?.startDate ?? schedule.earlyStart
+  const displayStart = override?.startDate ?? schedule.scheduledStart
   const displayDuration = override?.duration ?? task.duration
 
   // 拖拽期间工期可能刚被改过，结束日期必须按新工期重算，
-  // 不能沿用引擎算出的旧 earlyFinish（resizeEnd 时开始日期没变，但工期变了）。
+  // 不能沿用引擎算出的旧排期结束日（resizeEnd 时开始日期没变，但工期变了）。
   // 走 domain 的 taskFinish —— 「开始日 + 工期 → 结束日」只能有一个实现。
   const displayFinish = override
     ? taskFinish(displayStart, displayDuration, calendar)
-    : schedule.earlyFinish
+    : schedule.scheduledFinish
 
-  if (task.isMilestone) {
+  if (task.kind === 'milestone') {
     // 几何全部来自 milestoneRect()（外接盒），DependencyLayer 用的是同一个函数
     const rect = milestoneRect(scale, displayStart)
 

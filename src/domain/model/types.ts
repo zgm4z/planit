@@ -39,19 +39,42 @@ export type Scheduling =
 
 export type EffortMode = 'fixedDuration' | 'fixedEffort'
 
+export type TaskKind = 'task' | 'milestone' | 'group'
+
+/** 任务在「依赖允许的时间窗」内取早还是取晚 */
+export type SchedulingOrder = 'asap' | 'alap'
+
+/** 整条链从起点正推（forward）还是从终点逆推（backward） */
+export type SchedulingDirection = 'forward' | 'backward'
+
 export interface Task {
   id: TaskId
   name: string
   parentId: TaskId | null
   /** 数组顺序即树序 */
   childIds: TaskId[]
-  isMilestone: boolean
+  /** 显式类型。`group` 与「有子任务」永远同步，由命令层维护（见 reconcileKind） */
+  kind: TaskKind
   /** 工作日数；里程碑恒为 0 */
   duration: number
   scheduling: Scheduling
   /** 0–100 */
   progress: number
   effortMode: EffortMode
+  /** 该任务在「依赖允许的时间窗」内尽量早做还是晚做。默认 asap */
+  schedulingOrder: SchedulingOrder
+  /** 备注。纯展示，引擎不消费。必填而非可选：v0.3 会把它做成常驻可编辑列，'' 省掉渲染处的 ?? '' */
+  note: string
+  /**
+   * 占位：允许拆分。
+   * 注意不是 v0.5 —— v0.5 的 spec 明确「拆分排期不在本版」，该版本里
+   * 「允许拆分」仍保持禁用。所以它的消费者最早在 v0.6 之后。
+   */
+  allowSplitting: boolean
+  /** 占位：平衡优先级。数值越大越优先，v0.6 消费 */
+  priority: number
+  /** 占位：平衡允许延迟的工作日数，v0.6 消费 */
+  delay: number
   /** 人·工作日，第二阶段使用 */
   effort?: number
 }
@@ -103,6 +126,14 @@ export interface Project {
   schemaVersion: number
   /** 项目基准开始日期，CPM 正推的起点 */
   startDate: DateStr
+  /** 整条链从起点正推（forward）还是从终点逆推（backward） */
+  schedulingDirection: SchedulingDirection
+  /**
+   * 项目结束锚点。语义随方向变化：
+   *   forward  —— 「最晚必须完成」的期限。未设置即无期限
+   *   backward —— 逆推终点。未设置时退回用正推算出的完成日
+   */
+  endDate?: DateStr
   calendarId: CalendarId
   calendars: Record<CalendarId, Calendar>
   tasks: Record<TaskId, Task>
@@ -121,8 +152,20 @@ export interface ComputedSchedule {
   earlyFinish: DateStr
   lateStart: DateStr
   lateFinish: DateStr
+  /**
+   * 该任务在当前「方向 × 顺序」下**实际**落在的排期端。
+   * 显示层（甘特条、大纲列、状态栏）只读这两个字段 ——
+   * 它们才是「用户看到的日期」，early/late 是中间量。
+   */
+  scheduledStart: DateStr
+  scheduledFinish: DateStr
   /** 总浮时（工作日） */
   totalSlack: number
+  /**
+   * 自由宽延（工作日）：本任务可推迟多久而不影响**任何后继任务**的最早开始。
+   * 没有后继时与 totalSlack 相同。
+   */
+  freeSlack: number
   isCritical: boolean
 }
 

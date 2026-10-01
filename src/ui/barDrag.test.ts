@@ -179,7 +179,8 @@ describe('不变式：影子预览与提交结果一致', () => {
         const taskId: TaskId = project.rootIds[0]
 
         const before = solve(project).schedules
-        const originTask = { startDate: before[taskId].earlyStart, duration: 3 }
+        // originTask 描述「用户当前看到的条起点」，必须与 UI 用同一字段
+        const originTask = { startDate: before[taskId].scheduledStart, duration: 3 }
 
         // 拖 N 个自然日；N 由模式自身的锚点推演，与 hook 的算法一致
         const dropDate = addDays(dragAnchorDate(mode, originTask, cal), 2)
@@ -201,7 +202,7 @@ describe('不变式：影子预览与提交结果一致', () => {
       for (const mode of MODES) {
         const project = buildProject(scheduling)
         const taskId = project.rootIds[0]
-        const originTask = { startDate: solve(project).schedules[taskId].earlyStart, duration: 3 }
+        const originTask = { startDate: solve(project).schedules[taskId].scheduledStart, duration: 3 }
         const preview = computeDragPreview(
           mode,
           originTask,
@@ -218,9 +219,9 @@ describe('不变式：影子预览与提交结果一致', () => {
           const where = `${name} × ${mode} × ${id}`
           // 影子画出的位置必须等于提交后该任务的真实位置与工期 ——
           // 这条断言覆盖「被拖条也走 buildShadowTasks」这一要求
-          if (shadows[id]?.startDate !== finalSchedules[id].earlyStart) {
+          if (shadows[id]?.startDate !== finalSchedules[id].scheduledStart) {
             mismatches.push(
-              `${where}: 影子开始 ${shadows[id]?.startDate} ≠ 实际 ${finalSchedules[id].earlyStart}`,
+              `${where}: 影子开始 ${shadows[id]?.startDate} ≠ 实际 ${finalSchedules[id].scheduledStart}`,
             )
           }
           if (shadows[id]?.duration !== finalProject.tasks[id].duration) {
@@ -246,10 +247,11 @@ describe('不变式：影子预览与提交结果一致', () => {
     const shadow = solve(buildHypothetical(project, taskId, 'resizeEnd', preview)).schedules
 
     // finishOn 被保留：结束日仍是 03-04，工期 5 → 开始日反推到 02-26
-    expect(shadow[taskId].earlyStart).toBe('2026-02-26')
-    expect(shadow[taskId].earlyFinish).toBe('2026-03-04')
+    // 影子描述的是「用户看到的排期」，故断言 scheduled*
+    expect(shadow[taskId].scheduledStart).toBe('2026-02-26')
+    expect(shadow[taskId].scheduledFinish).toBe('2026-03-04')
     // 下游跟着回退 —— 而不是被错误地推到 03-09
-    expect(shadow[project.rootIds[1]].earlyStart).toBe('2026-03-05')
+    expect(shadow[project.rootIds[1]].scheduledStart).toBe('2026-03-05')
   })
 
   it('假设项目按模式改写字段：move/resizeStart 钉 startOn，resizeEnd 保留原 scheduling', () => {

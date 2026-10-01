@@ -1,5 +1,6 @@
 import type { Draft } from 'immer'
 import type { Project, TaskId } from '../domain/model/types'
+import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
 
 export interface TaskReorderPayload { taskId: TaskId; toIndex: number }
@@ -44,18 +45,20 @@ export const taskStructureHandlers: Record<string, CommandHandler<any>> = {
     const newParentId = list[index - 1]
     const newParent = draft.tasks[newParentId]
 
-    if (!newParent || newParent.isMilestone) return // 里程碑不可作为父任务
+    if (!newParent || newParent.kind === 'milestone') return // 里程碑不可作为父任务
 
     list.splice(index, 1)
     newParent.childIds.push(payload.taskId)
     task.parentId = newParentId
+    reconcileKind(draft, newParentId)
   },
 
   'task.outdent': (draft, payload: TaskOutdentPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task || task.parentId === null) return // 已是顶层
 
-    const parent = draft.tasks[task.parentId]
+    const oldParentId = task.parentId
+    const parent = draft.tasks[oldParentId]
     if (!parent) return
 
     const parentList = siblingList(draft, parent.id)
@@ -69,5 +72,7 @@ export const taskStructureHandlers: Record<string, CommandHandler<any>> = {
     const parentIndex = parentList.indexOf(parent.id)
     parentList.splice(parentIndex + 1, 0, payload.taskId)
     task.parentId = parent.parentId
+
+    reconcileKind(draft, oldParentId)
   },
 }

@@ -23,7 +23,9 @@ export function solve(project: Project): ScheduleResult {
     tasks: leaves,
     dependencies: Object.values(project.dependencies),
     calendar,
+    direction: project.schedulingDirection,
     projectStart: project.startDate,
+    projectEnd: project.endDate,
   })
 
   const schedules = summarizeParents(project.tasks, leafSchedules, project.rootIds)

@@ -251,3 +251,189 @@ describe('project.rename', () => {
     expect(r.name).toBe('新计划')
   })
 })
+
+describe('task.kind 不变式', () => {
+  beforeEach(setup)
+
+  it('不变式 1：里程碑恒为零工期且无子任务', () => {
+    const p1 = run(project, 'task.create', { name: 'M' })
+    const id = p1.rootIds[0]
+    const p2 = run(p1, 'task.toggleMilestone', { taskId: id })
+    const m = p2.tasks[id]
+    expect(m.kind).toBe('milestone')
+    expect(m.duration).toBe(0)
+    expect(m.childIds).toEqual([])
+  })
+
+  it('不变式 2：group ⟺ childIds.length > 0（双向）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a] = p.rootIds
+    expect(p.tasks[a].kind).toBe('task')
+
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // B 缩进到 A 下
+    expect(p.tasks[a].childIds.length).toBe(1)
+    expect(p.tasks[a].kind).toBe('group')
+
+    p = run(p, 'task.outdent', { taskId: p.tasks[a].childIds[0] })
+    expect(p.tasks[a].childIds).toEqual([])
+    expect(p.tasks[a].kind).toBe('task')
+  })
+
+  it('不变式 3：有子任务的任务不能是里程碑（indent 到里程碑之下被拒绝）', () => {
+    let p = run(project, 'task.create', { name: 'M' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [m] = p.rootIds
+    p = run(p, 'task.toggleMilestone', { taskId: m })
+
+    const before = p
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+
+    expect(p).toEqual(before) // 命令被拒绝，未产生任何变更
+    expect(p.tasks[m].kind).toBe('milestone')
+    expect(p.tasks[m].childIds).toEqual([])
+  })
+
+  it('不变式 4a：加第一个子任务时父任务自动 task → group', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a] = p.rootIds
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    expect(p.tasks[a].kind).toBe('group')
+  })
+
+  it('不变式 4b：删掉最后一个子任务时 group → task', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a] = p.rootIds
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const child = p.tasks[a].childIds[0]
+
+    p = run(p, 'task.delete', { taskId: child })
+
+    expect(p.tasks[a].kind).toBe('task')
+    expect(p.tasks[a].childIds).toEqual([])
+  })
+
+  it('不变式 4c：删掉子树的最后一个子任务时同样 group → task', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.create', { name: 'C' })
+    const [a] = p.rootIds
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // B 进 A
+    expect(p.tasks[a].childIds).toHaveLength(1)
+    // B 缩进后从 rootIds 里摘掉，此时 rootIds 已是 [A, C] —— C 落在索引 1。
+    // 所以第二次仍取 rootIds[1]（不是 [2]：那是 undefined，命令会静默 no-op，
+    // 用例就退化成只缩进一个子任务，悄悄测不到「删空多子任务」这条路径）。
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] }) // C 进 A
+    expect(p.tasks[a].childIds).toHaveLength(2)
+    expect(p.tasks[a].kind).toBe('group')
+
+    for (const childId of [...p.tasks[a].childIds]) {
+      p = run(p, 'task.delete', { taskId: childId })
+    }
+
+    expect(p.tasks[a].kind).toBe('task')
+  })
+
+  it('task.create 挂到里程碑父任务下时回退到根层，不把里程碑转成 group', () => {
+    let p = run(project, 'task.create', { name: 'M' })
+    const m = p.rootIds[0]
+    p = run(p, 'task.toggleMilestone', { taskId: m })
+
+    p = run(p, 'task.create', { name: '子', parentId: m })
+
+    expect(p.tasks[m].kind).toBe('milestone')
+    expect(p.tasks[m].childIds).toEqual([])
+    expect(p.rootIds).toHaveLength(2) // 新任务落在根层
+    expect(p.tasks[p.rootIds[1]].parentId).toBeNull()
+  })
+})
+
+describe('v0.2 新命令', () => {
+  // 每个 describe 都必须自己 setup —— 少了它，这组用例只能靠上一个 describe
+  // 留下的模块级 handlers / project 才跑得通，一被 -t 过滤或 shuffle 就报
+  // 「未注册的命令类型」。
+  beforeEach(setup)
+
+  function oneTask(): { p: Project; id: string } {
+    const p = run(project, 'task.create', { name: 'A' })
+    return { p, id: p.rootIds[0] }
+  }
+
+  it('task.setSchedulingOrder 改写 schedulingOrder', () => {
+    const { p, id } = oneTask()
+    const next = run(p, 'task.setSchedulingOrder', { taskId: id, order: 'alap' })
+    expect(next.tasks[id].schedulingOrder).toBe('alap')
+  })
+
+  it('task.setSchedulingOrder 对摘要任务是 no-op', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+
+    const next = run(p, 'task.setSchedulingOrder', { taskId: parent, order: 'alap' })
+    expect(next).toEqual(p)
+  })
+
+  it('task.setNote 改写 note，且对摘要任务同样生效', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    p = run(p, 'task.indent', { taskId: p.rootIds[1] })
+    const parent = p.rootIds[0]
+
+    const next = run(p, 'task.setNote', { taskId: parent, note: '阶段说明' })
+    expect(next.tasks[parent].note).toBe('阶段说明')
+  })
+
+  it('task.setPriority 改写 priority，且对摘要任务同样生效', () => {
+    const { p, id } = oneTask()
+    expect(run(p, 'task.setPriority', { taskId: id, priority: 7 }).tasks[id].priority).toBe(7)
+
+    // 摘要任务也要生效 —— 这与 setSchedulingOrder / setDelay 对 group 的
+    // no-op 是相反的规定（备注和优先级对摘要同样有意义）。
+    let q = run(project, 'task.create', { name: 'A' })
+    q = run(q, 'task.create', { name: 'B' })
+    q = run(q, 'task.indent', { taskId: q.rootIds[1] })
+    const parent = q.rootIds[0]
+    expect(q.tasks[parent].kind).toBe('group')
+
+    const next = run(q, 'task.setPriority', { taskId: parent, priority: 7 })
+    expect(next.tasks[parent].priority).toBe(7)
+    expect(next).not.toEqual(q) // 确实产生了变更，不是被守卫吞掉的 no-op
+  })
+
+  it('task.setDelay 改写 delay，对摘要任务是 no-op', () => {
+    const { p, id } = oneTask()
+    expect(run(p, 'task.setDelay', { taskId: id, delay: 3 }).tasks[id].delay).toBe(3)
+
+    let q = run(project, 'task.create', { name: 'A' })
+    q = run(q, 'task.create', { name: 'B' })
+    q = run(q, 'task.indent', { taskId: q.rootIds[1] })
+    const parent = q.rootIds[0]
+    expect(run(q, 'task.setDelay', { taskId: parent, delay: 3 })).toEqual(q)
+  })
+
+  it('task.setAllowSplitting 改写 allowSplitting', () => {
+    const { p, id } = oneTask()
+    const next = run(p, 'task.setAllowSplitting', { taskId: id, allowSplitting: true })
+    expect(next.tasks[id].allowSplitting).toBe(true)
+  })
+
+  it('project.setDirection 改写方向', () => {
+    const next = run(project, 'project.setDirection', { direction: 'backward' })
+    expect(next.schedulingDirection).toBe('backward')
+  })
+
+  it('project.setStartDate / setEndDate 改写锚点，endDate 可清空', () => {
+    const a = run(project, 'project.setStartDate', { startDate: '2026-04-01' })
+    expect(a.startDate).toBe('2026-04-01')
+
+    const b = run(a, 'project.setEndDate', { endDate: '2026-06-30' })
+    expect(b.endDate).toBe('2026-06-30')
+
+    const c = run(b, 'project.setEndDate', { endDate: undefined })
+    expect(c.endDate).toBeUndefined()
+  })
+})

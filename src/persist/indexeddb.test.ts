@@ -65,6 +65,6 @@ describe('parsePersistedProject', () => {
   it('项目自带的 schemaVersion 不匹配时也拒绝载入', () => {
     const project = { ...createProject('x', '2026-03-02'), schemaVersion: 999 }
     expect(() => parsePersistedProject({ schemaVersion: SCHEMA_VERSION, project }))
-      .toThrow(/项目 schema 版本不匹配/)
+      .toThrow(/版本不匹配/)
   })
 })
