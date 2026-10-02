@@ -1,6 +1,17 @@
-import type { Project, Resource, ResourceCost, Task } from '../domain/model/types'
-import { SCHEMA_VERSION } from '../domain/model/factories'
+import type {
+  Calendar,
+  CalendarException,
+  Project,
+  Resource,
+  ResourceCost,
+  Task,
+} from '../domain/model/types'
 import { deriveKind } from '../domain/model/kind'
+import {
+  DEFAULT_FINISH_TIME,
+  DEFAULT_START_TIME,
+  ensureDateTime,
+} from '../domain/calendar/dateTime'
 
 /** v2 存档里的资源形状：5 种 kind（含 'cost'），cost 是 { rate, per, currency } */
 type V2Resource = Omit<
@@ -130,13 +141,94 @@ type V3Project = Omit<Project, 'baselines' | 'activeBaselineId' | 'statusDate'> 
   schemaVersion: number
 }
 
+/** v4 存档形状：**与 v5 在 TS 上同形**（DateStr 与 DateTimeStr 都是 `string`），
+ *  差别只在语义 —— v4 的承载字段是纯日期，v5 带时刻。别名让逐跳链的签名对称。 */
+type V4Project = Project
+
 /**
- * v3 项目整体迁到 **v4**（= 当前版本）。纯函数，入参不被改动。
+ * v3 项目整体迁到 **v4**（**不是**当前版本）。纯函数，入参不被改动。
  *
  * 只补两个空容器：`baselines: []` + `activeBaselineId: null`。
  * `statusDate` 刻意**不设** —— 未设置即「PV / SV 暂不可算」，UI 会提示用户设基准日。
+ *
+ * 返回类型是 `V4Project` 而**不是** `Project`（与上一跳对称）：逐跳链下它只承诺
+ * 产出 v4 形状，v5 的「补时刻」由下一步负责。
  */
-export function migrateV3ToV4(project: V3Project): Project {
+export function migrateV3ToV4(project: V3Project): V4Project {
   const { schemaVersion: _drop, ...rest } = project
-  return { ...rest, schemaVersion: SCHEMA_VERSION, baselines: [], activeBaselineId: null }
+  // ⚠️ 写死字面量 4，**不是** SCHEMA_VERSION（历史欠账，见 migrateV1ToV2 的说明）：
+  // v5 起 SCHEMA_VERSION 不再等于 4，用符号会产出「v4 形状 + v5 版本号」的畸形结果。
+  return { ...rest, schemaVersion: 4, baselines: [], activeBaselineId: null }
+}
+
+/**
+ * v4 项目整体迁到 **v5**（= 当前版本）。纯函数，入参不被改动。
+ *
+ * 把承载时刻的字段从纯日期补上默认时刻（spec §4）：项目起止 / 基准日、任务约束
+ * 日期、资源可用期、`custom` 例外的时段。**不碰** `Calendar.exceptions` 的键
+ * （`isWorkday` 按日查表，带时刻会静默漏查）、也**不碰** `BaselineEntry`
+ * （快照冻结在当时的日粒度，见 spec 判断 B）。
+ */
+export function migrateV4ToV5(project: V4Project): Project {
+  const { schemaVersion: _drop, ...rest } = project
+
+  const tasks: Record<string, Task> = {}
+  for (const [id, task] of Object.entries(project.tasks)) {
+    tasks[id] =
+      task.scheduling.mode === 'constraint'
+        ? {
+            ...task,
+            scheduling: {
+              ...task.scheduling,
+              date: ensureDateTime(task.scheduling.date, DEFAULT_START_TIME),
+            },
+          }
+        : task
+  }
+
+  const resources: Record<string, Resource> = {}
+  for (const [id, resource] of Object.entries(project.resources)) {
+    resources[id] = {
+      ...resource,
+      // 可用期是可选字段：缺省（undefined）不补 —— 「未设」与「设了某日」是两种语义
+      ...(resource.availableFrom
+        ? { availableFrom: ensureDateTime(resource.availableFrom, DEFAULT_START_TIME) }
+        : {}),
+      ...(resource.availableUntil
+        ? { availableUntil: ensureDateTime(resource.availableUntil, DEFAULT_FINISH_TIME) }
+        : {}),
+    }
+  }
+
+  const calendars: Record<string, Calendar> = {}
+  for (const [id, calendar] of Object.entries(project.calendars)) {
+    const exceptions: Record<string, CalendarException> = {}
+    for (const [date, exception] of Object.entries(calendar.exceptions)) {
+      exceptions[date] =
+        exception.kind === 'custom'
+          ? {
+              kind: 'custom',
+              start: ensureDateTime(exception.start, DEFAULT_START_TIME),
+              end: ensureDateTime(exception.end, DEFAULT_FINISH_TIME),
+            }
+          : exception
+    }
+    calendars[id] = { ...calendar, exceptions }
+  }
+
+  return {
+    ...rest,
+    // 写死字面量（逐跳契约）—— 每一步的产出只承诺自己的版本号。
+    schemaVersion: 5,
+    startDate: ensureDateTime(project.startDate, DEFAULT_START_TIME),
+    ...(project.endDate
+      ? { endDate: ensureDateTime(project.endDate, DEFAULT_FINISH_TIME) }
+      : {}),
+    ...(project.statusDate
+      ? { statusDate: ensureDateTime(project.statusDate, DEFAULT_FINISH_TIME) }
+      : {}),
+    tasks,
+    resources,
+    calendars,
+  }
 }

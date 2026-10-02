@@ -19,7 +19,9 @@ export type DateTimeStr = string
 
 export type CalendarException =
   | { kind: 'holiday' }
-  | { kind: 'custom'; start: DateStr; end: DateStr }
+  // v0.8：时段本身有真实起止时刻。⚠️ 引擎**仍不消费**它（时段粒度排期不做）——
+  // 存得下、但不参与排期；`isWorkday` 只按**日**查 `exceptions` 的键（见下方 Calendar）。
+  | { kind: 'custom'; start: DateTimeStr; end: DateTimeStr }
 
 export interface Calendar {
   id: CalendarId
@@ -43,7 +45,8 @@ export type ConstraintType =
 
 export type Scheduling =
   | { mode: 'auto' }
-  | { mode: 'constraint'; type: ConstraintType; date: DateStr }
+  // v0.8：约束日期是**输入锚点**，带时刻；引擎经 toDateStr 归一后再进 CPM（cpm.ts:221/241）
+  | { mode: 'constraint'; type: ConstraintType; date: DateTimeStr }
 
 export type EffortMode = 'fixedDuration' | 'fixedEffort'
 
@@ -135,10 +138,10 @@ export interface Resource {
   calendarId?: CalendarId
   /** 0–1 可用率 */
   availability: number
-  /** 资源可用的起始日（临时工 / 租期）。缺省表示不早于任何日期即可用 */
-  availableFrom?: DateStr
-  /** 资源可用的结束日。缺省表示不晚于任何日期 */
-  availableUntil?: DateStr
+  /** 资源可用的起始日（临时工 / 租期）。缺省表示不早于任何日期即可用。v0.8 起带时刻 */
+  availableFrom?: DateTimeStr
+  /** 资源可用的结束日。缺省表示不晚于任何日期。v0.8 起带时刻 */
+  availableUntil?: DateTimeStr
   cost: ResourceCost
   efficiency?: number
   note?: string
@@ -159,16 +162,17 @@ export interface Project {
   id: string
   name: string
   schemaVersion: number
-  /** 项目基准开始日期，CPM 正推的起点 */
-  startDate: DateStr
+  /** 项目基准开始日期，CPM 正推的起点。v0.8 起带时刻（默认 09:00）；引擎经 toDateStr 归一 */
+  startDate: DateTimeStr
   /** 整条链从起点正推（forward）还是从终点逆推（backward） */
   schedulingDirection: SchedulingDirection
   /**
    * 项目结束锚点。语义随方向变化：
    *   forward  —— 「最晚必须完成」的期限。未设置即无期限
    *   backward —— 逆推终点。未设置时退回用正推算出的完成日
+   * v0.8 起带时刻（默认 18:00 —— 「到该日结束」）。
    */
-  endDate?: DateStr
+  endDate?: DateTimeStr
   calendarId: CalendarId
   calendars: Record<CalendarId, Calendar>
   tasks: Record<TaskId, Task>
@@ -187,8 +191,9 @@ export interface Project {
    * v1.0：挣值的**基准日**（「到某日为止」的那个日）。
    * 缺省表示未设 —— 此时 PV / SV 算不出来（派生为 null），UI 提示用户设置。
    * 刻意**不**默认成 `new Date()`：墙上时钟会让黄金测试与 e2e 不可复现（计划偏差 3）。
+   * v0.8 起带时刻（默认 18:00 —— 「到该日为止」= 该日结束）。
    */
-  statusDate?: DateStr
+  statusDate?: DateTimeStr
   createdAt: string
   updatedAt: string
 }

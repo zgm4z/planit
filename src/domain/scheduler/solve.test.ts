@@ -7,6 +7,7 @@ import {
   createResource,
 } from '../model/factories'
 import type { Project } from '../model/types'
+import { toDateStr } from '../calendar/dateTime'
 import { solve, runCpm } from './index'
 
 /** 把任务挂进项目：处理 rootIds 与父子指针的一致性 */
@@ -133,13 +134,16 @@ describe('v0.6：solve() 接入资源平衡', () => {
     const result = solve(project)
 
     // 未平衡的基准：leveling 是 solve 在 CPM 之后另加的一步，这里直接跑那一步。
+    // 注意 `runCpm` 是低层原语，`CpmInput.projectStart` 契约定为 `DateStr`（不内部归一，
+    // 边界 ① 在 `solve` 里）。v0.8 起 `project.startDate` 带时刻，故这里须与 solve 一样
+    // 先 `toDateStr` —— 否则 `snapToWorkday` 会拿到带时刻串。
     const reference = runCpm({
       tasks: Object.values(project.tasks),
       dependencies: Object.values(project.dependencies),
       calendar: project.calendars[project.calendarId],
       direction: project.schedulingDirection,
-      projectStart: project.startDate,
-      projectEnd: project.endDate,
+      projectStart: toDateStr(project.startDate),
+      projectEnd: project.endDate ? toDateStr(project.endDate) : undefined,
       resourceBounds: {},
     })
 

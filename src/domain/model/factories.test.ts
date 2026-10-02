@@ -25,7 +25,8 @@ describe('createProject', () => {
   it('创建一个带默认日历的空项目', () => {
     const p = createProject('测试项目', '2026-03-02')
     expect(p.name).toBe('测试项目')
-    expect(p.startDate).toBe('2026-03-02')
+    // v0.8：纯日期入参被补成带时刻（默认 09:00）—— 承载时刻的字段一律 YYYY-MM-DDTHH:mm
+    expect(p.startDate).toBe('2026-03-02T09:00')
     expect(p.calendarId).toBe(DEFAULT_CALENDAR_ID)
     expect(p.calendars[DEFAULT_CALENDAR_ID]).toBeDefined()
     expect(p.rootIds).toEqual([])

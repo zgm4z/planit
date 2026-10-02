@@ -20,7 +20,8 @@ describe('saveProject / loadProject', () => {
 
     expect(loaded).not.toBeNull()
     expect(loaded!.name).toBe('我的计划')
-    expect(loaded!.startDate).toBe('2026-03-02')
+    // v0.8：落盘的就是带时刻的形状（工厂已补默认 09:00）
+    expect(loaded!.startDate).toBe('2026-03-02T09:00')
     expect(loaded!.tasks[task.id].duration).toBe(3)
   })
 
