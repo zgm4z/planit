@@ -233,6 +233,84 @@ describe('日历编辑驱动排期（承接已删的 CalendarSettings 用例）'
   })
 })
 
+/**
+ * 「正常时数」网格（星期几 × 小时）：**只读**可视化。
+ *
+ * 断言的是绿块的 `data-from` / `data-to`（小时）与格子数，不是 CSS 类 ——
+ * 类名经 CSS Modules 哈希后不可断言，且「有类」不等于「看得见」。
+ * 绿块的唯一真相是 `shared/normalHours.workBlockOfDay`；这里从 DOM 读出它，
+ * 与 7 个复选框（模型数据源）交叉验证。
+ */
+describe('正常时数网格', () => {
+  const blockOf = (dayIndex: number) => screen.queryByTestId(`calendar-normal-hours-block-${dayIndex}`)
+
+  it('渲染 7 × 24 的格子网格，且整块以只读图（role=img）暴露', () => {
+    renderView()
+    const grid = screen.getByTestId('calendar-normal-hours-grid')
+    expect(grid).toHaveAttribute('role', 'img')
+    for (let day = 0; day < 7; day += 1) {
+      for (let hour = 0; hour < 24; hour += 1) {
+        expect(
+          screen.getByTestId(`calendar-normal-hours-cell-${day}-${hour}`),
+        ).toBeInTheDocument()
+      }
+    }
+  })
+
+  it('默认（周一–周五上班、每日 8 小时）→ 5 块绿，均为 09:00–17:00', () => {
+    renderView()
+    for (let day = 0; day < 5; day += 1) {
+      const block = blockOf(day)!
+      expect(block).toHaveAttribute('data-from', '9')
+      expect(block).toHaveAttribute('data-to', '17')
+    }
+    // 周六 / 周日不上班 → 没有绿块
+    expect(blockOf(5)).toBeNull()
+    expect(blockOf(6)).toBeNull()
+  })
+
+  it('每日工时改 9 → 绿块跟着变成 09:00–18:00（与参照一致）', () => {
+    renderView()
+    fireEvent.change(screen.getByTestId('calendar-hours-per-day'), { target: { value: '9' } })
+    expect(blockOf(0)).toHaveAttribute('data-to', '18')
+  })
+
+  it('取消勾选「周五」→ 周五那列不再有绿块（网格是复选框的投影）', () => {
+    renderView()
+    expect(blockOf(4)).not.toBeNull()
+    fireEvent.click(within(screen.getByTestId('calendar-settings')).getAllByRole('checkbox')[4])
+    expect(blockOf(4)).toBeNull()
+  })
+
+  it('工时大到跨过午夜 → 截到 24（纵轴只有 00–23）', () => {
+    renderView()
+    fireEvent.change(screen.getByTestId('calendar-hours-per-day'), { target: { value: '20' } })
+    expect(blockOf(0)).toHaveAttribute('data-to', '24')
+  })
+
+  /**
+   * 诚实性底线（本任务的红线）：网格一格都不可交互。
+   * 模型没有「几点到几点」，点格子「改时刻」是点了没反应 —— 比明确禁用更糟。
+   * 故断言网格内**没有任何**可交互 / 可聚焦的控件（button / input / checkbox），
+   * 也不挂 hover 才有的东西。加了 onClick 的格子会在这里红。
+   */
+  it('网格内没有任何可交互控件（不可点、不可拖）', () => {
+    renderView()
+    const grid = screen.getByTestId('calendar-normal-hours-grid')
+    expect(within(grid).queryAllByRole('button')).toHaveLength(0)
+    expect(within(grid).queryAllByRole('checkbox')).toHaveLength(0)
+    expect(within(grid).queryAllByRole('textbox')).toHaveLength(0)
+    expect(within(grid).queryAllByRole('slider')).toHaveLength(0)
+    expect(grid.querySelectorAll('input, button, select, a')).toHaveLength(0)
+  })
+
+  it('编辑控件仍在网格旁（calendar-settings 与每日工时输入都存在）', () => {
+    renderView()
+    expect(within(screen.getByTestId('calendar-settings')).getAllByRole('checkbox')).toHaveLength(7)
+    expect(screen.getByTestId('calendar-hours-per-day')).toBeInTheDocument()
+  })
+})
+
 /** 三语叶子键集合相等 —— 与 inspectorGroups.test.ts / outlineColumns.test.ts 同款守卫 */
 function leafKeys(node: unknown, prefix = ''): string[] {
   if (node === null || typeof node !== 'object') return [prefix]
