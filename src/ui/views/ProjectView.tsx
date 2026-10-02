@@ -39,6 +39,7 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../../domain/calendar/workdays'
+import { toDateStr } from '../../domain/calendar/dateTime'
 import styles from '../styles/ProjectView.module.scss'
 import ganttStyles from '../styles/GanttPane.module.scss'
 
@@ -111,8 +112,10 @@ export function ProjectView() {
     [schedulesResult.conflicts],
   )
 
+  // 甘特时间轴原点是几何锚点：`createScale` 内部按 `parseDate` 切日期段，
+  // 若 `project.startDate` 带上时刻（Task 3 起）会得到 Invalid Date —— 先归一。
   const scale = useMemo(
-    () => createScale(project?.startDate ?? '2026-01-01', dayWidth),
+    () => createScale(toDateStr(project?.startDate ?? '2026-01-01'), dayWidth),
     [project?.startDate, dayWidth],
   )
 

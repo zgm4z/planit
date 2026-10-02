@@ -9,6 +9,7 @@ import type {
 } from '../model/types'
 import type { ResourceBounds } from './effort'
 import { snapToWorkday, taskFinish, taskStart, workdaysBetween } from '../calendar/workdays'
+import { toDateStr } from '../calendar/dateTime'
 import { buildGraph } from './graph'
 import { backwardBound, forwardBound } from './constraints'
 import { usesLateSchedule } from './direction'
@@ -215,7 +216,9 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 function constraintLowerBound(task: Task, cal: Calendar, projectStart: DateStr): DateStr {
   if (task.scheduling.mode === 'auto') return projectStart
 
-  const { type, date } = task.scheduling
+  // 约束日期是承载时刻的字段：进入 `taskStart` / `taskFinish` / 直接作为边界返回前先归一。
+  const { type } = task.scheduling
+  const date = toDateStr(task.scheduling.date)
   switch (type) {
     case 'startOn':
     case 'startNoEarlierThan':
@@ -233,7 +236,9 @@ function constraintLowerBound(task: Task, cal: Calendar, projectStart: DateStr):
 function constraintUpperBound(task: Task, cal: Calendar, projectFinish: DateStr): DateStr {
   if (task.scheduling.mode === 'auto') return projectFinish
 
-  const { type, date } = task.scheduling
+  // 约束日期是承载时刻的字段：进入 `taskStart` / `taskFinish` / 直接作为边界返回前先归一。
+  const { type } = task.scheduling
+  const date = toDateStr(task.scheduling.date)
   switch (type) {
     case 'finishOn':
     case 'finishNoLaterThan':

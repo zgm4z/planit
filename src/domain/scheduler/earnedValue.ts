@@ -11,6 +11,7 @@ import type {
   TaskId,
 } from '../model/types'
 import { workdaysBetween, workdaysInRange } from '../calendar/workdays'
+import { toDateStr } from '../calendar/dateTime'
 
 /**
  * 活动基线（activeBaselineId 指向的那一份）。
@@ -32,11 +33,19 @@ export function activeBaseline(project: Project): Baseline | undefined {
  * 里程碑（start === finish）视为 1 个工作日：日期到点即「该完成」。
  */
 function plannedFraction(entry: { start: DateStr; finish: DateStr }, statusDate: DateStr, cal: Calendar): number {
-  const total = workdaysInRange(entry.start, entry.finish, cal).length
+  // 参与比较的三个日期都先过唯一归一化入口，再落到**中性名**的局部量上：
+  //   · `entry.start/finish` 本版仍是纯日期（spec 判断 B），包 `toDateStr` 对未来免疫；
+  //   · `statusDate` 调用方已归一，`toDateStr` 幂等；
+  //   · 用 `start/asOf/finish` 而非字段名，与 `effort.ts` 的 `from/until` 同源 —— 免得
+  //     `dateTime.guard.test.ts`（按**字段名**紧贴运算符判违规）把已归一的量误判成裸比较。
+  const start = toDateStr(entry.start)
+  const finish = toDateStr(entry.finish)
+  const total = workdaysInRange(start, finish, cal).length
   if (total === 0) return 0 // 异常快照（finish < start）—— 不除零
-  if (statusDate < entry.start) return 0
-  const cap = statusDate < entry.finish ? statusDate : entry.finish
-  return workdaysInRange(entry.start, cap, cal).length / total
+  const asOf = toDateStr(statusDate)
+  if (asOf < start) return 0
+  const cap = asOf < finish ? asOf : finish
+  return workdaysInRange(start, cap, cal).length / total
 }
 
 const clampPercent = (progress: number): number => Math.min(100, Math.max(0, progress))
@@ -69,7 +78,9 @@ export function collectEarnedValues(
 ): Record<TaskId, EarnedValue> {
   const calendar = project.calendars[project.calendarId]
   const baseline = activeBaseline(project)
-  const statusDate = project.statusDate
+  // `project.statusDate` 是承载时刻的字段（spec §2.2）—— 进入比较前先归一，
+  // 否则 `'…T18:00' < '…'` 恒假、`workdaysInRange` 收到带时刻串会静默算错。
+  const statusDate = project.statusDate ? toDateStr(project.statusDate) : undefined
 
   const result: Record<TaskId, EarnedValue> = {}
 

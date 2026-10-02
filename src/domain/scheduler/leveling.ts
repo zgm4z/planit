@@ -15,6 +15,7 @@ import { workdaysInRange } from '../calendar/workdays'
 import { buildGraph } from './graph'
 import { forwardBound } from './constraints'
 import { addWorkdays, snapToWorkday, taskFinish, workdaysBetween } from '../calendar/workdays'
+import { toDateStr } from '../calendar/dateTime'
 
 /** 超载判定阈值：`> 1 + ε` 才算超载。0.5 / 0.25 这类单位累加带浮点误差，ε 防误报 */
 const OVERLOAD_EPSILON = 1e-9
@@ -221,7 +222,8 @@ export function levelLeaves(
     const schedule = schedules[leaf.id]
     base[leaf.id] = schedule
       ? { start: schedule.scheduledStart, finish: schedule.scheduledFinish }
-      : { start: project.startDate, finish: project.startDate }
+      // 无排期兜底：这两处日期随后进 `addWorkdays`，必须是纯日期 —— 先归一。
+      : { start: toDateStr(project.startDate), finish: toDateStr(project.startDate) }
     slack.set(leaf.id, schedule ? remainingSlack(schedule, calendar) : 0)
   }
 

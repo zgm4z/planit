@@ -4,6 +4,7 @@ import type {
   Task,
   TaskId,
 } from '../model/types'
+import { toDateStr } from '../calendar/dateTime'
 
 /**
  * 把叶子任务的排期合并成完整的排期表：叶子结果原样保留，
@@ -95,7 +96,8 @@ export function detectConflicts(
         taskId: id,
         kind: 'constraintViolatedByDependency',
         constraint: task.scheduling.type,
-        date: task.scheduling.date,
+        // 冲突描述里的日期是 `DateStr`（spec §2.2）：归一后再写入，避免下游按日消费时静默错。
+        date: toDateStr(task.scheduling.date),
         earliest: schedule.earlyStart,
       })
     } else {
