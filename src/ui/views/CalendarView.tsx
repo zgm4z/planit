@@ -99,6 +99,13 @@ export function CalendarView() {
             }}
             firstDayOfWeek={1}
             hideOutsideDates
+            // 月网格撑满 `.calendarLeft` 的可用宽度（Mantine `Calendar` 的 `fullWidth`）。
+            // 不加时 `Calendar` 按内容宽度（7 × --day-size ≈ 266px）缩在左半边，
+            // 右侧留一大片空白 —— 而左栏是 `flex: 1 1 auto`，本就该把这段宽度用起来。
+            // 实现走 Mantine 内建：`data-full-width` 让根 `width:100%`、月份表 `width:100%`、
+            // 每个日格 `width:100%; aspect-ratio:1`（见 node_modules 的 dates/styles.css），
+            // 故日格随容器等比放大、保持正方形 —— 三态的底色与角标跟着整格放大，不会被压坏。
+            fullWidth
             getDayProps={(date) => {
               const iso = toDateStr(date)
               const workday = isWorkday(iso, calendar)
