@@ -219,6 +219,14 @@ describe('loadColumnWidths', () => {
     localStorage.setItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY, '{oops')
     expect(loadColumnWidths()).toEqual({})
   })
+
+  it('读到存档时按存档来，且经过归一化（未知 key 丢弃、越界值 clamp）', () => {
+    localStorage.setItem(
+      OUTLINE_COLUMN_WIDTHS_STORAGE_KEY,
+      JSON.stringify({ start: 140, 'ghost-column': 300, finish: 99999 }),
+    )
+    expect(loadColumnWidths()).toEqual({ start: 140, finish: COLUMN_WIDTH_MAX })
+  })
 })
 
 describe('viewStore 的列宽（columnWidths）', () => {

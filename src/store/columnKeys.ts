@@ -171,5 +171,11 @@ export const TITLE_COLUMN_WIDTH_MIN = 160
  */
 export function clampColumnWidth(key: OutlineColumnKey, width: number): number {
   const min = key === 'title' ? TITLE_COLUMN_WIDTH_MIN : COLUMN_WIDTH_MIN
+  // NaN 是真洞：Math.round(NaN) 是 NaN，且会原样穿过 Math.max / Math.min。它一旦
+  // 流进渲染层就是 `flex: 0 0 NaNpx` —— 无效值，整列宽度塌回 auto，且要到刷新才
+  // 自愈（落盘的 null 会被 normalizeColumnWidths 丢掉）。回落到下限即可。
+  // 只为 NaN 设防而不写成 `!Number.isFinite`：后者会把 Infinity 从「钳到上限」变成
+  // 「钳到下限」，那是行为变更；Infinity 经 Math.min 本来就能得到正确的上限。
+  if (Number.isNaN(width)) return min
   return Math.min(COLUMN_WIDTH_MAX, Math.max(min, Math.round(width)))
 }

@@ -29,6 +29,16 @@ describe('clampColumnWidth — 列宽的唯一 clamp 实现', () => {
     expect(clampColumnWidth('start', 123.6)).toBe(124)
   })
 
+  it('NaN 回落到下限 —— 否则会渲染成 flex: 0 0 NaNpx，整列塌回 auto', () => {
+    expect(clampColumnWidth('start', NaN)).toBe(COLUMN_WIDTH_MIN)
+    expect(clampColumnWidth('title', NaN)).toBe(TITLE_COLUMN_WIDTH_MIN)
+  })
+
+  it('Infinity 仍钳到上限 / 下限（不是行为变更）', () => {
+    expect(clampColumnWidth('start', Infinity)).toBe(COLUMN_WIDTH_MAX)
+    expect(clampColumnWidth('start', -Infinity)).toBe(COLUMN_WIDTH_MIN)
+  })
+
   it('title 的下限必须与 CSS 的 min-width 一致', () => {
     // CSS `.outlineHeaderCellSticky { min-width: 160px }`。若这里放宽，拖动
     // title 到 100 时 JS 存 100、CSS 渲染 160，每帧算出的宽度与实际渲染宽度
