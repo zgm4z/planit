@@ -114,6 +114,34 @@ describe('useColumnResize', () => {
     expect(onResize).toHaveBeenCalledWith('start', 160)
   })
 
+  it('另一根指针抬起不结束拖拽 —— 触摸时手掌落下又抬起不该打断', () => {
+    const onResize = vi.fn()
+    render(<Harness onResize={onResize} onReset={vi.fn()} />)
+
+    fireEvent.pointerDown(screen.getByTestId('handle'), { button: 0, pointerId: 1, clientX: 200 })
+    up(2) // 另一根手指抬起
+    expect(document.body.classList.contains(COLUMN_RESIZING_CLASS)).toBe(true)
+
+    // 原来那根指针仍能驱动
+    moveTo(260)
+    expect(onResize).toHaveBeenCalledWith('start', 160)
+  })
+
+  it('拖拽中途卸载：监听器与全局类一起清掉，不留下粘住的 col-resize', () => {
+    const onResize = vi.fn()
+    const { unmount } = render(<Harness onResize={onResize} onReset={vi.fn()} />)
+
+    fireEvent.pointerDown(screen.getByTestId('handle'), { button: 0, pointerId: 1, clientX: 200 })
+    expect(document.body.classList.contains(COLUMN_RESIZING_CLASS)).toBe(true)
+
+    unmount()
+
+    expect(document.body.classList.contains(COLUMN_RESIZING_CLASS)).toBe(false)
+    // 卸载后 window 上不该再有监听 —— 再派发 move 也不该回调
+    moveTo(400)
+    expect(onResize).not.toHaveBeenCalled()
+  })
+
   it('拖拽中给 body 挂全局类，结束后摘掉 —— 指针移出手柄时光标不闪', () => {
     render(<Harness onResize={vi.fn()} onReset={vi.fn()} />)
 
