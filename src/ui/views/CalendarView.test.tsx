@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MantineProvider } from '@mantine/core'
+import { DatesProvider } from '@mantine/dates'
 
 import zhCN from '../../i18n/locales/zh-CN.json'
 import enUS from '../../i18n/locales/en-US.json'
@@ -20,9 +21,13 @@ import { CalendarView } from './CalendarView'
 import i18n from '../../i18n'
 
 function renderView() {
+  // 日历网格换成 Mantine `Calendar` 后，月份名 / 星期名与日历计算由 dayjs 提供，
+  // 必须套 `DatesProvider`（与 `App.tsx` 的接线一致：周一起始、中文 locale）。
   return render(
     <MantineProvider>
-      <CalendarView />
+      <DatesProvider settings={{ locale: 'zh-cn', firstDayOfWeek: 1 }}>
+        <CalendarView />
+      </DatesProvider>
     </MantineProvider>,
   )
 }
@@ -132,6 +137,47 @@ describe('日历视图（视图 A）', () => {
     renderView()
     fireEvent.change(screen.getByTestId('calendar-hours-per-day'), { target: { value: '6' } })
     expect(calendar().hoursPerDay).toBe(6)
+  })
+})
+
+/**
+ * 判据 7：日历月网格的三态（工作日 / 非工作日 / 例外日）。
+ *
+ * 断言的是**日格上的 `data-*`**（e2e 与后续用例靠它识别三态），不是 CSS 类 ——
+ * 类名经 CSS Modules 哈希后不可断言，且「有类」不等于「看得见」。
+ * 三态两两可分辨：`custom` 落在工作日上时 `data-workday` 仍为 true，只靠 isWorkday
+ * 判色就看不出它是例外（第三态），故必须另有 `data-exception`。
+ */
+describe('月网格三态（工作日 / 非工作日 / 例外日）', () => {
+  it('每个日格的 data-workday / data-exception 与手算一致', () => {
+    renderView()
+    // 2026-03-02 是周一（工作日）
+    expect(screen.getByTestId('calendar-day-2026-03-02')).toHaveAttribute('data-workday', 'true')
+    expect(screen.getByTestId('calendar-day-2026-03-02')).not.toHaveAttribute('data-exception')
+    // 2026-03-07 是周六（非工作日）
+    expect(screen.getByTestId('calendar-day-2026-03-07')).toHaveAttribute('data-workday', 'false')
+  })
+
+  it('custom 落在工作日上：data-workday 仍为 true，但 data-exception 为 custom（第三态）', () => {
+    const project = useProjectStore.getState().project!
+    project.calendars.default.exceptions['2026-03-04'] = {
+      kind: 'custom', start: '2026-03-04T09:00', end: '2026-03-04T18:00',
+    }
+    useProjectStore.setState({ project: { ...project } })
+    renderView()
+    const cell = screen.getByTestId('calendar-day-2026-03-04')
+    expect(cell).toHaveAttribute('data-workday', 'true')
+    expect(cell).toHaveAttribute('data-exception', 'custom')
+  })
+
+  it('holiday 落在工作日上：data-workday 变 false 且 data-exception 为 holiday', () => {
+    const project = useProjectStore.getState().project!
+    project.calendars.default.exceptions['2026-03-05'] = { kind: 'holiday' }
+    useProjectStore.setState({ project: { ...project } })
+    renderView()
+    const cell = screen.getByTestId('calendar-day-2026-03-05')
+    expect(cell).toHaveAttribute('data-workday', 'false')
+    expect(cell).toHaveAttribute('data-exception', 'holiday')
   })
 })
 

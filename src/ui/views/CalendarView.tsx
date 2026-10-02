@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button, Checkbox, NumberInput, Select, Text } from '@mantine/core'
+import { Calendar, DatePickerInput } from '@mantine/dates'
 import { IconTrash } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
@@ -8,17 +9,15 @@ import { isWorkday } from '../../domain/calendar/workdays'
 import { createCalendar } from '../../domain/model/factories'
 import { toDateStr } from '../../domain/calendar/dateTime'
 import { useProjectStore } from '../../store/projectStore'
-import { monthMatrix, shiftMonth } from '../shared/calendarGrid'
+import { shiftMonth } from '../shared/calendarGrid'
 import { groupExceptions } from '../shared/groupExceptions'
 import { formatDate } from '../shared/format'
-import { DateField } from '../inspector/InspectorFields'
 import styles from '../styles/ProjectView.module.scss'
 // 区块类（blockTitle / weekdays / exceptionRow / exceptionDate / exceptionKind）原来由
 // CalendarSettings 用 Chrome.module.scss 提供，这里原样复用，避免两处各写一份样式。
 import chrome from '../styles/Chrome.module.scss'
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-const WEEKDAY_HEADERS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
 /**
  * 视图 A：项目日历（spec §5）。
@@ -48,7 +47,6 @@ export function CalendarView() {
   if (!project) return null
 
   const calendar = project.calendars[project.calendarId] ?? createCalendar()
-  const cells = monthMatrix(anchor)
   const ranges = groupExceptions(calendar.exceptions)
 
   const addException = () => {
@@ -82,36 +80,55 @@ export function CalendarView() {
           </Button>
         </div>
 
-        <div className={styles.calendarGrid} data-testid="calendar-month-grid">
-          {WEEKDAY_HEADERS.map((key) => (
-            <div key={key} className={styles.calendarHead}>{t(`calendar.weekdays.${key}`)}</div>
-          ))}
-          {cells.map((date, index) => {
-            if (date === null) {
-              return (
-                <div key={`pad-${index}`} className={`${styles.calendarDay} ${styles.calendarDayPad}`} />
-              )
-            }
-            const workday = isWorkday(date, calendar)
-            // 第三态：这一天是不是一条**例外**（日历里有它的条目）。
-            // 例外日与「非工作日」是两回事 —— 一个 custom 落在工作日上时 isWorkday 仍为 true，
-            // 只按 isWorkday 上色就看不出来（spec §5 要求三态：工作日 / 非工作日 / 例外日）。
-            const exception = calendar.exceptions[date]
-            return (
-              <div
-                key={date}
-                className={`${styles.calendarDay} ${workday ? '' : styles.calendarDayOff} ${
+        {/* 月网格改用 Mantine 的 `Calendar`（spec §6.1）：月份状态由 `anchor` 驱动。
+            三态仍是 v0.7 的三态（工作日 / 非工作日 / 例外日），但保住它们的方式变了：
+            - **配色**走 `getDayProps` 的 `className`（合法字段，落到日格 `<button>` 上）；
+            - **`data-*`** 走 `renderDay` 返回的 `<span>`（见下方注释：回调给的是
+              `DateStringValue`，不是 Date）。e2e 与单测都在这两个 `data-*` 上断言三态。
+            `firstDayOfWeek={1}` 与 `Calendar.workingDays` 的「周一是索引 0」一致；
+            `hideOutsideDates` 让相邻月的补白日整格隐藏（旧网格的补白由 `monthMatrix` 给）。 */}
+        <div data-testid="calendar-month-grid">
+          <Calendar
+            date={anchor}
+            onDateChange={(date) => {
+              // Mantine 9.6.3 的 `onDateChange?: (date: DateStringValue) => void`
+              // （`DateStringValue = string`，见 node_modules 源码）——已在读源码时确认，
+              // 不是早期文档里的 `Date`。只改「显示哪个月」，不写 store：
+              // 日格本身没有选中语义，与 v0.7 的手写网格一致。
+              setAnchor(toDateStr(date))
+            }}
+            firstDayOfWeek={1}
+            hideOutsideDates
+            getDayProps={(date) => {
+              const iso = toDateStr(date)
+              const workday = isWorkday(iso, calendar)
+              const exception = calendar.exceptions[iso]
+              return {
+                className: `${workday ? '' : styles.calendarDayOff} ${
                   exception ? styles.calendarDayException : ''
-                }`}
-                data-testid={`calendar-day-${date}`}
-                data-workday={workday ? 'true' : 'false'}
-                // 例外日的第三态身份也挂在 data 上，供 e2e 断言（视觉上靠角标，不引入新色相）
-                data-exception={exception?.kind}
-              >
-                {date.slice(8)}
-              </div>
-            )
-          })}
+                }`,
+              }
+            }}
+            renderDay={(date) => {
+              const iso = toDateStr(date)
+              const workday = isWorkday(iso, calendar)
+              // 第三态：这一天是不是一条**例外**（日历里有它的条目）。
+              // 例外日与「非工作日」是两回事 —— 一个 custom 落在工作日上时 isWorkday 仍为 true，
+              // 只按 isWorkday 上色就看不出来（spec §5 要求三态：工作日 / 非工作日 / 例外日）。
+              const exception = calendar.exceptions[iso]
+              return (
+                <span
+                  data-testid={`calendar-day-${iso}`}
+                  data-workday={workday ? 'true' : 'false'}
+                  // 例外日的第三态身份挂在 data 上，供 e2e / 单测断言（视觉上靠角标，不引入新色相）；
+                  // 非例外日**不挂**该属性（`toHaveAttribute` 的缺席断言因此有判别力）。
+                  {...(exception ? { 'data-exception': exception.kind } : {})}
+                >
+                  {iso.slice(8)}
+                </span>
+              )
+            }}
+          />
         </div>
 
         <Text className={chrome.blockTitle}>{t('calendarView.customDays')}</Text>
@@ -194,13 +211,35 @@ export function CalendarView() {
 
         <Text className={chrome.blockTitle}>{t('calendarView.addException')}</Text>
         <div className={chrome.exceptionRow}>
-          {/* 区间例外的命令（addExceptionRange）按**日**展开，payload 是日期语义。
-              故这两个 DateTimePicker 只用来「取日期」：回传值经 toDateStr 归一回
-              纯日期再交给命令 —— DateTimeStr 只活在输入控件里，不进命令边界。 */}
-          <DateField ariaLabel={t('calendarView.rangeStart')} value={rangeStart}
-            onChange={(next) => setRangeStart(toDateStr(next))} testId="calendar-range-start" />
-          <DateField ariaLabel={t('calendarView.rangeEnd')} value={rangeEnd}
-            onChange={(next) => setRangeEnd(toDateStr(next))} testId="calendar-range-end" />
+          {/* 这两处用 `DatePickerInput` 而**不是** `DateTimePicker`（计划「偏差 2」）：
+              区间例外的命令 `calendar.addExceptionRange` **按日展开**（逐日写单日条目，
+              payload 的 start / end 是 `DateStr`）。用带时刻的控件会让用户选出的时刻
+              被静默丢弃 —— 那是「假装能用」。`DatePickerInput` 的语义就是「选一天」，
+              值天然是 `YYYY-MM-DD`，时刻根本不会出现在选项里，故无需 toDateStr 转换，
+              命令边界仍是纯日期（DateTimeStr 不会渗进这里）。 */}
+          {/* ⚠️ 空值必须传 `null` **而不是 `''`**：`DatePickerInput` 的显示值走
+              `getFormattedDate`，只有 `date === null` 才回空串；`''` 会被当成
+              「非法日期」直接渲染成字面量 "Invalid Date"（实测踩过）。我们的状态里
+              `''` 是「未设」哨兵，故进控件前转 null、出控件后转回 `''`。 */}
+          {/* `placeholder` 与外层 `valueFormat` 同形状：`DatePickerInput` 默认没有占位符，
+              空值时会缩成一个几乎点不到的窄条（旧 `DateTimePicker` 靠 "YYYY-MM-DD HH:mm"
+              的占位文字撑开宽度，换成纯日期后这层宽度没了）。 */}
+          <DatePickerInput
+            aria-label={t('calendarView.rangeStart')}
+            value={rangeStart || null}
+            valueFormat="YYYY-MM-DD"
+            placeholder="YYYY-MM-DD"
+            onChange={(value) => setRangeStart(value ?? '')}
+            data-testid="calendar-range-start"
+          />
+          <DatePickerInput
+            aria-label={t('calendarView.rangeEnd')}
+            value={rangeEnd || null}
+            valueFormat="YYYY-MM-DD"
+            placeholder="YYYY-MM-DD"
+            onChange={(value) => setRangeEnd(value ?? '')}
+            data-testid="calendar-range-end"
+          />
           <Select
             size="xs"
             aria-label={t('calendarView.kindLabel')}
