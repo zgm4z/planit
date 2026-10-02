@@ -338,6 +338,24 @@
   border-right: 1px solid var(--planit-border);
 }
 
+// 类型列的宽度测量元素（`ResourceTree` 顶部注释解释了为什么要「先量后写」）。
+// 它挂 `.outlineCell` 以**继承同一套盒子**（内边距 / 字号 / box-sizing）——
+// 量出来的宽因此与真实单元格逐像素可比，SCSS 将来改单元格内边距它自动跟随。
+//
+// ⚠️ `display: block` **必须**覆盖 `.outlineCell` 的 `display: flex`：flex 会把四条
+// 标签横排成一行，容器宽度变成「总和」而不是「最宽者」。块级堆叠才让 shrink-to-fit
+// 取到最宽那条。本规则定义在 `.outlineCell` 之后（同特异性、后到者胜）。
+.kindSizer {
+  position: absolute; // 脱离文档流：不占位、不撑高树
+  top: 0;
+  left: 0;
+  visibility: hidden; // 不绘制，但**保留布局** —— display:none 会让它量不出宽度
+  pointer-events: none;
+  height: auto; // 覆盖 .outlineCell 的 height:100%
+  display: block; // 见上：纵向堆叠，宽度 = 最宽那条标签
+  white-space: nowrap; // 关键词：nowrap 下 shrink-to-fit 的宽度恰为 max-content
+}
+
 .resourceMain {
   flex: 0 0 auto;
   padding: var(--planit-sp-16);
