@@ -424,19 +424,11 @@
   display: flex; align-items: center; gap: var(--planit-sp-8);
   margin-bottom: var(--planit-sp-8);
 }
-.calendarGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--planit-sp-2); }
-.calendarHead {
-  font-size: var(--planit-fs-xs);
-  color: var(--planit-text-muted);
-  text-align: center;
-}
-.calendarDay {
-  min-height: 40px;
-  padding: var(--planit-sp-4);
-  border: 1px solid var(--planit-border);
-  border-radius: 2px;
-  font-size: var(--planit-fs-xs);
-}
+// 月网格由 Mantine 的 `Calendar` 渲染（spec §6.1），日格是 `<button class="mantine-Day …">`。
+// 故这里不再有 `.calendarGrid` / `.calendarHead` / `.calendarDay` / `.calendarDayPad`
+// —— 网格结构、星期行、补白日都归 `Calendar`（`hideOutsideDates` 整格隐藏补白）。
+// 下面两条是**状态类**，经 `getDayProps` 的 `className` 挂到日格按钮上；
+// 它们不依赖旧的 `.calendarDay` 容器（旧写法本来也是并列的顶层类，非嵌套）。
 .calendarDayOff { background: var(--planit-bg-subtle); color: var(--planit-text-faint); }
 // 例外日的第三态（spec §5：工作日 / 非工作日 / **例外日**）。
 // 例外日可能落在工作日上（custom）也可能落在非工作日上（holiday），所以不能靠换底色
@@ -456,4 +448,3 @@
     pointer-events: none;
   }
 }
-.calendarDayPad { border-color: transparent; }
