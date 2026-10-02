@@ -285,6 +285,8 @@
 }
 
 .outlineHeaderCell {
+  // 手柄的定位上下文 —— 手柄绝对定位在单元格右缘的**内部**
+  position: relative;
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -604,4 +606,31 @@
   display: flex;
   flex-direction: column;
   gap: var(--planit-sp-6);
+}
+
+/* ── 列宽拖拽手柄 ─────────────────────────────── */
+// 绝对定位在表头单元格**内部**右缘：`.outlineHeaderCell` 有 overflow: hidden
+// （为了文字省略号），外凸的柄会被裁掉。
+.columnResizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  // 触控设备上不把拖拽当成滚动
+  touch-action: none;
+  background: transparent;
+  transition: background var(--planit-dur-fast) var(--planit-ease-out);
+
+  &:hover {
+    background: var(--planit-work);
+  }
+}
+
+// 拖拽期间（useColumnResize 挂在 body 上）：强制光标并禁掉文本选择 ——
+// 指针短暂移出手柄那 6px 时，光标会闪回默认箭头、表头文字会被选中。
+:global(.planit-column-resizing) {
+  cursor: col-resize;
+  user-select: none;
 }

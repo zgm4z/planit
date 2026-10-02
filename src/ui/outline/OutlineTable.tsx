@@ -14,6 +14,7 @@ import type { FlatRow } from '../shared/flattenRows'
 import { cellFlex, OUTLINE_COLUMNS, type OutlineColumn } from './outlineColumns'
 import { useViewStore } from '../../store/viewStore'
 import { OutlineTree } from './OutlineTree'
+import { useColumnResize } from './useColumnResize'
 import styles from '../styles/ProjectView.module.scss'
 
 interface OutlineTableProps {
@@ -58,6 +59,12 @@ export function OutlineTable({
   const { t } = useTranslation()
   const visibleColumns = useViewStore((state) => state.visibleColumns)
   const toggleColumn = useViewStore((state) => state.toggleColumn)
+  const setColumnWidth = useViewStore((state) => state.setColumnWidth)
+  const resetColumnWidth = useViewStore((state) => state.resetColumnWidth)
+  const { begin, reset } = useColumnResize({
+    onResize: setColumnWidth,
+    onReset: resetColumnWidth,
+  })
 
   return (
     <div className={styles.outlineTable} data-testid="outline-table">
@@ -77,6 +84,17 @@ export function OutlineTable({
                 data-testid={`outline-col-${column.key}`}
               >
                 {t(column.labelKey)}
+                {/* 分隔线手柄：绝对定位在单元格**内部**右缘 —— 不能外凸，
+                    .outlineHeaderCell 的 overflow: hidden 会把它裁掉。 */}
+                <div
+                  className={styles.columnResizer}
+                  data-testid={`outline-col-resizer-${column.key}`}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t('outline.resizeHandle', { column: t(column.labelKey) })}
+                  onPointerDown={(event) => begin(event, column.key, column.width)}
+                  onDoubleClick={() => reset(column.key)}
+                />
               </div>
             ))}
           </div>
