@@ -7,6 +7,14 @@ export type AssignmentId = string
 /** ISO 日历日，格式 YYYY-MM-DD，按本地时区解释 */
 export type DateStr = string
 
+/**
+ * 带时刻的日期，格式 YYYY-MM-DDTHH:mm，按本地时区解释、无秒。
+ * 两个别名都放在此处（而非 dateTime.ts）—— 避免 types.ts ↔ dateTime.ts 的循环依赖。
+ * ⚠️ 二者都是 `string` 别名、互相可赋值，编译期拦不住混用：
+ * 承载时刻的字段只能经 dateTime.ts 的 toDateStr 归一后再进引擎（dateTime.guard.test.ts 守卫）。
+ */
+export type DateTimeStr = string
+
 // ── 日历 ────────────────────────────────────────────────
 
 export type CalendarException =
