@@ -1,11 +1,9 @@
 import type { ComputedSchedule, Project, ScheduleResult, TaskId } from '../model/types'
-import type { ResourceBounds } from './effort'
 import { runCpmWithGraph } from './cpm'
 import { levelLeaves } from './leveling'
 import { detectConflicts, summarizeParents } from './summarize'
-import { collectCosts, collectEfforts, effectiveDuration, resourceBounds } from './effort'
+import { collectCosts, collectEfforts, effectiveDuration } from './effort'
 import { collectBaselineDiffs, collectEarnedValues } from './earnedValue'
-import { sumUnits } from '../model/units'
 import { toDateStr } from '../calendar/dateTime'
 import { buildScheduleContext } from './context'
 
@@ -34,20 +32,13 @@ export function solve(project: Project): ScheduleResult {
 
   // ① 有效工期计算：把 effort × 分配 × 资源 解成 CPM 需要的 duration 输入，
   //    同时算出每个任务的资源可用期边界。
-  const units = new Map<TaskId, number>()
   const durations = new Map<TaskId, number>()
-  const bounds: Record<TaskId, ResourceBounds> = {}
 
   for (const leaf of leaves) {
-    const unit = sumUnits(project, leaf.id)
-    units.set(leaf.id, unit)
+    const unit = context.unitsByTask.get(leaf.id) ?? 0
     durations.set(leaf.id, effectiveDuration(leaf, unit))
-
-    const bound = resourceBounds(project, leaf.id)
-    if (bound.earliestStart !== undefined || bound.latestFinish !== undefined) {
-      bounds[leaf.id] = bound
-    }
   }
+  const bounds = Object.fromEntries(context.resourceBoundsByTask)
 
   const leafSchedules = runCpmWithGraph({
     tasks: leaves.map((leaf) => ({ ...leaf, duration: durations.get(leaf.id)! })),
@@ -76,8 +67,8 @@ export function solve(project: Project): ScheduleResult {
 
   const schedules = summarizeParents(project.tasks, leveledLeaves, project.rootIds)
   const conflicts = detectConflicts(project.tasks, schedules, project.rootIds)
-  const efforts = collectEfforts(project, leaves, units, durations)
-  const { costs, resourceTotals } = collectCosts(project, leaves, durations, calendar)
+  const efforts = collectEfforts(context, durations)
+  const { costs, resourceTotals } = collectCosts(context, durations)
 
   // ⑧ 基线与挣值（v1.0）：全部**派生**，不进 Project、不入撤销栈。
   //    必须在摘要汇总之后 —— 差异的「当前」端要最终的 scheduled*；

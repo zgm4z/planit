@@ -242,3 +242,30 @@ describe('黄金判据 5：分配变更后下游重排正确', () => {
     expect(after.schedules[t2.id].scheduledStart < before.schedules[t2.id].scheduledStart).toBe(true)
   })
 })
+
+describe('黄金判据：共享 assignment 索引不改变成本与资源总计', () => {
+  it('按每个资源的 units、usage 与 hourly 费率计算任务成本和总计', () => {
+    const { project, tasks } = projectWithChain([2])
+    const [task] = tasks
+    const resourceA = {
+      ...staff('A'),
+      cost: { usage: 10, hourly: 2, currency: 'CNY' },
+    }
+    const resourceB = {
+      ...staff('B'),
+      cost: { usage: 5, hourly: 1, currency: 'CNY' },
+    }
+    project.resources[resourceA.id] = resourceA
+    project.resources[resourceB.id] = resourceB
+    const assignmentA = createAssignment({ taskId: task.id, resourceId: resourceA.id, units: 0.5 })
+    const assignmentB = createAssignment({ taskId: task.id, resourceId: resourceB.id, units: 1 })
+    project.assignments[assignmentA.id] = assignmentA
+    project.assignments[assignmentB.id] = assignmentB
+
+    const result = solve(project)
+
+    expect(result.costs[task.id]).toEqual({ task: 15, resource: 32, total: 47 })
+    expect(result.resourceTotals[resourceA.id]).toEqual({ assignments: 1, hours: 8, cost: 26 })
+    expect(result.resourceTotals[resourceB.id]).toEqual({ assignments: 1, hours: 16, cost: 21 })
+  })
+})

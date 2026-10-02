@@ -10,7 +10,7 @@ import type {
   TaskCosts,
   TaskId,
 } from '../model/types'
-import { assignmentUnits } from '../model/units'
+import type { ScheduleContext } from './context'
 import { toDateStr } from '../calendar/dateTime'
 import { snapToWorkdayOrPrevious } from '../calendar/workdays'
 
@@ -102,15 +102,18 @@ export function taskEffort(task: Task, units: number, duration: number): number 
  * 返回的表**覆盖全部任务**（含无分配者，值为 0）。
  */
 export function collectEfforts(
-  project: Project,
-  leaves: readonly Task[],
-  units: ReadonlyMap<TaskId, number>,
+  context: ScheduleContext,
   durations: ReadonlyMap<TaskId, number>,
 ): Record<TaskId, number> {
+  const { project, leaves, unitsByTask } = context
   const result: Record<TaskId, number> = {}
 
   for (const leaf of leaves) {
-    result[leaf.id] = taskEffort(leaf, units.get(leaf.id) ?? 0, durations.get(leaf.id) ?? leaf.duration)
+    result[leaf.id] = taskEffort(
+      leaf,
+      unitsByTask.get(leaf.id) ?? 0,
+      durations.get(leaf.id) ?? leaf.duration,
+    )
   }
 
   const visit = (id: TaskId): number => {
@@ -129,11 +132,11 @@ export function collectEfforts(
 /** 一条分配折算出的工时与成本 */
 function assignmentCost(
   resource: Resource,
-  assignment: Assignment,
+  units: number,
   duration: number,
   hoursPerDay: number,
 ): { usage: number; hourly: number; hours: number } {
-  const hours = assignmentUnits(resource, assignment) * duration * hoursPerDay
+  const hours = units * duration * hoursPerDay
   // 费率字段必须兜底 0：createResource 的默认成本是 `{ currency: 'CNY' }`，
   // 两个费率字段都缺省，而**默认资源是最常见的路径**。不兜底会让
   // `undefined * hours` 算出 NaN，再顺着 collectCosts 的 `+=` 把
@@ -154,11 +157,10 @@ const ZERO_COST: TaskCosts = { task: 0, resource: 0, total: 0 }
  * `resourceTotals` 预置全部资源（零分配者计 0），供资源面板直接读。
  */
 export function collectCosts(
-  project: Project,
-  leaves: readonly Task[],
+  context: ScheduleContext,
   durations: ReadonlyMap<TaskId, number>,
-  calendar: Calendar,
 ): { costs: Record<TaskId, TaskCosts>; resourceTotals: Record<ResourceId, ResourceSummary> } {
+  const { project, leaves, calendar, assignmentsByTask, assignmentUnitsById } = context
   const costs: Record<TaskId, TaskCosts> = {}
 
   const resourceTotals: Record<ResourceId, ResourceSummary> = {}
@@ -171,12 +173,16 @@ export function collectCosts(
     let task = 0
     let resource = 0
 
-    for (const assignment of Object.values(project.assignments)) {
-      if (assignment.taskId !== leaf.id) continue
+    for (const assignment of assignmentsByTask.get(leaf.id) ?? []) {
       const assigned = project.resources[assignment.resourceId]
       if (!assigned) continue
 
-      const cost = assignmentCost(assigned, assignment, duration, calendar.hoursPerDay)
+      const cost = assignmentCost(
+        assigned,
+        assignmentUnitsById.get(assignment.id) ?? 0,
+        duration,
+        calendar.hoursPerDay,
+      )
       task += cost.usage
       resource += cost.hourly
 

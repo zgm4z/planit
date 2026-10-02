@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createProject, createTask, createResource, createAssignment } from '../model/factories'
 import type { Project } from '../model/types'
 import { assignmentUnits, sumUnits } from '../model/units'
+import { buildScheduleContext } from './context'
 import { effectiveDuration, taskEffort, resourceBounds, collectCosts } from './effort'
 
 function project(): Project {
@@ -138,7 +139,7 @@ describe('collectCosts（成本派生）', () => {
     const asg = createAssignment({ taskId: t, resourceId: r.id, units: 1 })
     p.assignments[asg.id] = asg
 
-    const { costs, resourceTotals } = collectCosts(p, [task], new Map([[t, 3]]), p.calendars.default)
+    const { costs, resourceTotals } = collectCosts(buildScheduleContext(p), new Map([[t, 3]]))
 
     expect(costs[t]).toEqual({ task: 0, resource: 0, total: 0 })
     // 工时照常派生（1 × 3 天 × 8 小时 = 24）—— 证明「0」来自「无费率」，
