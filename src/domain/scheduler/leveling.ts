@@ -2,19 +2,21 @@ import type {
   Calendar,
   ComputedSchedule,
   DateStr,
-  Dependency,
   LevelingResult,
-  Project,
   ResourceId,
-  Task,
   TaskId,
   ResourceOverload,
 } from '../model/types'
-import { assignmentUnits } from '../model/units'
-import { workdaysInRange } from '../calendar/workdays'
-import { buildGraph } from './graph'
+import type { ScheduleContext } from './context'
+import type { TaskGraph } from './graph'
 import { forwardBound } from './constraints'
-import { addWorkdays, snapToWorkday, taskFinish, workdaysBetween } from '../calendar/workdays'
+import {
+  addWorkdays,
+  snapToWorkday,
+  taskFinish,
+  workdaysBetween,
+  workdaysInRange,
+} from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
 
 /** 超载判定阈值：`> 1 + ε` 才算超载。0.5 / 0.25 这类单位累加带浮点误差，ε 防误报 */
@@ -36,28 +38,24 @@ export interface LeveledDates {
  * 悬空分配（指向不存在资源）与缺区间的任务（摘要）被忽略。
  */
 export function resourceDayLoad(
-  project: Project,
+  context: ScheduleContext,
   dates: Readonly<Record<TaskId, LeveledDates>>,
-  calendar: Calendar,
 ): Map<ResourceId, Map<DateStr, number>> {
   const load = new Map<ResourceId, Map<DateStr, number>>()
 
-  for (const assignment of Object.values(project.assignments)) {
-    const resource = project.resources[assignment.resourceId]
-    const span = dates[assignment.taskId]
-    if (!resource || !span) continue
+  for (const [resourceId, assignments] of context.assignmentsByResource) {
+    let byDay: Map<DateStr, number> | undefined
+    for (const assignment of assignments) {
+      const span = dates[assignment.taskId]
+      const units = context.assignmentUnitsById.get(assignment.id) ?? 0
+      if (!span || units <= 0) continue
 
-    const units = assignmentUnits(resource, assignment)
-    if (units <= 0) continue
-
-    let byDay = load.get(resource.id)
-    if (!byDay) {
-      byDay = new Map<DateStr, number>()
-      load.set(resource.id, byDay)
+      byDay ??= new Map<DateStr, number>()
+      for (const day of workdaysInRange(span.start, span.finish, context.calendar)) {
+        byDay.set(day, (byDay.get(day) ?? 0) + units)
+      }
     }
-    for (const day of workdaysInRange(span.start, span.finish, calendar)) {
-      byDay.set(day, (byDay.get(day) ?? 0) + units)
-    }
+    if (byDay) load.set(resourceId, byDay)
   }
 
   return load
@@ -101,14 +99,12 @@ const MAX_ITERATIONS = 100000
  * 对 alap 任务，基线即它已用满浮时的位置（见 remainingSlack），延迟恒被夹成 0。
  */
 function leveledForwardPass(
-  leaves: readonly Task[],
-  dependencies: Dependency[],
+  graph: TaskGraph,
   durations: ReadonlyMap<TaskId, number>,
   calendar: Calendar,
   base: Readonly<Record<TaskId, LeveledDates>>,
   delays: ReadonlyMap<TaskId, number>,
 ): Record<TaskId, LeveledDates> {
-  const graph = buildGraph(leaves, dependencies)
   const out: Record<TaskId, LeveledDates> = {}
 
   for (const id of graph.order) {
@@ -146,7 +142,7 @@ function remainingSlack(schedule: ComputedSchedule, calendar: Calendar): number 
  * 对负载毫无贡献的任务被当成候选推走，白耗浮时并在 `delays` 里报出与超载无关的值。
  */
 function covers(
-  project: Project,
+  context: ScheduleContext,
   dates: Readonly<Record<TaskId, LeveledDates>>,
   taskId: TaskId,
   resourceId: ResourceId,
@@ -154,12 +150,11 @@ function covers(
 ): boolean {
   const span = dates[taskId]
   if (!span || date < span.start || date > span.finish) return false
-  for (const assignment of Object.values(project.assignments)) {
-    if (assignment.taskId !== taskId || assignment.resourceId !== resourceId) continue
-    const resource = project.resources[assignment.resourceId]
-    if (resource && assignmentUnits(resource, assignment) > 0) return true
-  }
-  return false
+  return (context.assignmentsByTask.get(taskId) ?? []).some(
+    (assignment) =>
+      assignment.resourceId === resourceId &&
+      (context.assignmentUnitsById.get(assignment.id) ?? 0) > 0,
+  )
 }
 
 /** 平衡是否越界：任一任务的 start 超过它的 lateStart（= 推迟了项目完成） */
@@ -208,13 +203,11 @@ function exceedsLateStart(
  * 故总轮数 ≤ S + #格子 × (1 + S)，有限。`MAX_ITERATIONS` 仍是最后的兜底。
  */
 export function levelLeaves(
-  project: Project,
-  leaves: readonly Task[],
+  context: ScheduleContext,
   durations: ReadonlyMap<TaskId, number>,
-  calendar: Calendar,
   schedules: Readonly<Record<TaskId, ComputedSchedule>>,
 ): { result: LevelingResult; dates: Record<TaskId, LeveledDates> } {
-  const dependencies = Object.values(project.dependencies)
+  const { project, leaves, calendar, graph } = context
 
   const base: Record<TaskId, LeveledDates> = {}
   const slack = new Map<TaskId, number>()
@@ -233,7 +226,7 @@ export function levelLeaves(
     delays.set(leaf.id, Math.min(Math.max(0, Math.round(leaf.delay)), slack.get(leaf.id) ?? 0))
   }
 
-  let dates = leveledForwardPass(leaves, dependencies, durations, calendar, base, delays)
+  let dates = leveledForwardPass(graph, durations, calendar, base, delays)
 
   // 推不动的超载（资源@日期）→ 记录**冻结时的负载**（不是永久标记）。
   // 只在「当前负载 ≤ 冻结负载」时跳过：负载一旦增长就说明旧冻结的候选集已失效，
@@ -242,7 +235,7 @@ export function levelLeaves(
   const cellKey = (resourceId: ResourceId, date: DateStr): string => `${resourceId}@${date}`
 
   for (let iter = 0; iter < MAX_ITERATIONS; iter += 1) {
-    const overloads = collectOverloads(resourceDayLoad(project, dates, calendar)).filter(
+    const overloads = collectOverloads(resourceDayLoad(context, dates)).filter(
       (overload) => {
         const frozen = frozenAt.get(cellKey(overload.resourceId, overload.date))
         return frozen === undefined || overload.load > frozen
@@ -268,7 +261,7 @@ export function levelLeaves(
 
     // ③ 候选 = 该资源该日的当事叶子，按优先级升序（数值小 = 先推），同序按 id 升序
     const candidates = leaves
-      .filter((leaf) => covers(project, dates, leaf.id, worst.resourceId, worst.date))
+      .filter((leaf) => covers(context, dates, leaf.id, worst.resourceId, worst.date))
       .sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : 1))
 
     let pushed = false
@@ -276,7 +269,7 @@ export function levelLeaves(
       if ((delays.get(candidate.id) ?? 0) >= (slack.get(candidate.id) ?? 0)) continue // 浮时耗尽
 
       delays.set(candidate.id, (delays.get(candidate.id) ?? 0) + 1)
-      const next = leveledForwardPass(leaves, dependencies, durations, calendar, base, delays)
+      const next = leveledForwardPass(graph, durations, calendar, base, delays)
       if (exceedsLateStart(next, schedules)) {
         delays.set(candidate.id, (delays.get(candidate.id) ?? 0) - 1) // 回退
         continue
@@ -293,7 +286,7 @@ export function levelLeaves(
   return {
     result: {
       delays: Object.fromEntries(delays),
-      unresolved: collectOverloads(resourceDayLoad(project, dates, calendar)),
+      unresolved: collectOverloads(resourceDayLoad(context, dates)),
     },
     dates,
   }

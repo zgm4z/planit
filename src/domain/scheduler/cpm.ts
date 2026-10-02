@@ -16,7 +16,7 @@ import {
   workdaysBetween,
 } from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
-import { buildGraph } from './graph'
+import { buildGraph, type TaskGraph } from './graph'
 import { backwardBound, forwardBound } from './constraints'
 import { usesLateSchedule } from './direction'
 
@@ -42,12 +42,20 @@ export interface CpmInput {
 }
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
-  const { tasks, dependencies, calendar, direction, projectStart, projectEnd, resourceBounds } = input
+  const graph = buildGraph(input.tasks, input.dependencies) // 可能抛出 CycleError
+  return runCpmWithGraph(input, graph)
+}
+
+/** 内部入口：复用 solve context 已构建的任务图；不从 scheduler barrel 导出。 */
+export function runCpmWithGraph(
+  input: CpmInput,
+  graph: TaskGraph,
+): Record<TaskId, ComputedSchedule> {
+  const { tasks, calendar, direction, projectStart, projectEnd, resourceBounds } = input
   const latestProjectEnd = projectEnd
     ? snapToWorkdayOrPrevious(projectEnd, calendar)
     : undefined
 
-  const graph = buildGraph(tasks, dependencies) // 可能抛出 CycleError
   const byId = new Map(tasks.map((task) => [task.id, task]))
 
   // ── 正推（early）───────────────────────────────────────

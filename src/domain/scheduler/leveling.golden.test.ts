@@ -8,7 +8,8 @@ import {
   __resetIdCounterForTests,
 } from '../model/factories'
 import type { ComputedSchedule, Project, Task, TaskId } from '../model/types'
-import { runCpm } from './cpm'
+import { buildScheduleContext } from './context'
+import { runCpmWithGraph } from './cpm'
 import { toDateStr } from '../calendar/dateTime'
 import { addWorkdays } from '../calendar/workdays'
 import { levelLeaves } from './leveling'
@@ -16,43 +17,34 @@ import { levelLeaves } from './leveling'
 // 2026-03-02 是周一，默认日历周一至周五上班。
 const START = '2026-03-02'
 
-/** 测试本地助手：收集叶子（与 index.ts 的 collectLeaves 同规则；仅测试用） */
-function leavesOf(project: Project): Task[] {
-  const leaves: Task[] = []
-  const visit = (id: TaskId): void => {
-    const task = project.tasks[id]
-    if (!task) return
-    if (task.childIds.length === 0) {
-      leaves.push(task)
-      return
-    }
-    for (const childId of task.childIds) visit(childId)
-  }
-  for (const rootId of project.rootIds) visit(rootId)
-  return leaves
-}
-
 /** 跑一遍 CPM，拿到 levelLeaves 需要的基线排期（scheduled* / lateStart） */
 function solveCpm(project: Project): {
+  context: ReturnType<typeof buildScheduleContext>
   leaves: Task[]
   calendar: Project['calendars'][string]
   durations: Map<TaskId, number>
   schedules: Record<TaskId, ComputedSchedule>
 } {
-  const leaves = leavesOf(project)
-  const calendar = project.calendars[project.calendarId]
-  const durations = new Map(leaves.map((task) => [task.id, task.duration]))
+  const context = buildScheduleContext(project)
+  const durations = new Map(context.leaves.map((task) => [task.id, task.duration]))
   // `runCpm` 的 `projectStart` 契约是 `DateStr`（边界 ① 在 `solve` 里归一）。
   // v0.8 起 `project.startDate` 带时刻，须先 `toDateStr` 再喂给低层原语。
-  const schedules = runCpm({
-    tasks: leaves,
+  const schedules = runCpmWithGraph({
+    tasks: [...context.leaves],
     dependencies: Object.values(project.dependencies),
-    calendar,
+    calendar: context.calendar,
     direction: project.schedulingDirection,
     projectStart: toDateStr(project.startDate),
     projectEnd: project.endDate ? toDateStr(project.endDate) : undefined,
-  })
-  return { leaves, calendar, durations, schedules }
+    resourceBounds: Object.fromEntries(context.resourceBoundsByTask),
+  }, context.graph)
+  return {
+    context,
+    leaves: [...context.leaves],
+    calendar: context.calendar,
+    durations,
+    schedules,
+  }
 }
 
 /** 建一个「A、B 共用一个资源 R，C 独立」的基础场景（无依赖） */
@@ -85,9 +77,9 @@ beforeEach(() => {
 describe('黄金判据 1：平衡后资源负载不超 100%', () => {
   it('A、B 共占资源 → 低 id 的 A 被推 2 天，负载降到 100%', () => {
     const { project, a, b, c } = sharedResourceProject()
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, durations, schedules } = solveCpm(project)
 
-    const { result, dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { result, dates } = levelLeaves(context, durations, schedules)
 
     // 手算：A、B 都在 03-02..03-03 占 R（各 1 单元）→ 03-02、03-03 各 150%。
     // C(dur6) 把项目完成日撑到 03-09，给 A 4 个工作日浮时。
@@ -107,9 +99,9 @@ describe('黄金判据 3：优先级数值越大越优先（越晚被推）', ()
     const { project, a, b } = sharedResourceProject()
     project.tasks[a.id] = { ...a, priority: 5 }
     project.tasks[b.id] = { ...b, priority: 0 }
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, durations, schedules } = solveCpm(project)
 
-    const { dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { dates } = levelLeaves(context, durations, schedules)
 
     // 与判据 1 相反的分布 —— 仅优先级不同 → 证明优先级真的在起作用（非恒真）
     expect(dates[b.id].start).toBe('2026-03-04')
@@ -121,9 +113,9 @@ describe('黄金判据 4：delay 被遵守（先按用户意愿推）', () => {
   it('A.delay = 2 → A 直接落到 03-04，无需 leveling 再推', () => {
     const { project, a, b } = sharedResourceProject()
     project.tasks[a.id] = { ...a, delay: 2 }
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, durations, schedules } = solveCpm(project)
 
-    const { result, dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { result, dates } = levelLeaves(context, durations, schedules)
 
     expect(dates[a.id].start).toBe('2026-03-04')
     expect(dates[b.id].start).toBe('2026-03-02')
@@ -147,9 +139,9 @@ describe('黄金判据 4：delay 被遵守（先按用户意愿推）', () => {
       project.assignments[assignment.id] = assignment
     }
     project.tasks[a.id] = { ...a, delay: 5 } // 想要的远超浮时
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, durations, schedules } = solveCpm(project)
 
-    const { result, dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { result, dates } = levelLeaves(context, durations, schedules)
 
     expect(dates[a.id].start).toBe('2026-03-02') // 夹到 0，原地
     expect(result.delays[a.id]).toBe(0)
@@ -176,9 +168,9 @@ describe('黄金判据 2：平衡后不违反任何依赖', () => {
       const assignment = createAssignment({ taskId: task.id, resourceId: r.id, units: 1 })
       project.assignments[assignment.id] = assignment
     }
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, leaves, calendar, durations, schedules } = solveCpm(project)
 
-    const { dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { dates } = levelLeaves(context, durations, schedules)
 
     // A 被推 2 天 → 03-04..03-05；A→B 把 B 带到 03-06 起
     expect(dates[a.id].start).toBe('2026-03-04')
@@ -208,9 +200,9 @@ describe('黄金判据 2（不可行）：浮时耗尽时如实报告无法平�
       const assignment = createAssignment({ taskId: task.id, resourceId: r.id, units: 1 })
       project.assignments[assignment.id] = assignment
     }
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, durations, schedules } = solveCpm(project)
 
-    const { result, dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { result, dates } = levelLeaves(context, durations, schedules)
 
     // 无 C 撑浮时 → 推一点就会越过 lateStart → 一步不动
     expect(dates[a.id].start).toBe('2026-03-02')
@@ -234,9 +226,9 @@ describe('黄金判据（稳定性）：无超载时 dates 与 scheduled 逐字�
     project.resources[rb.id] = rb
     project.assignments.a1 = createAssignment({ taskId: a.id, resourceId: ra.id, units: 1 })
     project.assignments.a2 = createAssignment({ taskId: b.id, resourceId: rb.id, units: 1 })
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
+    const { context, leaves, durations, schedules } = solveCpm(project)
 
-    const { result, dates } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { result, dates } = levelLeaves(context, durations, schedules)
 
     for (const leaf of leaves) {
       expect(dates[leaf.id].start).toBe(schedules[leaf.id].scheduledStart)
@@ -297,8 +289,8 @@ describe('回归 v0.6.1：冻结的格子若负载增长，必须被重新纳入
       project.assignments[assignment.id] = assignment
     }
 
-    const { leaves, calendar, durations, schedules } = solveCpm(project)
-    const { result } = levelLeaves(project, leaves, durations, calendar, schedules)
+    const { context, durations, schedules } = solveCpm(project)
+    const { result } = levelLeaves(context, durations, schedules)
 
     // 断言 1：不可约下限 = A + B = 2。
     // 修复前这里会拿到 3（03-05 早先被永久冻结，M 落上去后再没被纠正）—— 断言会红。

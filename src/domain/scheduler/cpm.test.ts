@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { createCalendar, createTask, createDependency } from '../model/factories'
 import type { ConstraintType, Dependency, SchedulingDirection, Task } from '../model/types'
 import { workdaysBetween } from '../calendar/workdays'
-import { runCpm } from './cpm'
-import { CycleError } from './graph'
+import { runCpm, runCpmWithGraph } from './cpm'
+import { buildGraph, CycleError } from './graph'
 
 const mk = (name: string, duration: number): Task => ({
   ...createTask({ name, duration }),
@@ -649,5 +649,30 @@ describe('runCpm — 非工作日上界', () => {
 
     expect(result.S.earlyStart).toBe('2026-03-09')
     expect(result.F.earlyFinish).toBe('2026-03-09')
+  })
+})
+
+describe('runCpm — 复用预构建图', () => {
+  it('四种依赖与 ALAP 排期复用同一 TaskGraph 时结果不变', () => {
+    const tasks = [mk('A', 3), mk('B', 2), mk('C', 5), mk('D', 1)].map((task) => ({
+      ...task,
+      schedulingOrder: 'alap' as const,
+    }))
+    const dependencies = [
+      createDependency('A', 'B', 'FS', 0),
+      createDependency('A', 'C', 'SS', 1),
+      createDependency('B', 'D', 'FF', 0),
+      createDependency('C', 'D', 'SF', -1),
+    ]
+    const input = {
+      tasks,
+      dependencies,
+      calendar: createCalendar(),
+      direction: 'backward' as const,
+      projectStart: '2026-03-02',
+      projectEnd: '2026-03-20',
+    }
+
+    expect(runCpmWithGraph(input, buildGraph(tasks, dependencies))).toEqual(runCpm(input))
   })
 })

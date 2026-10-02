@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createAssignment, createProject, createResource, createTask } from '../model/factories'
 import type { DateStr, Project, TaskId } from '../model/types'
 import { workdaysInRange } from '../calendar/workdays'
+import { buildScheduleContext } from './context'
 import { resourceDayLoad, collectOverloads, type LeveledDates } from './leveling'
 
 // 2026-03-02 是周一，默认日历周一至周五上班。
@@ -53,7 +54,7 @@ describe('resourceDayLoad / collectOverloads', () => {
       [t1.id]: { start: '2026-03-02', finish: '2026-03-04' },
       [t2.id]: { start: '2026-03-02', finish: '2026-03-03' },
     }
-    const load = resourceDayLoad(p, dates, p.calendars.default)
+    const load = resourceDayLoad(buildScheduleContext(p), dates)
     const byDay = load.get(r.id)!
     expect(byDay.get('2026-03-02')).toBeCloseTo(1.5)
     expect(byDay.get('2026-03-03')).toBeCloseTo(1.5)
@@ -78,10 +79,10 @@ describe('resourceDayLoad / collectOverloads', () => {
     const dates: Record<TaskId, LeveledDates> = {
       [t.id]: { start: '2026-03-02', finish: '2026-03-02' },
     }
-    const byDay = resourceDayLoad(p, dates, p.calendars.default).get(r.id)!
+    const byDay = resourceDayLoad(buildScheduleContext(p), dates).get(r.id)!
     expect(byDay.get('2026-03-02')).toBeCloseTo(0.5 * 1 * 2)
     // 负载 = 1，不 > 1 → 不超载
-    expect(collectOverloads(resourceDayLoad(p, dates, p.calendars.default))).toEqual([])
+    expect(collectOverloads(resourceDayLoad(buildScheduleContext(p), dates))).toEqual([])
   })
 
   it('不同资源各自独立；悬空分配（指向不存在资源）被忽略', () => {
@@ -98,7 +99,7 @@ describe('resourceDayLoad / collectOverloads', () => {
     const dates: Record<TaskId, LeveledDates> = {
       [t.id]: { start: '2026-03-02', finish: '2026-03-02' },
     }
-    const load = resourceDayLoad(p, dates, p.calendars.default)
+    const load = resourceDayLoad(buildScheduleContext(p), dates)
     expect(load.get(r1.id)?.get('2026-03-02')).toBeCloseTo(1)
     expect(load.get(r2.id)).toBeUndefined() // R2 无分配
     expect(collectOverloads(load)).toEqual([])
@@ -110,7 +111,7 @@ describe('resourceDayLoad / collectOverloads', () => {
     p.resources[r.id] = r
     p.assignments.a1 = createAssignment({ taskId: 'missing', resourceId: r.id, units: 1 })
 
-    const load = resourceDayLoad(p, {} as Record<TaskId, LeveledDates>, p.calendars.default)
+    const load = resourceDayLoad(buildScheduleContext(p), {} as Record<TaskId, LeveledDates>)
     expect(load.size).toBe(0)
   })
 })

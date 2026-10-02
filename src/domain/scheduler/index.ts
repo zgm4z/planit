@@ -1,12 +1,13 @@
-import type { ComputedSchedule, Project, ScheduleResult, Task, TaskId } from '../model/types'
+import type { ComputedSchedule, Project, ScheduleResult, TaskId } from '../model/types'
 import type { ResourceBounds } from './effort'
-import { runCpm } from './cpm'
+import { runCpmWithGraph } from './cpm'
 import { levelLeaves } from './leveling'
 import { detectConflicts, summarizeParents } from './summarize'
 import { collectCosts, collectEfforts, effectiveDuration, resourceBounds } from './effort'
 import { collectBaselineDiffs, collectEarnedValues } from './earnedValue'
 import { sumUnits } from '../model/units'
 import { toDateStr } from '../calendar/dateTime'
+import { buildScheduleContext } from './context'
 
 export { CycleError } from './graph'
 export { runCpm } from './cpm'
@@ -27,8 +28,9 @@ export { summarizeParents, detectConflicts } from './summarize'
  * 资源可用期在此翻译成任务级排期边界（见 ResourceBounds）。
  */
 export function solve(project: Project): ScheduleResult {
-  const leaves = collectLeaves(project)
-  const calendar = project.calendars[project.calendarId]
+  const context = buildScheduleContext(project)
+  const leaves = context.leaves
+  const calendar = context.calendar
 
   // ① 有效工期计算：把 effort × 分配 × 资源 解成 CPM 需要的 duration 输入，
   //    同时算出每个任务的资源可用期边界。
@@ -47,7 +49,7 @@ export function solve(project: Project): ScheduleResult {
     }
   }
 
-  const leafSchedules = runCpm({
+  const leafSchedules = runCpmWithGraph({
     tasks: leaves.map((leaf) => ({ ...leaf, duration: durations.get(leaf.id)! })),
     dependencies: Object.values(project.dependencies),
     calendar,
@@ -57,18 +59,12 @@ export function solve(project: Project): ScheduleResult {
     projectStart: toDateStr(project.startDate),
     projectEnd: project.endDate ? toDateStr(project.endDate) : undefined,
     resourceBounds: bounds,
-  })
+  }, context.graph)
 
   // ⑦ 资源平衡（v0.6）：用 CPM 算出的浮时，把资源超载处的任务往后推。
   //    必须在 ② 之后（要浮时）、在摘要汇总之前（产出的 scheduled* 要被汇总）。
   //    只覆盖叶子的 scheduledStart/Finish —— early/late/slack 一律不动（spec §3）。
-  const { result: leveling, dates } = levelLeaves(
-    project,
-    leaves,
-    durations,
-    calendar,
-    leafSchedules,
-  )
+  const { result: leveling, dates } = levelLeaves(context, durations, leafSchedules)
 
   const leveledLeaves: Record<TaskId, ComputedSchedule> = {}
   for (const [id, schedule] of Object.entries(leafSchedules)) {
@@ -90,22 +86,4 @@ export function solve(project: Project): ScheduleResult {
   const baselineDiffs = collectBaselineDiffs(project, schedules)
 
   return { schedules, conflicts, efforts, costs, resourceTotals, leveling, earnedValues, baselineDiffs }
-}
-
-/** 深度优先收集全部叶子任务（childIds 为空者） */
-function collectLeaves(project: Project): Task[] {
-  const leaves: Task[] = []
-
-  const visit = (id: TaskId): void => {
-    const task = project.tasks[id]
-    if (!task) return
-    if (task.childIds.length === 0) {
-      leaves.push(task)
-      return
-    }
-    for (const childId of task.childIds) visit(childId)
-  }
-
-  for (const rootId of project.rootIds) visit(rootId)
-  return leaves
 }
