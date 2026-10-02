@@ -141,3 +141,35 @@ export function isOutlineColumnKey(value: unknown): value is OutlineColumnKey {
 export function isEnabledOutlineColumnKey(value: unknown): value is OutlineColumnKey {
   return isOutlineColumnKey(value) && !DISABLED_OUTLINE_COLUMN_KEYS.has(value)
 }
+
+/**
+ * 通用列宽下限。`title` 另有更高的下限，见下。
+ */
+export const COLUMN_WIDTH_MIN = 40
+
+/** 通用列宽上限 —— 防止拖出一个占满屏幕的巨列 */
+export const COLUMN_WIDTH_MAX = 1000
+
+/**
+ * `title` 列的宽度下限。
+ *
+ * 这个数字**不是新发明的** —— 它就是现有的 CSS
+ * `.outlineHeaderCellSticky { min-width: 160px }`（见 `ProjectView.module.scss`）。
+ *
+ * 为什么两边必须是同一个数：CSS 的 `min-width` 是兜底，但若 JS 允许拖到 100
+ * 而 CSS 把渲染宽度撑在 160，拖拽逻辑每帧算出的宽度与实际渲染宽度就对不上，
+ * 手感表现为「拖不动」。JS 侧的 clamp 必须与 CSS 一致（或更紧）。
+ */
+export const TITLE_COLUMN_WIDTH_MIN = 160
+
+/**
+ * 列宽的**唯一** clamp 实现 —— `viewStore.setColumnWidth` 与载入时的归一化
+ * 都读它。两处各写一遍上下限，将来改区间必然漂移。
+ *
+ * 取整是必需的：HiDPI 下 `clientX` 是小数，`startWidth + delta` 会算出小数宽，
+ * 存进 localStorage 后每次载入都会变；取整让它稳定。
+ */
+export function clampColumnWidth(key: OutlineColumnKey, width: number): number {
+  const min = key === 'title' ? TITLE_COLUMN_WIDTH_MIN : COLUMN_WIDTH_MIN
+  return Math.min(COLUMN_WIDTH_MAX, Math.max(min, Math.round(width)))
+}
