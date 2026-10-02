@@ -69,12 +69,7 @@ describe('OutlineTable', () => {
   it('每个可见列出且只出一个表头单元格，文案走 i18n', () => {
     renderTable()
 
-    // `(?!resizer-)`：表头单元格的 testid 是 `outline-col-<key>`，列宽手柄的是
-    // `outline-col-resizer-<key>` —— 两者都匹配 `^outline-col-`，必须把手柄排除掉，
-    // 否则「表头数量 == 可见列数」这条断言会因为手柄而多出一倍。
-    expect(screen.getAllByTestId(/^outline-col-(?!resizer-)/)).toHaveLength(
-      DEFAULT_VISIBLE_COLUMNS.length,
-    )
+    expect(screen.getAllByTestId(/^outline-col-/)).toHaveLength(DEFAULT_VISIBLE_COLUMNS.length)
     expect(screen.getByTestId('outline-col-title')).toHaveTextContent('标题')
     expect(screen.getByTestId('outline-col-duration')).toHaveTextContent('工期')
     // 没开的列不出表头。`progress` 现在是**默认可见列**（§7 的列优先级），
@@ -89,15 +84,14 @@ describe('OutlineTable', () => {
    * 反转表头顺序、或表头漏渲染最后一列，都能蒙混过关。
    *
    * 注意选择器：甘特左列的容器 testid 是 `outline-column`（ProjectView），
-   * 它在 `col` 后面是 `u` 而不是 `-`，因此 `/^outline-col-/` 不会误匹配它；
-   * 而列宽手柄的 testid 是 `outline-col-resizer-<key>`，用 `(?!resizer-)` 排除。
+   * 它在 `col` 后面是 `u` 而不是 `-`，因此 `/^outline-col-/` 不会误匹配它。
    */
   it('表头列与首行单元格逐列对齐、顺序一致', () => {
     const { container } = renderTable()
 
     // 表头列 key（按渲染顺序）：`outline-col-<key>` → `<key>`
     const headerKeys = screen
-      .getAllByTestId(/^outline-col-(?!resizer-)/)
+      .getAllByTestId(/^outline-col-/)
       .map((cell) => cell.getAttribute('data-testid')!.slice('outline-col-'.length))
 
     // 首行单元格 key（按渲染顺序）：`outline-cell-<key>-<taskId>` → `<key>`
@@ -197,24 +191,23 @@ describe('OutlineTable 的列宽手柄', () => {
   it('每个可见列恰好一个手柄，带 aria-label（含列名）', () => {
     renderTable()
 
-    const handles = screen.getAllByTestId(/^outline-col-resizer-/)
+    const handles = screen.getAllByTestId(/^outline-resizer-/)
     expect(handles).toHaveLength(DEFAULT_VISIBLE_COLUMNS.length)
 
     // 表头列与手柄一一对应（遍历表头反推，而不是硬编码数量 —— 数量断言
     // 在「某列漏了手柄、另一列多了个手柄」时仍然通过）
-    // `(?!resizer-)` 排除手柄自身，否则会反推出 `resizer-<key>` 这种不存在的列名。
     const headerKeys = screen
-      .getAllByTestId(/^outline-col-(?!resizer-)/)
+      .getAllByTestId(/^outline-col-/)
       .map((cell) => cell.getAttribute('data-testid')!.slice('outline-col-'.length))
     for (const key of headerKeys) {
-      expect(screen.getByTestId(`outline-col-resizer-${key}`), key).toBeInTheDocument()
+      expect(screen.getByTestId(`outline-resizer-${key}`), key).toBeInTheDocument()
     }
   })
 
   it('手柄的 aria-label 是「动作 + 列名」，不是裸的 i18n key', () => {
     renderTable()
 
-    const label = screen.getByTestId('outline-col-resizer-start').getAttribute('aria-label')!
+    const label = screen.getByTestId('outline-resizer-start').getAttribute('aria-label')!
     expect(label).toContain('开始')
     expect(label).not.toContain('outline.')
   })
@@ -223,7 +216,7 @@ describe('OutlineTable 的列宽手柄', () => {
     renderTable()
 
     // jsdom 不实现 setPointerCapture —— hook 用 try/catch 包住，这里无需 mock
-    fireEvent.pointerDown(screen.getByTestId('outline-col-resizer-start'), {
+    fireEvent.pointerDown(screen.getByTestId('outline-resizer-start'), {
       button: 0,
       pointerId: 1,
       clientX: 200,
@@ -239,7 +232,7 @@ describe('OutlineTable 的列宽手柄', () => {
     useViewStore.getState().setColumnWidth('start', 300)
     renderTable()
 
-    fireEvent.dblClick(screen.getByTestId('outline-col-resizer-start'))
+    fireEvent.dblClick(screen.getByTestId('outline-resizer-start'))
 
     expect('start' in useViewStore.getState().columnWidths).toBe(false)
   })

@@ -85,10 +85,13 @@ export function OutlineTable({
               >
                 {t(column.labelKey)}
                 {/* 分隔线手柄：绝对定位在单元格**内部**右缘 —— 不能外凸，
-                    .outlineHeaderCell 的 overflow: hidden 会把它裁掉。 */}
+                    .outlineHeaderCell 的 overflow: hidden 会把它裁掉。
+                    testid **刻意不放在 `outline-col-` 前缀下**：那会让所有
+                    `[data-testid^="outline-col-"]`（组件测试与 e2e 都有）把
+                    手柄也一并数进去，凭空多出手指数量的断言。 */}
                 <div
                   className={styles.columnResizer}
-                  data-testid={`outline-col-resizer-${column.key}`}
+                  data-testid={`outline-resizer-${column.key}`}
                   role="separator"
                   aria-orientation="vertical"
                   aria-label={t('outline.resizeHandle', { column: t(column.labelKey) })}
