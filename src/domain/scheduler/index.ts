@@ -6,6 +6,7 @@ import { detectConflicts, summarizeParents } from './summarize'
 import { collectCosts, collectEfforts, effectiveDuration, resourceBounds } from './effort'
 import { collectBaselineDiffs, collectEarnedValues } from './earnedValue'
 import { sumUnits } from '../model/units'
+import { toDateStr } from '../calendar/dateTime'
 
 export { CycleError } from './graph'
 export { runCpm } from './cpm'
@@ -51,8 +52,10 @@ export function solve(project: Project): ScheduleResult {
     dependencies: Object.values(project.dependencies),
     calendar,
     direction: project.schedulingDirection,
-    projectStart: project.startDate,
-    projectEnd: project.endDate,
+    // CPM 的起点 / 终点锚点消费的是日粒度：先把承载时刻的字段归一，
+    // 否则引擎内部 `parseDate` 拿到带时刻串会静默算出 NaN。
+    projectStart: toDateStr(project.startDate),
+    projectEnd: project.endDate ? toDateStr(project.endDate) : undefined,
     resourceBounds: bounds,
   })
 

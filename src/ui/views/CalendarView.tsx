@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import type { DateStr } from '../../domain/model/types'
 import { isWorkday } from '../../domain/calendar/workdays'
 import { createCalendar } from '../../domain/model/factories'
+import { toDateStr } from '../../domain/calendar/dateTime'
 import { useProjectStore } from '../../store/projectStore'
 import { monthMatrix, shiftMonth } from '../shared/calendarGrid'
 import { groupExceptions } from '../shared/groupExceptions'
@@ -35,8 +36,10 @@ export function CalendarView() {
   // 此前写死 '2026-03-01'，真实项目（起始 2026-09）打开日历显示的是与项目无关的 3 月。
   // 进视图时按项目起始日期定月；左右翻月仍由 calendar-prev/next-month 调整。
   // CalendarView 随 activeView 切换而挂载/卸载，故 anchor 每次进入都回到起始月。
+  // 月锚点只取「年月」：先归一掉时刻再切片（带时刻串 `'…T09:00'.slice(0, 7)` 恰好仍得
+  // `'YYYY-MM'`，但那是巧合 —— 归一后语义明确，且 Task 3 起 project.startDate 会带时刻）。
   const [anchor, setAnchor] = useState<DateStr>(
-    () => `${(project?.startDate ?? '2026-01-01').slice(0, 7)}-01`,
+    () => `${toDateStr(project?.startDate ?? '2026-01-01').slice(0, 7)}-01`,
   )
   const [rangeStart, setRangeStart] = useState('')
   const [rangeEnd, setRangeEnd] = useState('')
