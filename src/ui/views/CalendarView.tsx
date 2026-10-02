@@ -194,10 +194,13 @@ export function CalendarView() {
 
         <Text className={chrome.blockTitle}>{t('calendarView.addException')}</Text>
         <div className={chrome.exceptionRow}>
+          {/* 区间例外的命令（addExceptionRange）按**日**展开，payload 是日期语义。
+              故这两个 DateTimePicker 只用来「取日期」：回传值经 toDateStr 归一回
+              纯日期再交给命令 —— DateTimeStr 只活在输入控件里，不进命令边界。 */}
           <DateField ariaLabel={t('calendarView.rangeStart')} value={rangeStart}
-            onChange={setRangeStart} testId="calendar-range-start" />
+            onChange={(next) => setRangeStart(toDateStr(next))} testId="calendar-range-start" />
           <DateField ariaLabel={t('calendarView.rangeEnd')} value={rangeEnd}
-            onChange={setRangeEnd} testId="calendar-range-end" />
+            onChange={(next) => setRangeEnd(toDateStr(next))} testId="calendar-range-end" />
           <Select
             size="xs"
             aria-label={t('calendarView.kindLabel')}

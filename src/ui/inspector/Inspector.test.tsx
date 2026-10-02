@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -35,6 +35,37 @@ function renderInspector() {
 function currentTask() {
   return useProjectStore.getState().project!.tasks[taskId]
 }
+
+/**
+ * 驱动 `DateTimePicker` 的弹出日历，点选**当前显示月份**里的某一天。
+ *
+ * 为什么不用 `fireEvent.change`：Mantine 9 的 `DateTimePicker` 渲染的是一个打开
+ * 弹出层的 `<button>`（`valueFormat` 只管显示），不是可键入的 `<input>` ——
+ * 对按钮派发 change 事件什么也不会发生（旧的文本框实现才能那样驱动）。
+ *
+ * 前提：控件的值落在目标月份，日历才会打开在那个月。空值控件打开的是**今天**所在月，
+ * 故空值用例先种一个值再点（见各用例的注释）—— 这样断言与真实时钟无关。
+ */
+async function pickDay(handle: HTMLElement, day: number): Promise<void> {
+  fireEvent.click(handle)
+  // 按 aria-controls 精确定位**本控件**的浮层：多个 DateTimePicker 的浮层可能同时
+  // 挂在 DOM 里（选中一天后浮层不自动关闭），用 document.querySelector 会拿错那个。
+  const dropdown = await waitFor(() => {
+    const id = handle.getAttribute('aria-controls')
+    const el = id ? document.getElementById(id) : null
+    if (!el) throw new Error('date picker dropdown did not open')
+    return el
+  })
+  // 排除相邻月的「补白日」：Mantine 会渲染上/下月的日子并标 data-outside，
+  // 否则三月视图里点 25 可能命中补白格（2 月 25 日）。
+  const cell = Array.from(dropdown.querySelectorAll('table button')).find(
+    (button) => button.textContent === String(day) && !button.hasAttribute('data-outside'),
+  )
+  if (!cell) throw new Error(`day cell ${day} not found in the displayed month`)
+  fireEvent.click(cell)
+}
+
+
 
 /**
  * 展开 Mantine 浮层下拉并点选一项。jsdom 里浮层的计算样式停在 display:none，
@@ -585,11 +616,11 @@ describe('日程安排组', () => {
     expect(scheduling.mode).toBe('constraint')
     if (scheduling.mode !== 'constraint') throw new Error('unreachable')
     expect(scheduling.type).toBe('startOn')
-    // 这条断言测的是「UI 把用户看到的开始日写进约束日期」——属于派生取值，
-    // 应与 Inspector 取同一个字段（scheduledStart），而不是引擎原始输出 earlyStart。
-    expect(scheduling.date).toBe(
-      useScheduleStore.getState().result.schedules[taskId].scheduledStart,
-    )
+    // 这条断言测的是「UI 把用户看到的开始日写进约束日期」。**期望值必须是字面量**：
+    // 从 scheduledStart 现取再比是循环论证（同一份实现写一次读一次，两边一起错也绿）。
+    // 播种值带默认时刻 09:00（§4 默认时刻表），派生排期 scheduledStart 是纯日期
+    // '2026-03-02'，故写入的是 '2026-03-02T09:00'（DateTimeStr 契约）。
+    expect(scheduling.date).toBe('2026-03-02T09:00')
   })
 
   it('排期方式切到固定结束日期会写入 finishOn', async () => {
@@ -601,7 +632,8 @@ describe('日程安排组', () => {
     expect(currentTask().scheduling).toEqual({
       mode: 'constraint',
       type: 'finishOn',
-      date: '2026-03-02',
+      // 播种值带默认时刻 09:00（§4）—— 纯日期靠下游 toDateStr 兜底会掩盖「未归一」
+      date: '2026-03-02T09:00',
     })
   })
 
@@ -644,8 +676,10 @@ describe('日程安排组', () => {
 
     expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('固定结束日期')
     // Task 4 把「约束日期」并入开始/结束两个字段：finishOn 属「结束」族，
-    // 约束的日期就显示在「结束」输入框里（断言强度不变，只是换了控件位置）。
-    expect(screen.getByLabelText('结束')).toHaveValue('2026-03-05')
+    // 约束的日期就显示在「结束」控件里（断言强度不变，只是换了控件位置）。
+    // 控件不再是 <input>（DateTimePicker 渲染按钮），故断显示文案而非 .value；
+    // 纯日期的约束值经 ensureDateTime 补默认时刻 09:00 显示。
+    expect(screen.getByLabelText('结束')).toHaveTextContent('2026-03-05 09:00')
   })
 
   it('下拉列出全部 6 种 ConstraintType（一个控件即可设置任一约束）', async () => {
@@ -713,7 +747,7 @@ describe('日程安排组', () => {
     expect(screen.getByLabelText('结束')).toBeDisabled()
   })
 
-  it('编辑「结束」写回 finishOn 约束的日期（不偷换类型）', () => {
+  it('编辑「结束」写回 finishOn 约束的日期（不偷换类型）', async () => {
     const project = useProjectStore.getState().project!
     useProjectStore.setState({
       project: {
@@ -729,14 +763,15 @@ describe('日程安排组', () => {
     })
     renderInspector()
 
-    // date 输入框用 fireEvent.change（userEvent 对 type="date" 的逐字符输入不稳定）
-    fireEvent.change(screen.getByLabelText('结束'), { target: { value: '2026-03-09' } })
+    // 约束日期已有值（2026-03-05）→ 日历打开在 2026-03，点 9 日。
+    // 原值带默认时刻 09:00，故结果保留 09:00。
+    await pickDay(screen.getByLabelText('结束'), 9)
 
     // 类型仍是 finishOn —— 编辑日期不允许把 Select 上的类型悄悄换成 startOn
     expect(currentTask().scheduling).toEqual({
       mode: 'constraint',
       type: 'finishOn',
-      date: '2026-03-09',
+      date: '2026-03-09T09:00',
     })
   })
 
@@ -816,15 +851,15 @@ describe('日程安排组', () => {
     expect(screen.getByLabelText('优先级')).not.toBeDisabled()
   })
 
-  it('日期输入不依赖原生 type=date —— 显示始终 YYYY-MM-DD（§1.3）', () => {
+  it('日期输入不依赖原生 type=date —— 显示始终 YYYY-MM-DD HH:mm（§1.3）', () => {
     renderInspector()
     const start = screen.getByLabelText('开始')
 
-    // 原生 <input type="date"> 会按浏览器 locale 渲染成 2026/03/02；改用文本框后
-    // 值只可能是 YYYY-MM-DD。写回 type="date" 这条立刻变红（那正是规范点名的缺陷）。
+    // 原生 <input type="date"> 会按浏览器 locale 渲染成 2026/03/02；DateTimePicker
+    // 渲染的是 <button>，显示文案由 valueFormat 决定，跨语言都是 YYYY-MM-DD HH:mm。
+    // 写回 type="date" 这条立刻变红（那正是规范点名的缺陷）。
     expect(start).not.toHaveAttribute('type', 'date')
-    expect(start).toHaveValue('2026-03-02')
-    expect(start).toHaveAttribute('placeholder', 'YYYY-MM-DD')
+    expect(start).toHaveTextContent('2026-03-02 09:00')
   })
 
   it('没有排期时：日期留空，浮时是弱化的 —（不是空白、也不是 0）', () => {
@@ -836,7 +871,10 @@ describe('日程安排组', () => {
     // §3.3 的「算不出来」：显 —，而不是把 undefined 兜成 0 天
     expect(screen.getByTestId('inspector-slack')).toHaveTextContent('—')
     expect(screen.getByTestId('inspector-slack')).not.toHaveTextContent('0 天')
-    expect(screen.getByLabelText('开始')).toHaveValue('')
+    // 无排期 → 日期控件显示占位串（未设 = 空，不是今天）；
+    // 注意不能再用 toHaveValue —— 该控件是 <button>，.value 恒为空串，
+    // toHaveValue('') 会在控件坏掉时也恒绿（这正是本仓库最怕的恒真断言）。
+    expect(screen.getByLabelText('开始')).toHaveTextContent('YYYY-MM-DD HH:mm')
   })
 
   it('手动模式下显示手动安排提示', async () => {

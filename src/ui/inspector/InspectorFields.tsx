@@ -1,8 +1,17 @@
 import { useEffect, useId, useState } from 'react'
 import type { ReactNode } from 'react'
-import { NumberInput, Text, TextInput } from '@mantine/core'
+import { NumberInput, Text } from '@mantine/core'
+import { DateTimePicker } from '@mantine/dates'
 
-import { formatDate, formatPlain, isDateInput } from '../shared/format'
+import { formatPlain } from '../shared/format'
+// 落盘闸门从 format.ts 的 isDateInput（纯日期）换成 dateTime.ts 的 isDateTimeStr
+//（带时刻）—— 承载时刻的字段形状只有一个定义处，别再在 UI 里手写正则。
+import {
+  ensureDateTime,
+  formatDateTime,
+  isDateTimeStr,
+  parseDateTime,
+} from '../../domain/calendar/dateTime'
 import styles from '../styles/Inspector.module.scss'
 
 /**
@@ -85,7 +94,7 @@ interface DateFieldProps {
    * 页面上出现两次（标题 + 字段标签），既重复又让按文案定位的断言命中两个元素。
    */
   ariaLabel?: string
-  /** 已存的值，`''` 表示未设。展示前一律过 formatDate（§1.3：YYYY-MM-DD） */
+  /** 已存的值，`''` 表示未设。展示前一律过 ensureDateTime（补默认时刻，见 dateTime.ts） */
   value: string
   disabled?: boolean
   testId?: string
@@ -96,15 +105,20 @@ interface DateFieldProps {
 }
 
 /**
- * 日期输入。
+ * 日期输入（内部换成 Mantine 的 `DateTimePicker`）。
  *
- * **为什么不用原生 `<input type="date">`**：它的显示格式由浏览器 locale 决定，
- * zh-CN 下渲染成 `2026/09/14`，CSS 改不动它 —— 规范 §1.3 点名的缺陷正是这一条。
- * 改用文本框承载后，展示值完全由 formatDate 决定，跨语言都是 YYYY-MM-DD。
+ * **为什么不自己写文本框**：显示格式与解析都要跟语言走，而 Mantine 的日期组件
+ * 已经把这件事（连同弹出日历、时刻输入、键盘可达性）做全了。自研文本框在
+ * zh-CN 下只能用固定的 `YYYY-MM-DD`，且没有日历可点 —— 规范 §1.3 点名的缺陷
+ * （原生 `type="date"` 显示随浏览器 locale 漂移）在这里连带的解法是：**不碰原生
+ * `type=date`**（`DateTimePicker` 渲染的是一个按钮，不是 `<input type="date">`）。
  *
- * 落盘闸门（isDateInput）：只有完整合法的 `YYYY-MM-DD` 才 dispatch。半截输入
- * （`2026-03-0`）留在草稿里不落盘 —— 否则每敲一个字符就会把中间态写进 store，
- * 撤销栈里立刻多出十几条垃圾记录。
+ * **对外接口一字未变**：9 个调用点仍按 `value: string` / `onChange(value: string)`
+ * 使用（`''` = 未设）。换的是内部实现，不是契约。
+ *
+ * 落盘闸门改由 `isDateTimeStr` 承担：`DateTimePicker` 只会在「选中某天」或
+ * 「提交时刻」时给出完整值，半截输入留在它自己的草稿里 —— 撤销栈语义不变
+ * （每敲一个字符不会写一次 store）。
  */
 export function DateField({
   label,
@@ -117,39 +131,40 @@ export function DateField({
   onBlur,
 }: DateFieldProps) {
   const id = useId()
-  // 展示值一律过 formatDate（§1.3）—— 即使 store 里存着带时间的 ISO 串，
-  // 输入框里也只出现 YYYY-MM-DD。draft 是**可编辑草稿**，允许出现半截输入。
-  const normalized = formatDate(value) ?? ''
-  const [draft, setDraft] = useState(normalized)
 
-  // 外部值变化（切任务 / 撤销 / 换 Tab）时同步草稿；用户输入过程中 value 不变，不打断
-  useEffect(() => {
-    setDraft(normalized)
-  }, [normalized])
+  // 承载时刻的字段一律显示成 `YYYY-MM-DD HH:mm`；纯日期（如派生的 scheduledStart）
+  // 补默认 09:00 —— 与引擎只认日期部分的约定自洽（§2.2 判断 A）。
+  const normalized = value ? ensureDateTime(value) : ''
 
   const input = (
-    <TextInput
+    <DateTimePicker
       id={id}
       // ariaLabel 用于「标签已由区块标题给出」的场合：只给可访问名、不渲染可见标签，
       // 避免同一段文字在页面上出现两次（标题 + 字段标签）。
       aria-label={ariaLabel}
-      value={draft}
+      // 存的是 DateTimeStr（`YYYY-MM-DDTHH:mm`），控件要 Date；两端的转换都走原语，
+      // 绝不在 UI 里手写 `new Date(...)`（那会引入时区偏移）。
+      value={normalized ? parseDateTime(normalized) : null}
       disabled={disabled}
       data-testid={testId}
-      placeholder="YYYY-MM-DD"
-      inputMode="numeric"
+      valueFormat="YYYY-MM-DD HH:mm"
+      placeholder="YYYY-MM-DD HH:mm"
+      clearable={clearable}
       classNames={{ input: styles.dateInput }}
-      onChange={(event) => {
-        const next = event.currentTarget.value
-        setDraft(next)
-        if (isDateInput(next)) onChange(next)
-        else if (clearable && next === '') onChange('')
+      onChange={(next) => {
+        if (next === null) {
+          // 清空 = 未设（只在允许清空的字段上生效）
+          if (clearable) onChange('')
+          return
+        }
+        // ⚠️ Mantine 9 的 `onChange` 给的是 `YYYY-MM-DD HH:mm:ss`（空格分隔、**带秒**），
+        // `valueFormat` 只管**显示**，不改变回传值的形状。经 dateTime 原语归一成
+        // DateTimeStr（`YYYY-MM-DDTHH:mm`，无秒）后再落盘 —— 否则「无秒」的类型契约
+        // 会被一个秒尾悄悄破坏（字符串比较与 parseDate 都会因此出错）。
+        const text = formatDateTime(parseDateTime(next))
+        if (isDateTimeStr(text)) onChange(text)
       }}
-      onBlur={() => {
-        // §6：失焦后显示格式化值 —— 非法草稿回退到已存值，不留半截日期在框里
-        if (!isDateInput(draft)) setDraft(normalized)
-        onBlur?.()
-      }}
+      onBlur={onBlur}
     />
   )
 

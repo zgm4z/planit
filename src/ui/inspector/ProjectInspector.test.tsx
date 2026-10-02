@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -27,6 +27,40 @@ async function chooseOption(
 ) {
   await user.click(screen.getByRole('combobox', { name: selectLabel }))
   fireEvent.click(screen.getByRole('option', { name: optionLabel, hidden: true }))
+}
+
+/**
+ * 驱动 `DateTimePicker` 的弹出日历，点选**当前显示月份**里的某一天。
+ *
+ * Mantine 9 的 `DateTimePicker` 渲染的是一个打开弹出层的 `<button>`
+ *（`valueFormat` 只管显示），故 `fireEvent.change` 什么也触发不了 ——
+ * 必须先点开控件再点日历格。日历打开的是「已存值所在月」；空值控件打开的是今天
+ * 所在月，所以空值用例先种一个值（见各用例注释），断言才与真实时钟无关。
+ */
+async function pickDay(handle: HTMLElement, day: number): Promise<void> {
+  fireEvent.click(handle)
+  // 按 aria-controls 精确定位**本控件**的浮层：多个 DateTimePicker 的浮层可能同时
+  // 挂在 DOM 里（选中一天后浮层不自动关闭），用 document.querySelector 会拿错那个。
+  const dropdown = await waitFor(() => {
+    const id = handle.getAttribute('aria-controls')
+    const el = id ? document.getElementById(id) : null
+    if (!el) throw new Error('date picker dropdown did not open')
+    return el
+  })
+  // 排除相邻月的「补白日」：Mantine 会渲染上/下月的日子并标 data-outside，
+  // 否则三月视图里点 25 可能命中补白格（2 月 25 日）。
+  const cell = Array.from(dropdown.querySelectorAll('table button')).find(
+    (button) => button.textContent === String(day) && !button.hasAttribute('data-outside'),
+  )
+  if (!cell) throw new Error(`day cell ${day} not found in the displayed month`)
+  fireEvent.click(cell)
+}
+
+/** 点 DateTimePicker 的清除按钮（渲染在控件右槽里；无 aria-label，按 Mantine 的类定位） */
+function clickClearButton(handle: HTMLElement): void {
+  const button = handle.parentElement?.querySelector('button.mantine-InputClearButton-root')
+  if (!button) throw new Error('clear button not found')
+  fireEvent.click(button)
 }
 
 beforeEach(async () => {
@@ -80,14 +114,22 @@ describe('ProjectInspector', () => {
     expect(screen.getByLabelText('结束日期')).not.toBeDisabled()
   })
 
-  it('结束日期在两个方向下都可编辑，写回 endDate；清空即无期限', () => {
+  it('结束日期在两个方向下都可编辑，写回 endDate；清空即无期限', async () => {
+    // 种一个已有值：DateTimePicker 打开的是「已存值所在月」（2026-06），
+    // 点 30 日的结果因此与真实时钟无关（空值控件打开的是今天所在月）。
+    const seeded = useProjectStore.getState().project!
+    useProjectStore.setState({ project: { ...seeded, endDate: '2026-06-10T18:00' } })
     renderProjectInspector()
 
     const input = screen.getByLabelText('结束日期')
-    fireEvent.change(input, { target: { value: '2026-06-30' } })
-    expect(useProjectStore.getState().project!.endDate).toBe('2026-06-30')
+    expect(input).toHaveTextContent('2026-06-10 18:00')
 
-    fireEvent.change(input, { target: { value: '' } })
+    // 点日历里的 30 日 → 保留原有时刻 18:00，写回**带时刻**的 endDate
+    await pickDay(input, 30)
+    expect(useProjectStore.getState().project!.endDate).toBe('2026-06-30T18:00')
+
+    // 清空 = 无期限（必须是 undefined，不能留空串）
+    clickClearButton(screen.getByLabelText('结束日期'))
     expect(useProjectStore.getState().project!.endDate).toBeUndefined()
   })
 
@@ -179,17 +221,28 @@ describe('ProjectInspector', () => {
     expect(screen.queryByText(/v1\.0/)).not.toBeInTheDocument()
   })
 
-  it('基准日输入框写入 project.statusDate；清空即删除该字段（不是空串）', () => {
+  it('基准日输入框写入 project.statusDate；清空即删除该字段（不是空串）', async () => {
     renderProjectInspector()
 
-    // 缺省未设 → 值显示为空串
-    expect(screen.getByLabelText('基准日')).toHaveValue('')
+    // 缺省未设 → 控件显示占位串（不是空白）。
+    // 注意不能再用 toHaveValue —— DateTimePicker 渲染的是 <button>，.value 恒为空串，
+    // toHaveValue('') 在控件坏掉时也恒绿（本仓库最怕的恒真断言）。
+    expect(screen.getByLabelText('基准日')).toHaveTextContent('YYYY-MM-DD HH:mm')
 
-    fireEvent.change(screen.getByLabelText('基准日'), { target: { value: '2026-03-04' } })
-    expect(useProjectStore.getState().project!.statusDate).toBe('2026-03-04')
+    // 种一个值，让日历打开在 2026-03（否则空值控件打开的是今天所在月）
+    act(() => {
+      const project = useProjectStore.getState().project!
+      useProjectStore.setState({ project: { ...project, statusDate: '2026-03-04T18:00' } })
+    })
+    const input = screen.getByLabelText('基准日')
+    expect(input).toHaveTextContent('2026-03-04 18:00')
+
+    // 点 9 日 → 保留原有时刻 18:00
+    await pickDay(input, 9)
+    expect(useProjectStore.getState().project!.statusDate).toBe('2026-03-09T18:00')
 
     // 清空 = 未设基准日（PV / SV 不可算）—— 必须是 undefined，不能留 ''
-    fireEvent.change(screen.getByLabelText('基准日'), { target: { value: '' } })
+    clickClearButton(screen.getByLabelText('基准日'))
     expect(useProjectStore.getState().project!.statusDate).toBeUndefined()
   })
 
