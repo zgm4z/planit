@@ -127,6 +127,18 @@ describe('useColumnResize', () => {
     expect(onResize).toHaveBeenCalledWith('start', 160)
   })
 
+  it('另一根指针的 pointercancel 不结束拖拽 —— 它是带 pointerId 的 PointerEvent', () => {
+    const onResize = vi.fn()
+    render(<Harness onResize={onResize} onReset={vi.fn()} />)
+
+    fireEvent.pointerDown(screen.getByTestId('handle'), { button: 0, pointerId: 1, clientX: 200 })
+    window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 2 }))
+
+    expect(document.body.classList.contains(COLUMN_RESIZING_CLASS)).toBe(true)
+    moveTo(260)
+    expect(onResize).toHaveBeenCalledWith('start', 160)
+  })
+
   it('拖拽中途卸载：监听器与全局类一起清掉，不留下粘住的 col-resize', () => {
     const onResize = vi.fn()
     const { unmount } = render(<Harness onResize={onResize} onReset={vi.fn()} />)

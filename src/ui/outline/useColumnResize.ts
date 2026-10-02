@@ -87,7 +87,7 @@ export function useColumnResize({ onResize, onReset }: UseColumnResizeOptions): 
         window.removeEventListener('pointermove', handleMove)
         window.removeEventListener('pointerup', handleUp)
         window.removeEventListener('pointercancel', handleCancel)
-        captureTarget?.removeEventListener('lostpointercapture', handleCancel)
+        captureTarget?.removeEventListener('lostpointercapture', handleLostCapture)
         document.body.classList.remove(COLUMN_RESIZING_CLASS)
       }
       stopRef.current = stop
@@ -103,27 +103,33 @@ export function useColumnResize({ onResize, onReset }: UseColumnResizeOptions): 
         )
       }
 
-      const handleUp = (upEvent: PointerEvent): void => {
-        // 只有启动拖拽的那根指针能结束它 —— 否则触摸设备上另一根手指（或手掌）
-        // 的抬起会打断进行中的拖拽。useDependencyLink 有同样的守卫。
-        if (upEvent.pointerId !== pointerId) return
+      const finish = (): void => {
         if (finished) return
         finished = true
         stop()
       }
 
-      // 指针被系统取消（触摸打断、浏览器抢占手势），或捕获丢失（在浏览器窗口
-      // 外松开 —— 此时既没有 pointerup 也没有 pointercancel）时收尾，
-      // 否则全局类与 window 监听会一直挂到下一次拖拽。
-      //
-      // **刻意不加 pointerId 守卫**：它同时是 pointercancel 与 lostpointercapture
-      // 的处理器，且这两个事件不一定带得动 pointerId。「多收尾一次」是幂等的、
-      // 可接受；「漏收尾」会让全局类永远粘在 body 上。宁可能多收，不可漏收。
-      // 因此它**自成一体的收尾**，不委托给带守卫的 handleUp（useDependencyLink 同形）。
-      const handleCancel = (): void => {
-        if (finished) return
-        finished = true
-        stop()
+      const handleUp = (upEvent: PointerEvent): void => {
+        // 只有启动拖拽的那根指针能结束它 —— 否则触摸设备上另一根手指（或手掌）
+        // 的抬起会打断进行中的拖拽。useDependencyLink 有同样的守卫。
+        if (upEvent.pointerId !== pointerId) return
+        finish()
+      }
+
+      // pointercancel 同样是**带 pointerId 的 PointerEvent**，所以照样守卫：
+      // 另一根手指被浏览器取消（例如它变成了滚动手势）时不该打断本拖拽。
+      // 这里曾与 lostpointercapture 共用一个无守卫的处理函数，那条理由
+      //（「这两个事件不一定带 pointerId」）对 pointercancel 是错的。
+      const handleCancel = (cancelEvent: PointerEvent): void => {
+        if (cancelEvent.pointerId !== pointerId) return
+        finish()
+      }
+
+      // lostpointercapture 是**最后兜底**：在浏览器窗口外松开时，既没有 pointerup
+      // 也没有 pointercancel，只剩它。它是唯一一条「宁可多收也不能漏收」的路径 ——
+      // 漏收会让全局类与监听永远粘着，所以这里**刻意不设守卫**。
+      const handleLostCapture = (): void => {
+        finish()
       }
 
       window.addEventListener('pointermove', handleMove)
@@ -136,7 +142,7 @@ export function useColumnResize({ onResize, onReset }: UseColumnResizeOptions): 
       if (captureTarget) {
         try {
           captureTarget.setPointerCapture(pointerId)
-          captureTarget.addEventListener('lostpointercapture', handleCancel)
+          captureTarget.addEventListener('lostpointercapture', handleLostCapture)
         } catch {
           /* 捕获不可用时忽略 */
         }
