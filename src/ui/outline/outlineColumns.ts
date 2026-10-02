@@ -14,6 +14,7 @@ import {
   isEnabledOutlineColumnKey,
   type OutlineColumnKey,
 } from '../../store/columnKeys'
+import type { ColumnWidths } from '../../store/viewStore'
 import { resolveScheduleDates } from '../shared/scheduleDates'
 
 /**
@@ -337,4 +338,27 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
       // 全部禁用列（v1.0 起只剩依赖实际成本录入的 acwp / cv / eac）：本版没有数据来源
       return EMPTY
   }
+}
+
+/**
+ * 把用户的宽度覆盖合并进列描述 —— **宽度进入渲染的唯一入口**。
+ *
+ * 返回的新数组里，被拖过的列 `width` 换成用户值、`flex` 置 false（「拖了即固定」）；
+ * 没拖过的列**原样返回同一个对象**（`toBe` 可断言），于是 title 的 `flex: true`
+ * 与「从没拖过」完全等价 —— 这是 `resetColumnWidth` 敢用「删除 key」实现的地基。
+ *
+ * 为什么在这里合并、而不是让 `cellFlex` 去查 store：`cellFlex` 是「表头必须与
+ * 单元格逐列对齐」这条不变量的**唯一实现**，表头（`OutlineTable`）与单元格
+ * （`OutlineTree`）读的是**同一个** `columns` 数组。宽度在数组进入这两个组件
+ * **之前**就已合并完毕，「表头用新宽度、单元格用旧宽度」这类中间态在结构上
+ * 不可能出现 —— 本项目反复踩的「同一条规则两份实现」，在这里天然不成立。
+ */
+export function applyColumnWidths(
+  columns: readonly OutlineColumn[],
+  widths: ColumnWidths,
+): OutlineColumn[] {
+  return columns.map((column) => {
+    const width = widths[column.key]
+    return width === undefined ? column : { ...column, width, flex: false }
+  })
 }

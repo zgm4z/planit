@@ -13,6 +13,7 @@ import {
 import {
   GANTT_OUTLINE_COLUMNS,
   OUTLINE_COLUMNS,
+  applyColumnWidths,
   cellFlex,
   getOutlineCellValue,
   responsiveHiddenColumns,
@@ -467,5 +468,39 @@ describe('getOutlineCellValue', () => {
     for (const key of ENABLED_KEYS) {
       expect(getOutlineCellValue(key, rich).type, `${key} 没有取值口径`).not.toBe('empty')
     }
+  })
+})
+
+describe('applyColumnWidths — 用户宽度覆盖的唯一注入点', () => {
+  const columns = OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'start')
+
+  it('没有覆盖时返回原对象本身（title 的 flex 保持）', () => {
+    const result = applyColumnWidths(columns, {})
+    // `toBe` 而不是 `toEqual`：没覆盖的列必须**原样透传同一个引用**，
+    // 复制一份会让「有没有被拖过」这件事在渲染层变得不可分辨
+    expect(result[0]).toBe(columns[0])
+    expect(result[0].flex).toBe(true)
+    expect(cellFlex(result[0])).toBe('1 1 240px')
+  })
+
+  it('有覆盖时替换宽度并把 flex 置 false —— 这就是「拖了即固定」', () => {
+    const result = applyColumnWidths(columns, { title: 320 })
+    const title = result.find((c) => c.key === 'title')!
+    expect(title.width).toBe(320)
+    expect(title.flex).toBe(false)
+    // 不需要第二套机制：cellFlex 已经把 flex:false 翻成 `0 0 Wpx`
+    expect(cellFlex(title)).toBe('0 0 320px')
+  })
+
+  it('只影响被覆盖的那一列', () => {
+    const result = applyColumnWidths(columns, { start: 140 })
+    expect(result.find((c) => c.key === 'start')!.width).toBe(140)
+    expect(result.find((c) => c.key === 'title')!.width).toBe(240)
+    expect(result.find((c) => c.key === 'title')!.flex).toBe(true)
+  })
+
+  it('覆盖的是不可见的 key 时不产生任何影响（归一化已保证不会，这里是双保险）', () => {
+    const result = applyColumnWidths(columns, { note: 500 })
+    expect(result.map((c) => c.width)).toEqual(columns.map((c) => c.width))
   })
 })
