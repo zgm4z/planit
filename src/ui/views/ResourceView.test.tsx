@@ -176,6 +176,20 @@ describe('资源视图（视图 B）', () => {
     expect(screen.getByTestId('resource-timeline-grid')).toBeInTheDocument()
   })
 
+  it('宽度测量元素排布了当前语言的四种类型标签 + 列标题（漏一个就量不到那种类型）', () => {
+    const project = fixture()
+    useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+    useScheduleStore.setState({ result: solve(project), error: null })
+    renderView(project)
+
+    const sizer = screen.getByTestId('resource-kind-width-sizer')
+    // 样本 = 列标题「类型」+ 四种 kind 标签（zh 下：人员 / 设备 / 素材 / 群组）。
+    // 断言逐个标签都在 —— 若有人把某个 kind 从 RESOURCE_KINDS 里删掉，这里会红。
+    for (const label of ['类型', '人员', '设备', '素材', '群组']) {
+      expect(sizer).toHaveTextContent(label)
+    }
+  })
+
   it('没有任何资源 → 空态文字 + 新建按钮（不是空白）', () => {
     const project = createProject('空资源', '2026-03-02')
     useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
