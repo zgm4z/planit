@@ -4,7 +4,6 @@ import type {
   Task,
   TaskId,
 } from '../model/types'
-import { toDateStr } from '../calendar/dateTime'
 
 /**
  * 把叶子任务的排期合并成完整的排期表：叶子结果原样保留，
@@ -67,7 +66,7 @@ export function summarizeParents(
 
 /**
  * 如实记录排期矛盾，不做调和。摘要任务本身不判冲突。
- * 判定依据是浮时为负 —— 意味着「约束要求的最晚」早于「依赖要求的最早」。
+ * 判定依据是浮时为负 —— 最早与最晚排期窗口不可行；这里不推断矛盾由哪个边界造成。
  *
  * 前提：childIds 构成一棵树（无环）。树形不变量由命令层保证，
  * 与依赖环不同，这里不做环检测。
@@ -91,22 +90,11 @@ export function detectConflicts(
     const schedule = schedules[id]
     if (!schedule || schedule.totalSlack >= 0) return
 
-    if (task.scheduling.mode === 'constraint') {
-      conflicts.push({
-        taskId: id,
-        kind: 'constraintViolatedByDependency',
-        constraint: task.scheduling.type,
-        // 冲突描述里的日期是 `DateStr`（spec §2.2）：归一后再写入，避免下游按日消费时静默错。
-        date: toDateStr(task.scheduling.date),
-        earliest: schedule.earlyStart,
-      })
-    } else {
-      conflicts.push({
-        taskId: id,
-        kind: 'impossibleConstraint',
-        slack: schedule.totalSlack,
-      })
-    }
+    conflicts.push({
+      taskId: id,
+      kind: 'infeasibleSchedule',
+      slack: schedule.totalSlack,
+    })
   }
 
   for (const rootId of rootIds) visit(rootId)

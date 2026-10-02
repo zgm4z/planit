@@ -23,7 +23,7 @@ import type { Task } from '../model/types'
  *
  * 极端组合（例如 startNoEarlierThan + alap）不需要特判：如果晚端落在
  * 约束下界之前，lateStart < earlyStart，totalSlack 变负，
- * detectConflicts 会如实报成 constraintViolatedByDependency。
+ * detectConflicts 会如实报告负浮时，不推断矛盾成因。
  */
 export function usesLateSchedule(task: Task): boolean {
   return task.schedulingOrder === 'alap'

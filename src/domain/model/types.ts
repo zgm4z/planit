@@ -224,8 +224,7 @@ export interface ComputedSchedule {
 
 /** 冲突的说明参数。文案本身由 UI 层按当前语言渲染 —— 领域层不产出自然语言。 */
 export type ConflictParams =
-  | { kind: 'constraintViolatedByDependency'; constraint: ConstraintType; date: DateStr; earliest: DateStr }
-  | { kind: 'impossibleConstraint'; slack: number }
+  | { kind: 'infeasibleSchedule'; slack: number }
 
 export type ConflictInfo = ConflictParams & { taskId: TaskId }
 

@@ -339,8 +339,7 @@
     "calendar.removeExceptionRange": "例外期間を削除"
   },
   "conflicts": {
-    "constraintViolatedByDependency": "タスクは「{{constraint}} {{date}}」に固定されていますが、依存関係は {{earliest}} 以降を要求しています",
-    "impossibleConstraint": "スケジュール不可：このタスクの余裕が負です（{{slack}} 稼働日）"
+    "infeasibleSchedule": "スケジュール不可：このタスクの余裕が負です（{{slack}} 稼働日）"
   },
   "errors": {
     "cycle": "循環依存を検出しました：{{path}}",

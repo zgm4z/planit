@@ -118,7 +118,7 @@ describe('summarizeParents', () => {
 })
 
 describe('detectConflicts', () => {
-  it('浮时为负的约束任务被标记为 constraintViolatedByDependency', () => {
+  it('有约束的负浮时任务只报告不可行与浮时，不推断成因', () => {
     const t = task('A', {
       scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-04' },
     })
@@ -130,14 +130,12 @@ describe('detectConflicts', () => {
     expect(conflicts).toHaveLength(1)
     expect(conflicts[0]).toEqual({
       taskId: 'A',
-      kind: 'constraintViolatedByDependency',
-      constraint: 'startOn',
-      date: '2026-03-04',
-      earliest: '2026-03-09',
+      kind: 'infeasibleSchedule',
+      slack: -3,
     })
   })
 
-  it('无约束任务浮时为负时报 impossibleConstraint', () => {
+  it('无约束任务的负浮时使用相同的中性结构', () => {
     const t = task('A') // 默认 mode: 'auto'
     const tasks = { A: t }
     const schedules = { A: sch({ totalSlack: -2, earlyStart: '2026-03-09' }) }
@@ -147,7 +145,7 @@ describe('detectConflicts', () => {
     expect(conflicts).toHaveLength(1)
     expect(conflicts[0]).toEqual({
       taskId: 'A',
-      kind: 'impossibleConstraint',
+      kind: 'infeasibleSchedule',
       slack: -2,
     })
   })

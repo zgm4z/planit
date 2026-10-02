@@ -339,8 +339,7 @@
     "calendar.removeExceptionRange": "Remove exception range"
   },
   "conflicts": {
-    "constraintViolatedByDependency": "Task is pinned to \"{{constraint}} {{date}}\", but a dependency requires it no earlier than {{earliest}}",
-    "impossibleConstraint": "Infeasible schedule: this task has negative slack ({{slack}} workdays)"
+    "infeasibleSchedule": "Infeasible schedule: this task has negative slack ({{slack}} workdays)"
   },
   "errors": {
     "cycle": "Circular dependency detected: {{path}}",

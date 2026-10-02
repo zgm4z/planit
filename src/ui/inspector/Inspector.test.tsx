@@ -430,7 +430,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
     expect(screen.getByText(/日期由子任务汇总/)).toBeInTheDocument()
   })
 
-  it('冲突在任务 Tab 顶部显示，且用当前语言的约束名', () => {
+  it('冲突在任务 Tab 顶部显示中性不可行说明', () => {
     const project = useProjectStore.getState().project!
     const dep = createDependency(siblingId, taskId, 'FS', 0)
     useProjectStore.setState({
@@ -450,7 +450,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
     renderInspector()
 
     const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent('固定开始日期')
+    expect(alert).toHaveTextContent('排期不可行：该任务浮时为负（-2 个工作日）')
     expect(alert).not.toHaveTextContent('startOn')
   })
 

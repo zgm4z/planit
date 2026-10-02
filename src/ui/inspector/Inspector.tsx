@@ -227,12 +227,7 @@ function TaskPanel({ taskId }: { taskId: TaskId }) {
     <Stack gap={GAP_BLOCK}>
       {conflict && (
         <Alert color="red" p="xs">
-          {t(`conflicts.${conflict.kind}`, {
-            ...conflict,
-            ...(conflict.kind === 'constraintViolatedByDependency'
-              ? { constraint: t(`scheduling.${conflict.constraint}`) }
-              : {}),
-          })}
+          {t(`conflicts.${conflict.kind}`, { ...conflict })}
         </Alert>
       )}
 

@@ -196,3 +196,32 @@ describe('v0.6：solve() 接入资源平衡', () => {
     )
   })
 })
+
+describe('solve — 中性不可行冲突', () => {
+  it('无依赖时资源可用期冲突不归因为 dependency', () => {
+    const project = createProject('资源边界冲突', '2026-03-02')
+    const task = createTask({ name: '受约束任务', duration: 2 })
+    task.scheduling = {
+      mode: 'constraint',
+      type: 'startNoEarlierThan',
+      date: '2026-03-10T09:00',
+    }
+    addTask(project, task)
+
+    const resource = {
+      ...createResource({ name: '离职资源' }),
+      availableUntil: '2026-03-06T18:00',
+    }
+    project.resources[resource.id] = resource
+    const assignment = createAssignment({ taskId: task.id, resourceId: resource.id })
+    project.assignments[assignment.id] = assignment
+
+    const result = solve(project)
+
+    expect(Object.keys(project.dependencies)).toHaveLength(0)
+    expect(result.schedules[task.id].totalSlack).toBe(-3)
+    expect(result.conflicts).toEqual([
+      { taskId: task.id, kind: 'infeasibleSchedule', slack: -3 },
+    ])
+  })
+})
