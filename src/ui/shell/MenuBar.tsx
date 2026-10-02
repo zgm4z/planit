@@ -318,6 +318,8 @@ function ViewItems() {
   const views: { view: ActiveView; label: string }[] = [
     { view: 'gantt', label: t('toolbar.view.gantt') },
     { view: 'outline', label: t('toolbar.view.outline') },
+    { view: 'calendar', label: t('toolbar.view.calendar') },
+    { view: 'resources', label: t('toolbar.view.resources') },
   ]
   const zooms: ZoomLevel[] = ['day', 'week', 'month']
 

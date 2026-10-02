@@ -136,6 +136,24 @@ describe('viewStore 的 Inspector Tab 与选中资源', () => {
   })
 })
 
+// v0.7：视图从二值扩到四值。这条钉住「四值都被接受，且初值仍是 gantt」——
+// 只要 setActiveView 还是旧的二值联合，类型层面就会先红。
+describe('四个并列视图（v0.7）', () => {
+  it('setActiveView 接受四值；初值仍是 gantt（不持久化）', () => {
+    expect(useViewStore.getState().activeView).toBe('gantt')
+    for (const view of ['outline', 'calendar', 'resources', 'gantt'] as const) {
+      useViewStore.getState().setActiveView(view)
+      expect(useViewStore.getState().activeView).toBe(view)
+    }
+  })
+
+  it('__resetViewStoreForTests 把 activeView 复位成 gantt', () => {
+    useViewStore.getState().setActiveView('resources')
+    __resetViewStoreForTests()
+    expect(useViewStore.getState().activeView).toBe('gantt')
+  })
+})
+
 describe('资源树的折叠态（v0.7）', () => {
   it('toggleResourceCollapsed 增删同一个 Set；重复点同一个 id 来回切换', () => {
     const { toggleResourceCollapsed } = useViewStore.getState()

@@ -199,7 +199,6 @@
       "startDerivedHint": "向后排期时开始日期由引擎推导，不可编辑",
       "summary": "摘要",
       "groupTimeline": "时间线",
-      "groupCalendar": "工作日历",
       "spanLabel": "项目跨度",
       "spanValue": "{{start}} → {{finish}}",
       "workdaysLabel": "总工作日",
@@ -271,9 +270,6 @@
     "conflictCount": "排期冲突 {{count}} 处"
   },
   "calendar": {
-    "title": "工作日",
-    "exceptions": "例外日期",
-    "addHoliday": "设为假日",
     "holiday": "假日",
     "custom": "自定义",
     "weekdays": { "mon": "一", "tue": "二", "wed": "三", "thu": "四", "fri": "五", "sat": "六", "sun": "日" }

@@ -100,18 +100,29 @@ export function ResourceTimeline({
     <div className={styles.resourceMain} data-testid="resource-timeline">
       <p className={styles.resourceTimelineTitle}>{t('resourceView.timelineTitle')}</p>
 
-      {/* 只有一个横向滚动口：刻度与画布一起滚，标题留在外面不跟着走。
-          它也是 TimeRuler 月份标签 sticky 的锚点 —— 资源侧没有 sticky 左列，
-          故给 TimeRuler 传 stickyLabelLeft="0"（钉在时间线自身左缘）。 */}
+      {/* 日期轴表头：sticky top，纵向滚动时留在视口里（与甘特标尺同款）。
+          它是 .resourceMain 的**直接子元素**（画布之外）—— 这样它的 containing block
+          是整块主区（被 .resourceView 的 align-items:stretch 撑到与资源树等高），
+          sticky 才能走完整个纵向滚动范围。若把它塞进下面的画布容器，containing block
+          只有「画布那么高」：资源多、而选中资源分配少时，表头会在半途提前脱钉。
+          宽度内联给 contentWidth，与画布逐列对齐。 */}
+      <div
+        className={styles.resourceTimelineRuler}
+        style={{ width: contentWidth }}
+        data-testid="resource-timeline-ruler"
+      >
+        <TimeRuler scale={scale} totalDays={totalDays} stickyLabelLeft="320px" />
+      </div>
+
+      {/* 横向滚动由 shared-scroll 承担（与甘特一致）—— 刻度与画布一起滚。
+          月份标签 sticky 的锚点因此是 shared-scroll 的左缘，而资源树钉在那里（宽 320px），
+          故把标签钉在**树右缘**：stickyLabelLeft="320px"（与 .resourceTree 的定宽同源），
+          否则月名会滑到资源树底下。 */}
       <div className={styles.resourceTimelineScroll}>
         <div
           className={styles.resourceTimelineBody}
           style={{ width: contentWidth, '--day-width': `${scale.dayWidth}px` } as CSSProperties}
         >
-          <div className={styles.resourceTimelineRuler} data-testid="resource-timeline-ruler">
-            <TimeRuler scale={scale} totalDays={totalDays} stickyLabelLeft="0" />
-          </div>
-
           <div
             className={styles.resourceTimelineGrid}
             style={{ height: bars.length * ROW_HEIGHT, width: contentWidth }}

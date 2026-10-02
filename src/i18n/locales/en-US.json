@@ -196,7 +196,6 @@
       "startDerivedHint": "Start date is derived by the engine when scheduling backward and cannot be edited",
       "summary": "Summary",
       "groupTimeline": "Timeline",
-      "groupCalendar": "Working calendar",
       "spanLabel": "Span",
       "spanValue": "{{start}} → {{finish}}",
       "workdaysLabel": "Total workdays",
@@ -268,9 +267,6 @@
     "conflictCount": "{{count}} conflicts"
   },
   "calendar": {
-    "title": "Working days",
-    "exceptions": "Exceptions",
-    "addHoliday": "Mark as holiday",
     "holiday": "Holiday",
     "custom": "Custom",
     "weekdays": { "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri", "sat": "Sat", "sun": "Sun" }

@@ -6,7 +6,6 @@ import { findActiveBaseline } from '../../domain/model/baseline'
 import type { SchedulingDirection } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
-import { CalendarSettings } from './CalendarSettings'
 import { DateField, FieldRow, GAP_BLOCK, GAP_INNER, StatList, StatRow } from './InspectorFields'
 import { formatDate, formatDays } from '../shared/format'
 import { computeProjectSummary } from '../shared/projectSummary'
@@ -14,7 +13,7 @@ import styles from '../styles/Inspector.module.scss'
 
 /**
  * 项目面板（spec §4）的默认展开分组（§3.5）：**主分组**（时间线 / 摘要）默认展开，
- * **次要分组**（格式 / 工作日历）默认收起 —— 收起态仍显示分组名与 ▼，用户知道那里
+ * **次要分组**（格式）默认收起 —— 收起态仍显示分组名与 ▼，用户知道那里
  * 有东西，只是先不占屏。
  */
 const PROJECT_OPEN_GROUPS = ['timeline', 'summary']
@@ -31,13 +30,12 @@ const PROJECT_OPEN_GROUPS = ['timeline', 'summary']
  *   ▼ 时间线   排期方向 · 开始日期 · 结束日期 · 基准日
  *   ▼ 摘要     项目跨度 · 总工作日 · 任务数
  *   ▼ 格式     货币 · 投入单位转换
- *   ▼ 工作日历 工作日 · 例外日期
  *
  * 排版（§3.4）：字段一律走 FieldRow —— 标签固定在左列、值填满右列，只读事实右对齐。
  * 分组用 Accordion（与任务面板同构，§3.5），组内 6px、组间 24px。
  *
- * 工作日历（CalendarSettings）是**项目级配置**，与排期方向 / 基准日同类，
- * 因此归「工作日历」分组 —— 它不再常驻右栏底部（见 CalendarSettings 的 IA 注释）。
+ * v0.7：**工作日历的编辑已迁出右栏**（原「工作日历」分组连同 CalendarSettings 一并删除），
+ * 改由一等的「日历」视图承担 —— 同一规则（工作日 / 例外日期）只能有一处入口。
  */
 export function ProjectInspector() {
   const { t } = useTranslation()
@@ -289,17 +287,6 @@ export function ProjectInspector() {
                 />
               </FieldRow>
             </Stack>
-          </Accordion.Panel>
-        </Accordion.Item>
-
-        {/* 工作日历：**项目配置**（工作日 / 例外日期）。归「项目」Tab 的最后一个分组，
-            详见 CalendarSettings 顶部的归属说明。 */}
-        <Accordion.Item value="calendar">
-          <Accordion.Control data-testid="project-group-calendar">
-            {t('inspector.project.groupCalendar')}
-          </Accordion.Control>
-          <Accordion.Panel>
-            <CalendarSettings />
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion>

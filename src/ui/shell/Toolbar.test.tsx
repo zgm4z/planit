@@ -6,7 +6,10 @@ import { MantineProvider } from '@mantine/core'
 import { createProject, __resetIdCounterForTests } from '../../domain/model/factories'
 import { initCommands, __resetRegistryForTests } from '../../commands/registry'
 import { useProjectStore } from '../../store/projectStore'
-import { __resetViewStoreForTests } from '../../store/viewStore'
+import { useViewStore, __resetViewStoreForTests } from '../../store/viewStore'
+import zhCN from '../../i18n/locales/zh-CN.json'
+import enUS from '../../i18n/locales/en-US.json'
+import jaJP from '../../i18n/locales/ja-JP.json'
 import { Toolbar } from './Toolbar'
 import i18n from '../../i18n'
 
@@ -83,5 +86,38 @@ describe('撤销 / 重做的键盘快捷键', () => {
     // 一条历史都不该被这个按键吃掉
     expect(useProjectStore.getState().undoStack).toHaveLength(1)
     input.remove()
+  })
+})
+
+// v0.7：视图切换器从 2 段扩到 4 段。分段是**控件总数**（不是被选的某个）——
+// 若仍只渲染两段，下面四个 getByTestId 里的 calendar / resources 会找不到而红。
+describe('四段视图切换（v0.7）', () => {
+  it('四个 view-option-* 都在工具栏里（无需开任何菜单）', () => {
+    renderToolbar()
+    for (const view of ['gantt', 'outline', 'calendar', 'resources'] as const) {
+      expect(screen.getByTestId(`view-option-${view}`)).toBeInTheDocument()
+    }
+  })
+
+  it('点「日历」把 activeView 切成 calendar', () => {
+    renderToolbar()
+    fireEvent.click(screen.getByTestId('view-option-calendar'))
+    expect(useViewStore.getState().activeView).toBe('calendar')
+  })
+})
+
+describe('toolbar 块的三语叶子键集合', () => {
+  it('zh / en / ja 完全相等（新增日历 / 资源标签三语同步）', () => {
+    const leafKeys = (node: unknown, prefix = ''): string[] =>
+      node === null || typeof node !== 'object'
+        ? [prefix]
+        : Object.entries(node as Record<string, unknown>).flatMap(([k, v]) =>
+            leafKeys(v, prefix ? `${prefix}.${k}` : k),
+          )
+    const zh = leafKeys(zhCN.toolbar, 'toolbar').sort()
+    expect(leafKeys(enUS.toolbar, 'toolbar').sort()).toEqual(zh)
+    expect(leafKeys(jaJP.toolbar, 'toolbar').sort()).toEqual(zh)
+    expect(zh).toContain('toolbar.view.calendar')
+    expect(zh).toContain('toolbar.view.resources')
   })
 })
