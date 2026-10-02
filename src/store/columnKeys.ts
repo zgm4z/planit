@@ -166,8 +166,10 @@ export const TITLE_COLUMN_WIDTH_MIN = 160
  * 列宽的**唯一** clamp 实现 —— `viewStore.setColumnWidth` 与载入时的归一化
  * 都读它。两处各写一遍上下限，将来改区间必然漂移。
  *
- * 取整是必需的：HiDPI 下 `clientX` 是小数，`startWidth + delta` 会算出小数宽，
- * 存进 localStorage 后每次载入都会变；取整让它稳定。
+ * 取整的必要性**不在**于「浮点会漂移」—— JSON 能忠实往返一个浮点数，存进去什么
+ * 读出来还是什么，反复载入不会自己变。取整是为了让落盘的值是一个**稳定的整数**：
+ * 一眼可读、可与其他整数直接比较（断言尤其如此），而不是 HiDPI 下 `clientX` 带出来的
+ * `317.5` 这种小数。
  */
 export function clampColumnWidth(key: OutlineColumnKey, width: number): number {
   const min = key === 'title' ? TITLE_COLUMN_WIDTH_MIN : COLUMN_WIDTH_MIN

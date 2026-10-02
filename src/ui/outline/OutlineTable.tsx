@@ -95,7 +95,22 @@ export function OutlineTable({
                   role="separator"
                   aria-orientation="vertical"
                   aria-label={t('outline.resizeHandle', { column: t(column.labelKey) })}
-                  onPointerDown={(event) => begin(event, column.key, column.width)}
+                  onPointerDown={(event) => {
+                    // 起始宽必须取**渲染**宽度，不能取 column.width：title 是 flex 列，没被拖过时
+                    // column.width 是 flex 基准（240），而浏览器会把它撑到剩余空间的实际宽度
+                    // （默认视图实测约 620 —— 大纲区 980 = 视口 1280 − 右栏 300，减去固定列
+                    // 100+100+80+80=360 后剩给 title）。用基准当起始宽会让**首次**右拖反而变窄
+                    // （240+80=320，远小于实际的 620）。非 flex 列两者相等，所以统一走渲染宽度是安全的。
+                    //
+                    // 回落到 column.width 覆盖两种量不出宽度的情形，且都用 `||` 而非 `??`：
+                    //   ① parentElement 为 null（结构意外，理论上不会）；
+                    //   ② 量得的宽度为 0 —— 无布局环境（jsdom 单测的 getBoundingClientRect
+                    //      恒返回 0），此时 parentElement 非 null，`??` 拦不住这个 0。
+                    // 真实浏览器里表头单元格最窄也有 40px（title 为 160），渲染宽绝不为 0，
+                    // 因此这个 0 回落只在无布局环境生效，不会吃掉真实宽度。
+                    const rendered = event.currentTarget.parentElement?.getBoundingClientRect().width
+                    begin(event, column.key, rendered || column.width)
+                  }}
                   onDoubleClick={() => reset(column.key)}
                 />
               </div>

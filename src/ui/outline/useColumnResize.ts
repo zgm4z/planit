@@ -19,7 +19,12 @@ interface UseColumnResizeOptions {
 export interface ColumnResizeApi {
   /**
    * 手柄的 `pointerdown` 里调用。
-   * `startWidth` 传**当前**列宽（`column.width` —— 那是已合并用户覆盖值的宽度）。
+   * `startWidth` 传该列**渲染出来的**宽度 —— 量已布局的表头单元格（`getBoundingClientRect`）。
+   *
+   * **不能**直接传 `column.width`：只有非 flex 列两者才相等。`title` 是唯一
+   * `flex: true` 的列，没被拖过时 `column.width` 是 flex **基准**（240），而浏览器
+   * 会把它撑到剩余空间的实际宽度（默认视图实测约 620）—— 拿基准当起始宽会让**首次**
+   * 右拖反而变窄（240+80=320，远小于实际的 620）。起始宽必须反映眼睛看到的实际宽度。
    */
   begin: (event: React.PointerEvent, key: OutlineColumnKey, startWidth: number) => void
   /** 手柄的 `dblclick` 里调用 */
