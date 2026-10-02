@@ -2,7 +2,6 @@ import type {
   Assignment,
   Calendar,
   CalendarId,
-  DateStr,
   Dependency,
   DependencyType,
   EffortMode,
@@ -15,11 +14,12 @@ import type {
   TaskKind,
 } from './types'
 import { formatDate } from '../dateUtils'
+import { DEFAULT_START_TIME, ensureDateTime } from '../calendar/dateTime'
 
 export const DEFAULT_CALENDAR_ID: CalendarId = 'default'
 
 /** 与设计文档一致的 schema 版本，持久化时用于校验 */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 let counter = 0
 
@@ -89,16 +89,22 @@ export function createCalendar(id: CalendarId = DEFAULT_CALENDAR_ID): Calendar {
   }
 }
 
+/**
+ * 新建项目。第二参**可选**：既有的 `createProject('测试', '2026-03-02')` 调用点一行不改 ——
+ * 纯日期被 `ensureDateTime` 补成 `'2026-03-02T09:00'`；已带时刻的串被原样保留
+ * （用 `ensureDateTime` 而非 `toDateTime` 就是为了「已是带时刻就保留」）。
+ * 缺省起点 = 今天 09:00。
+ */
 export function createProject(
   name: string,
-  startDate: DateStr = formatDate(new Date()),
+  startDate?: string,
 ): Project {
   const now = new Date().toISOString()
   return {
     id: nextId('proj'),
     name,
     schemaVersion: SCHEMA_VERSION,
-    startDate,
+    startDate: ensureDateTime(startDate ?? formatDate(new Date()), DEFAULT_START_TIME),
     schedulingDirection: 'forward',
     calendarId: DEFAULT_CALENDAR_ID,
     calendars: { [DEFAULT_CALENDAR_ID]: createCalendar() },

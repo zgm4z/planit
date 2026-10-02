@@ -789,10 +789,11 @@ describe('v0.7 区间例外命令', () => {
       kind: 'custom',
     })
     const calendar = next.calendars.default
+    // v0.8：custom 条目落盘为带时刻的形状（按单日 09:00–18:00），与 DateTimeStr 类型一致
     expect(calendar.exceptions['2026-03-14']).toEqual({
       kind: 'custom',
-      start: '2026-03-14',
-      end: '2026-03-14',
+      start: '2026-03-14T09:00',
+      end: '2026-03-14T18:00',
     })
     // 未被读取的 start/end 在这里**按单日写入**；生效靠的是单日精确查表（isWorkday）
     expect(isWorkday('2026-03-14', calendar)).toBe(true)

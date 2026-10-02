@@ -1,5 +1,6 @@
 import type { CalendarException, CalendarId, DateStr } from '../domain/model/types'
 import { addDays } from '../domain/dateUtils'
+import { DEFAULT_FINISH_TIME, DEFAULT_START_TIME, ensureDateTime } from '../domain/calendar/dateTime'
 import type { CommandHandler } from './types'
 
 export interface SetWorkingDaysPayload {
@@ -75,7 +76,15 @@ export const calendarHandlers: Record<string, CommandHandler<any>> = {
     for (let i = 0; i < MAX_RANGE_DAYS && cursor <= payload.end; i += 1) {
       calendar.exceptions[cursor] = payload.kind === 'holiday'
         ? { kind: 'holiday' }
-        : { kind: 'custom', start: cursor, end: cursor }
+        : {
+            // v0.8：`custom.start/end` 已是 `DateTimeStr`。这里按**单日**写入带时刻的
+            // 形状（09:00–18:00），否则会落盘成「纯日期 + DateTimeStr 字段」的混合形状
+            // 与类型不符。注意 `isWorkday` 仍**只查键（日）**，start/end 至今是死数据
+            // （时段粒度排期不做，spec §9）—— 本改动只为让落盘形状与类型一致。
+            kind: 'custom',
+            start: ensureDateTime(cursor, DEFAULT_START_TIME),
+            end: ensureDateTime(cursor, DEFAULT_FINISH_TIME),
+          }
       cursor = addDays(cursor, 1)
     }
   },

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createProject, createTask, SCHEMA_VERSION } from '../domain/model/factories'
 import { parsePersistedProject } from './schema'
-import { migrateV2ToV3 } from './migrate'
+import { migrateV2ToV3, migrateV3ToV4 } from './migrate'
 
 /** 手工构造一份 v1 存档：kind 时代之前的形状（isMilestone + 无新字段） */
 function v1Save() {
@@ -235,9 +235,9 @@ describe('parsePersistedProject — v2 → v3 迁移', () => {
     expect(project.resources.r1.availableUntil).toBeUndefined()
   })
 
-  it('v2 存档迁移后到达当前版本（v4）', () => {
+  it('v2 存档迁移后到达当前版本（v5）', () => {
     expect(parsePersistedProject(v2Save()).schemaVersion).toBe(SCHEMA_VERSION)
-    expect(SCHEMA_VERSION).toBe(4)
+    expect(SCHEMA_VERSION).toBe(5)
   })
 
   it('v1 存档经 v2 → v3 两步迁移也能到当前版本（逐跳链式）', () => {
@@ -333,9 +333,9 @@ describe('parsePersistedProject — v3 → v4 迁移', () => {
     expect(parsePersistedProject(v3Save()).statusDate).toBeUndefined()
   })
 
-  it('迁移后 project.schemaVersion 更新为 4', () => {
+  it('迁移后 project.schemaVersion 更新为当前版本（v5）', () => {
     expect(parsePersistedProject(v3Save()).schemaVersion).toBe(SCHEMA_VERSION)
-    expect(SCHEMA_VERSION).toBe(4)
+    expect(SCHEMA_VERSION).toBe(5)
   })
 
   it('v1 / v2 存档经逐跳链也能到 v4（三跳）', () => {
@@ -362,6 +362,113 @@ describe('parsePersistedProject — v3 → v4 迁移', () => {
     const a = parsePersistedProject(raw)
     const b = parsePersistedProject(v3Save())
     expect(a).toEqual(b)
+    expect(JSON.stringify(raw)).toBe(snapshot)
+  })
+})
+
+/** 手工构造一份 v4 存档：承载字段是**纯日期**（带时刻之前） */
+function v4Save() {
+  const now = '2026-03-01T00:00:00.000Z'
+  return {
+    schemaVersion: 4,
+    updatedAt: now,
+    project: {
+      id: 'proj_v4',
+      name: '带时刻之前',
+      schemaVersion: 4,
+      startDate: '2026-03-02',
+      endDate: '2026-06-30',
+      statusDate: '2026-03-04',
+      schedulingDirection: 'forward',
+      calendarId: 'default',
+      calendars: {
+        default: {
+          id: 'default',
+          name: '标准日历',
+          workingDays: [true, true, true, true, true, false, false],
+          hoursPerDay: 8,
+          exceptions: {
+            '2026-03-17': { kind: 'holiday' },
+            '2026-04-06': { kind: 'custom', start: '2026-04-06', end: '2026-04-06' },
+          },
+        },
+      },
+      tasks: {
+        t1: {
+          id: 't1', name: '手动任务', parentId: null, childIds: [], kind: 'task',
+          duration: 2, scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-05' },
+          progress: 0, effortMode: 'fixedDuration', schedulingOrder: 'asap',
+          note: '', allowSplitting: false, priority: 0, delay: 0,
+        },
+        t2: {
+          id: 't2', name: '自动任务', parentId: null, childIds: [], kind: 'task',
+          duration: 1, scheduling: { mode: 'auto' }, progress: 0, effortMode: 'fixedDuration',
+          schedulingOrder: 'asap', note: '', allowSplitting: false, priority: 0, delay: 0,
+        },
+      },
+      rootIds: ['t1', 't2'],
+      dependencies: {},
+      resources: {
+        r1: { id: 'r1', name: '临时工', kind: 'staff', parentId: null, availability: 1,
+          availableFrom: '2026-03-10', availableUntil: '2026-04-01', cost: { currency: 'CNY' } },
+      },
+      assignments: {},
+      baselines: [
+        { id: 'bl1', name: '基线 1', createdAt: now,
+          entries: { t1: { name: '手动任务', start: '2026-03-05', finish: '2026-03-06' } } },
+      ],
+      activeBaselineId: 'bl1',
+      createdAt: now,
+      updatedAt: now,
+    },
+  }
+}
+
+describe('parsePersistedProject — v4 → v5 迁移', () => {
+  it('承载时刻的字段补上默认时刻（09:00 / 18:00）', () => {
+    const project = parsePersistedProject(v4Save())
+    expect(project.schemaVersion).toBe(5)
+    expect(project.startDate).toBe('2026-03-02T09:00')
+    expect(project.endDate).toBe('2026-06-30T18:00')
+    expect(project.statusDate).toBe('2026-03-04T18:00')
+    expect(project.tasks.t1.scheduling).toEqual({
+      mode: 'constraint', type: 'startOn', date: '2026-03-05T09:00',
+    })
+    expect(project.resources.r1.availableFrom).toBe('2026-03-10T09:00')
+    expect(project.resources.r1.availableUntil).toBe('2026-04-01T18:00')
+    expect(project.calendars.default.exceptions['2026-04-06']).toEqual({
+      kind: 'custom', start: '2026-04-06T09:00', end: '2026-04-06T18:00',
+    })
+  })
+
+  it('例外表的键与假日变体一字未动；auto 任务的 scheduling 保持原样', () => {
+    const project = parsePersistedProject(v4Save())
+    expect(Object.keys(project.calendars.default.exceptions)).toEqual(['2026-03-17', '2026-04-06'])
+    expect(project.calendars.default.exceptions['2026-03-17']).toEqual({ kind: 'holiday' })
+    expect(project.tasks.t2.scheduling).toEqual({ mode: 'auto' })
+  })
+
+  it('基线快照保持纯日期（不补时刻）—— 快照冻结在当时的日粒度', () => {
+    const project = parsePersistedProject(v4Save())
+    expect(project.baselines[0].entries.t1).toEqual({
+      name: '手动任务', start: '2026-03-05', finish: '2026-03-06',
+    })
+  })
+
+  it('v1 / v2 / v3 存档经逐跳链都能到 v5（四跳）', () => {
+    expect(parsePersistedProject(v1Save()).schemaVersion).toBe(5)
+    expect(parsePersistedProject(v2Save()).schemaVersion).toBe(5)
+    expect(parsePersistedProject(v3Save()).schemaVersion).toBe(5)
+  })
+
+  it('migrateV3ToV4 产出的是 v4 字面量，而不是 SCHEMA_VERSION（偏差 6）', () => {
+    expect(migrateV3ToV4(v3Save().project as never).schemaVersion).toBe(4)
+  })
+
+  it('迁移是纯函数：同一份输入跑两次结果逐字段相同且不改动入参', () => {
+    const raw = v4Save()
+    const snapshot = JSON.stringify(raw)
+    expect(parsePersistedProject(raw)).toEqual(parsePersistedProject(v4Save()))
     expect(JSON.stringify(raw)).toBe(snapshot)
   })
 })

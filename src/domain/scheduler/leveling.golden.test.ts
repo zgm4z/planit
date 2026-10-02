@@ -9,6 +9,7 @@ import {
 } from '../model/factories'
 import type { ComputedSchedule, Project, Task, TaskId } from '../model/types'
 import { runCpm } from './cpm'
+import { toDateStr } from '../calendar/dateTime'
 import { addWorkdays } from '../calendar/workdays'
 import { levelLeaves } from './leveling'
 
@@ -41,13 +42,15 @@ function solveCpm(project: Project): {
   const leaves = leavesOf(project)
   const calendar = project.calendars[project.calendarId]
   const durations = new Map(leaves.map((task) => [task.id, task.duration]))
+  // `runCpm` 的 `projectStart` 契约是 `DateStr`（边界 ① 在 `solve` 里归一）。
+  // v0.8 起 `project.startDate` 带时刻，须先 `toDateStr` 再喂给低层原语。
   const schedules = runCpm({
     tasks: leaves,
     dependencies: Object.values(project.dependencies),
     calendar,
     direction: project.schedulingDirection,
-    projectStart: project.startDate,
-    projectEnd: project.endDate,
+    projectStart: toDateStr(project.startDate),
+    projectEnd: project.endDate ? toDateStr(project.endDate) : undefined,
   })
   return { leaves, calendar, durations, schedules }
 }
