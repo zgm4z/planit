@@ -414,15 +414,33 @@
 }
 /* ── v0.7 日历视图 ─────────────────────────────── */
 .calendarView { display: flex; align-items: flex-start; min-height: 100%; }
-.calendarLeft { flex: 1 1 auto; min-width: 0; padding: var(--planit-sp-16); }
+// 左栏 = 「时间」本身（月网格 + 正常时数网格）。改成纵向 flex：块与块按 §2.1 组间 16px
+// 排，改掉此前靠零散 margin 拼出的间距（无节奏、也容易漏）。
+.calendarLeft {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--planit-sp-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-16);
+}
+// 右栏（280px）= 「例外」：自定义日列表 + 添加表单。同样按组间 16px 排。
 .calendarRight {
   flex: 0 0 280px;
   padding: var(--planit-sp-16);
   border-left: 1px solid var(--planit-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-16);
 }
-.calendarNav {
-  display: flex; align-items: center; gap: var(--planit-sp-8);
-  margin-bottom: var(--planit-sp-8);
+.calendarNav { display: flex; align-items: center; gap: var(--planit-sp-8); }
+// 「正常时数」区块标题与月网格之间留 §2.1 的**区块间 24px**（flex gap 已给 16，这里补 8）。
+.normalHoursTitle { margin-top: var(--planit-sp-8); }
+// 例外列表：行与行 6px（组内），不再靠零间距挤成一片。
+.calendarExceptionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-6);
 }
 // 月网格由 Mantine 的 `Calendar` 渲染（spec §6.1），日格是 `<button class="mantine-Day …">`。
 // 故这里不再有 `.calendarGrid` / `.calendarHead` / `.calendarDay` / `.calendarDayPad`
@@ -447,4 +465,125 @@
     border-left: 6px solid transparent;
     pointer-events: none;
   }
+}
+
+/* ── 正常时数网格（只读可视化，v0.8+）────────────────────────
+   星期几（横）× 小时（纵）。格子**不可点、不可拖、无 hover**（模型没有「几点到几点」，
+   点了没反应 —— 红线）。这里只管画：一块绿 = [START_HOUR, START_HOUR + hoursPerDay)。 */
+
+// 网格 + 它的编辑控件并排（§2.1 区块内组间 24px）。窄屏换行时控件落到网格下方。
+.normalHours {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--planit-sp-24);
+}
+
+// 编辑控件（工作日复选框 + 每日工时）—— 模型的数据源，网格只是它的投影。
+.normalHoursControls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-8);
+  min-width: 200px;
+}
+
+// 每日工时输入：数字框不铺满整列（一个 1–24 的数不需要 300px 宽），给它一个定宽。
+.hoursPerDayInput { width: 140px; }
+
+// 只读说明。元数据层（§1.2）：xs / --text-faint。「未配置给原因」的同款做法 ——
+// 点明这是投影，用户不会对着网格找编辑入口。
+.normalHoursHint {
+  font-size: var(--planit-fs-xs);
+  line-height: 1.5;
+  color: var(--planit-text-faint);
+  max-width: 26em;
+}
+
+// `--hour-row` 是**唯一**的「一行一小时多少 px」的真相：格子高度与绿块几何都从它算。
+// 24 行 × 13px ≈ 312px —— 铺满 00–23（判断点 1）也仍在一屏可读的高度内。
+.normalHoursGrid {
+  --hour-row: 13px;
+  display: grid;
+  // 第一列是小时轴的窄槽，其余 7 列等宽（每天一列）。
+  grid-template-columns: 26px repeat(7, minmax(0, 1fr));
+  min-width: 340px;
+  border: 1px solid var(--planit-border);
+  border-radius: 3px; // 与任务条同档（§8 反面清单否掉的是大圆角卡片，不是 3px）
+  overflow: hidden; // 让四角圆角裁掉网格线与绿块
+  background: var(--planit-bg-surface);
+  user-select: none; // 只读图表，不选框选文字
+}
+
+// 表头行：左上角空位 + 七个星期名。micro / 500 / --text-muted（§1.1 列头体例），
+// 下沿一条强描边（--border-strong），与 TimeRuler 的表头同款。
+.normalHoursCorner,
+.normalHoursDay {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--planit-fs-micro);
+  font-weight: 500;
+  color: var(--planit-text-muted);
+  border-bottom: 1px solid var(--planit-border-strong);
+  // 列分隔线延伸到表头，与下方每列的左边界对齐（否则列线到表头就断了）。
+  border-left: 1px solid var(--planit-border);
+}
+
+// 小时轴：24 个 0..23 的标签，各占一行（行高与格子同源）。
+.normalHoursHourAxis {
+  display: grid;
+  grid-auto-rows: var(--hour-row);
+}
+
+.normalHoursHour {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: var(--planit-sp-4);
+  font-size: var(--planit-fs-micro);
+  font-variant-numeric: tabular-nums; // §1.3：09 与 10 左右对齐
+  color: var(--planit-text-faint);
+}
+
+// 一天一列：24 个格子 + 一块绿（绝对定位覆盖在格子上）。
+// `position: relative` 是绿块的定位基准 —— 绿块的 top/height 以本列为原点算。
+.normalHoursDayCol {
+  position: relative;
+  display: grid;
+  grid-auto-rows: var(--hour-row);
+  border-left: 1px solid var(--planit-border);
+}
+
+// 一格 = 一小时。底线即小时格线。
+.normalHoursCell {
+  height: var(--hour-row);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--planit-border);
+}
+
+// 绿块：一个上班日一条，跨过若干行（含格线）→ 读作**一整块**实心绿，
+// 而不是若干被线切开的小方块（参照里就是一块）。
+//
+// 几何只在这里算一次：--from（起始小时）与 --rows（行数）由组件内联给两个**整数**，
+// 乘上 --hour-row 得像素 —— JS 因此不必知道一行多少 px，与 SCSS 不会各持一份真相。
+//
+// 颜色用 --planit-positive（既有绿色令牌，此前无人消费 → 不存在「同一支绿两处定义」）。
+// ⚠️ 语义上它是「信号 · 已完成」，此处借作「上班时段」；§4.2「结构层用中性色」与本条
+// 有张力 —— 但参照与需求都明确要绿色，且日历视图内高饱和色仍只有绿 + 靛蓝两种（≤2）。
+.normalHoursBlock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--from) * var(--hour-row));
+  height: calc(var(--rows) * var(--hour-row));
+  background: var(--planit-positive);
+  pointer-events: none; // 纯展示：不接收任何指针事件（更不可能被点动）
+}
+
+// 例外添加表单：右栏只有 280px，四个控件横排会挤成一团 → 竖排，标签到控件组内 6px。
+.exceptionForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--planit-sp-6);
 }

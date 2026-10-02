@@ -277,6 +277,8 @@
     "customDays": "カスタム日",
     "noExceptions": "例外日はまだありません。",
     "normalHours": "標準稼働時間",
+    "normalHoursGridLabel": "週の標準稼働時間グリッド（読み取り専用）",
+    "normalHoursHint": "読み取り専用のプレビュー。緑＝稼働時間帯（隣のコントロール「稼働日 / 1日の稼働時間」で設定）。",
     "hoursPerDay": "1日の稼働時間",
     "addException": "例外を追加",
     "rangeStart": "開始",

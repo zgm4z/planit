@@ -12,15 +12,20 @@ import { useProjectStore } from '../../store/projectStore'
 import { shiftMonth } from '../shared/calendarGrid'
 import { groupExceptions } from '../shared/groupExceptions'
 import { formatDate } from '../shared/format'
+import { WEEKDAY_KEYS } from '../shared/normalHours'
+import { NormalHoursGrid } from './NormalHoursGrid'
 import styles from '../styles/ProjectView.module.scss'
 // 区块类（blockTitle / weekdays / exceptionRow / exceptionDate / exceptionKind）原来由
 // CalendarSettings 用 Chrome.module.scss 提供，这里原样复用，避免两处各写一份样式。
 import chrome from '../styles/Chrome.module.scss'
 
-const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-
 /**
  * 视图 A：项目日历（spec §5）。
+ *
+ * 布局（判断点 1 的落点）：**左栏**放「时间」本身 —— 月网格 + 正常时数网格（含它的
+ * 编辑控件）；**右栏**（280px 固定）放「例外」—— 自定义日列表与添加表单。左=周期规则、
+ * 右=具体日期，是同一种划分。原先「正常时数」的复选框与每日工时输入在右栏，本次随
+ * 网格一起搬到左栏网格旁（硬约束：编辑控件必须留在网格旁边）。
  *
  * 「正常时数」区块**保留 `data-testid="calendar-settings"`** 并承载那七个工作日复选框 ——
  * 既有 e2e（regression / acceptance）靠它定位复选组，保留可让它们只改「怎么到达日历」。
@@ -138,8 +143,70 @@ export function CalendarView() {
           />
         </div>
 
+        {/* 保留 calendar-normal-hours-title 文案 testid（e2e 用它断言「文案跟随语言」）。
+            区块内容 = **只读网格** + 它的编辑控件。网格本身一格都不可点（模型没有时刻，
+            点了没反应 —— 见 NormalHoursGrid 的注释）；能改的仍是右面那七个复选框与
+            每日工时输入 —— 网格是它们的投影。 */}
+        <Text
+          className={`${chrome.blockTitle} ${styles.normalHoursTitle}`}
+          data-testid="calendar-normal-hours-title"
+        >
+          {t('calendarView.normalHours')}
+        </Text>
+        <div className={styles.normalHours}>
+          <NormalHoursGrid calendar={calendar} />
+
+          <div className={styles.normalHoursControls}>
+            {/* 说明性文字（§3.3「未配置给原因」的同类做法）：点明这是只读投影，
+                免得用户对着网格找编辑入口。它同时解释了绿块从哪来。 */}
+            <Text className={styles.normalHoursHint}>{t('calendarView.normalHoursHint')}</Text>
+
+            {/* 保留 calendar-settings 这个 testid：既有 e2e 靠它定位七个工作日复选框。
+                WEEKDAY_KEYS 的顺序即 workingDays 的索引序（周一打头）—— 与网格横轴同源。 */}
+            <div className={chrome.weekdays} data-testid="calendar-settings">
+              {WEEKDAY_KEYS.map((key, index) => (
+                <Checkbox
+                  key={key}
+                  size="xs"
+                  label={t(`calendar.weekdays.${key}`)}
+                  checked={calendar.workingDays[index]}
+                  onChange={(event) => {
+                    const next = [...calendar.workingDays] as typeof calendar.workingDays
+                    next[index] = event.currentTarget.checked
+                    dispatch({
+                      type: 'calendar.setWorkingDays',
+                      label: 'commands.calendar.setWorkingDays',
+                      payload: { calendarId: calendar.id, workingDays: next },
+                    })
+                  }}
+                />
+              ))}
+            </div>
+
+            <Text className={chrome.blockTitle}>{t('calendarView.hoursPerDay')}</Text>
+            <NumberInput
+              size="xs"
+              min={1}
+              className={styles.hoursPerDayInput}
+              data-testid="calendar-hours-per-day"
+              value={calendar.hoursPerDay}
+              onChange={(value) =>
+                dispatch({
+                  type: 'calendar.setHoursPerDay',
+                  label: 'commands.calendar.setHoursPerDay',
+                  payload: { hoursPerDay: Number(value) || 1 },
+                })
+              }
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 右栏（280px）：具体的「例外日期」—— 列表 + 添加表单。
+          与左栏的「周期规则」（哪些天上班 / 每天几小时）分开：一个是模板，一个是特例。 */}
+      <section className={styles.calendarRight}>
         <Text className={chrome.blockTitle}>{t('calendarView.customDays')}</Text>
-        <div data-testid="calendar-exception-list">
+        <div className={styles.calendarExceptionList} data-testid="calendar-exception-list">
           {ranges.length === 0 ? (
             <Text fz="xs" c="dimmed">{t('calendarView.noExceptions')}</Text>
           ) : (
@@ -172,52 +239,11 @@ export function CalendarView() {
             ))
           )}
         </div>
-      </section>
-
-      <section className={styles.calendarRight}>
-        {/* 保留 calendar-settings 这个 testid：既有 e2e 靠它定位七个工作日复选框。
-            区块标题另给一个 testid：e2e 用它断言「文案跟随语言」。它取代了已删的
-            CalendarSettings 里那个 t('calendar.title') 标题（那个键已随之删除）。 */}
-        <Text className={chrome.blockTitle} data-testid="calendar-normal-hours-title">
-          {t('calendarView.normalHours')}
-        </Text>
-        <div className={chrome.weekdays} data-testid="calendar-settings">
-          {WEEKDAY_KEYS.map((key, index) => (
-            <Checkbox
-              key={key}
-              size="xs"
-              label={t(`calendar.weekdays.${key}`)}
-              checked={calendar.workingDays[index]}
-              onChange={(event) => {
-                const next = [...calendar.workingDays] as typeof calendar.workingDays
-                next[index] = event.currentTarget.checked
-                dispatch({
-                  type: 'calendar.setWorkingDays',
-                  label: 'commands.calendar.setWorkingDays',
-                  payload: { calendarId: calendar.id, workingDays: next },
-                })
-              }}
-            />
-          ))}
-        </div>
-
-        <Text className={chrome.blockTitle}>{t('calendarView.hoursPerDay')}</Text>
-        <NumberInput
-          size="xs"
-          min={1}
-          data-testid="calendar-hours-per-day"
-          value={calendar.hoursPerDay}
-          onChange={(value) =>
-            dispatch({
-              type: 'calendar.setHoursPerDay',
-              label: 'commands.calendar.setHoursPerDay',
-              payload: { hoursPerDay: Number(value) || 1 },
-            })
-          }
-        />
 
         <Text className={chrome.blockTitle}>{t('calendarView.addException')}</Text>
-        <div className={chrome.exceptionRow}>
+        {/* 右栏只有 280px 宽，四个控件横排会挤成一团（原来在宽左栏里是一行）。
+            改为**竖排**：标签到控件仍是组内 6px（§2.1）。 */}
+        <div className={styles.exceptionForm}>
           {/* 这两处用 `DatePickerInput` 而**不是** `DateTimePicker`（计划「偏差 2」）：
               区间例外的命令 `calendar.addExceptionRange` **按日展开**（逐日写单日条目，
               payload 的 start / end 是 `DateStr`）。用带时刻的控件会让用户选出的时刻

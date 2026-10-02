@@ -280,6 +280,8 @@
     "customDays": "自定义日",
     "noExceptions": "还没有例外日期。",
     "normalHours": "正常时数",
+    "normalHoursGridLabel": "每周正常时数网格（只读）",
+    "normalHoursHint": "只读预览。绿色 = 上班时段，由旁边的控件（工作日 / 每日工时）决定。",
     "hoursPerDay": "每日工时（小时）",
     "addException": "添加例外",
     "rangeStart": "开始",

@@ -277,6 +277,8 @@
     "customDays": "Custom days",
     "noExceptions": "No exception days yet.",
     "normalHours": "Normal hours",
+    "normalHoursGridLabel": "Weekly normal hours grid (read-only)",
+    "normalHoursHint": "Read-only preview. Green marks working hours, set by the controls beside it (working days / hours per day).",
     "hoursPerDay": "Hours per day",
     "addException": "Add exception",
     "rangeStart": "Start",
