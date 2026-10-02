@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MantineProvider } from '@mantine/core'
 
 import zhCN from '../../i18n/locales/zh-CN.json'
@@ -30,6 +30,43 @@ function renderView() {
 const exceptions = () => useProjectStore.getState().project!.calendars.default.exceptions
 const calendar = () => useProjectStore.getState().project!.calendars.default
 
+/**
+ * 从「今天所在月」回到夹具的 2026-03 需要翻多少个月。
+ * 区间例外的两个控件是**局部状态**（初始为空），空值 DateTimePicker 打开的是今天
+ * 所在月 —— 故这里按真实时钟算差值再翻月，断言值（2026-03-*）与时钟无关。
+ */
+const MONTHS_BACK_TO_FIXTURE_MONTH = (() => {
+  const now = new Date()
+  return now.getFullYear() * 12 + now.getMonth() - (2026 * 12 + 2)
+})()
+
+/**
+ * 打开 `DateTimePicker` 浮层，翻到 2026-03，点选该月的某一天。
+ * Mantine 9 的 `DateTimePicker` 是打开浮层的 `<button>`（`valueFormat` 只管显示），
+ * 对按钮派发 change 无效 —— 必须点开日历再点日格。
+ */
+async function pickDayInMarch2026(handle: HTMLElement, day: number): Promise<void> {
+  fireEvent.click(handle)
+  // 按 aria-controls 精确定位**本控件**的浮层（两个控件可能同时开着）
+  const dropdown = await waitFor(() => {
+    const id = handle.getAttribute('aria-controls')
+    const el = id ? document.getElementById(id) : null
+    if (!el) throw new Error('date picker dropdown did not open')
+    return el
+  })
+  for (let i = 0; i < MONTHS_BACK_TO_FIXTURE_MONTH; i += 1) {
+    const prev = dropdown.querySelector('button[data-direction="previous"]')
+    if (!prev) throw new Error('prev-month control not found')
+    fireEvent.click(prev)
+  }
+  // 排除相邻月的「补白日」（data-outside），否则点 25 可能命中 2 月 25 日
+  const cell = Array.from(dropdown.querySelectorAll('table button')).find(
+    (button) => button.textContent === String(day) && !button.hasAttribute('data-outside'),
+  )
+  if (!cell) throw new Error(`day cell ${day} not found in 2026-03`)
+  fireEvent.click(cell)
+}
+
 beforeEach(async () => {
   __resetRegistryForTests()
   initCommands()
@@ -57,12 +94,12 @@ describe('日历视图（视图 A）', () => {
     expect(calendar().workingDays).toEqual([true, true, true, true, false, false, false])
   })
 
-  it('按区间添加「假日」→ 逐日条目；列表聚合成一条区间；一次 dispatch 一条命令', () => {
+  it('按区间添加「假日」→ 逐日条目；列表聚合成一条区间；一次 dispatch 一条命令', async () => {
     renderView()
     const undoBefore = useProjectStore.getState().undoStack.length
 
-    fireEvent.change(screen.getByTestId('calendar-range-start'), { target: { value: '2026-03-16' } })
-    fireEvent.change(screen.getByTestId('calendar-range-end'), { target: { value: '2026-03-20' } })
+    await pickDayInMarch2026(screen.getByTestId('calendar-range-start'), 16)
+    await pickDayInMarch2026(screen.getByTestId('calendar-range-end'), 20)
     fireEvent.click(screen.getByTestId('calendar-range-submit'))
 
     expect(Object.keys(exceptions()).sort()).toEqual([
@@ -76,10 +113,10 @@ describe('日历视图（视图 A）', () => {
     expect(screen.getByTestId('calendar-exception-row-2026-03-16')).toHaveTextContent('2026-03-16 → 2026-03-20')
   })
 
-  it('删除一条区间例外 → 区间内每一天都被清掉', () => {
+  it('删除一条区间例外 → 区间内每一天都被清掉', async () => {
     renderView()
-    fireEvent.change(screen.getByTestId('calendar-range-start'), { target: { value: '2026-03-16' } })
-    fireEvent.change(screen.getByTestId('calendar-range-end'), { target: { value: '2026-03-17' } })
+    await pickDayInMarch2026(screen.getByTestId('calendar-range-start'), 16)
+    await pickDayInMarch2026(screen.getByTestId('calendar-range-end'), 17)
     fireEvent.click(screen.getByTestId('calendar-range-submit'))
 
     fireEvent.click(screen.getByTestId('calendar-exception-remove-2026-03-16'))
@@ -136,13 +173,13 @@ describe('日历编辑驱动排期（承接已删的 CalendarSettings 用例）'
     expect(finishOf(bId)).toBe('2026-03-09') // 排期**真的**重算了
   })
 
-  it('把 03-03 设为假日 → 排期跳过该日，A 顺延到 03-05', () => {
+  it('把 03-03 设为假日 → 排期跳过该日，A 顺延到 03-05', async () => {
     const { aId } = fixtureWithDependency()
     renderView()
 
     expect(finishOf(aId)).toBe('2026-03-04')
 
-    fireEvent.change(screen.getByTestId('calendar-range-start'), { target: { value: '2026-03-03' } })
+    await pickDayInMarch2026(screen.getByTestId('calendar-range-start'), 3)
     fireEvent.click(screen.getByTestId('calendar-range-submit'))
 
     expect(exceptions()['2026-03-03']).toEqual({ kind: 'holiday' })

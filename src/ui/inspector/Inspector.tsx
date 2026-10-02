@@ -36,6 +36,11 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore, type InspectorTab } from '../../store/viewStore'
 import { DEFAULT_OPEN_GROUPS, INSPECTOR_GROUPS, type InspectorGroupKey } from './inspectorGroups'
 import { resolveScheduleDates } from '../shared/scheduleDates'
+import {
+  DEFAULT_FINISH_TIME,
+  DEFAULT_START_TIME,
+  ensureDateTime,
+} from '../../domain/calendar/dateTime'
 import { AssignmentSection } from './AssignmentSection'
 import {
   DateField,
@@ -686,8 +691,14 @@ function ScheduleGroup({
 
   const startEditable = !isSummary && startType !== null
   const finishEditable = !isSummary && finishType !== null
-  const startValue = startType ? constraint!.date : (dates?.start ?? '')
-  const finishValue = finishType ? constraint!.date : (dates?.finish ?? '')
+  // 约束日期已带时刻（Task 3 起是 DateTimeStr）；派生排期是纯日期（引擎产物），
+  // 显示前补默认时刻 —— 于是「开始」显示 09:00、「结束」显示 18:00，与 §4 的默认时刻表一致。
+  const startValue = startType
+    ? constraint!.date
+    : ensureDateTime(dates?.start ?? '', DEFAULT_START_TIME)
+  const finishValue = finishType
+    ? constraint!.date
+    : ensureDateTime(dates?.finish ?? '', DEFAULT_FINISH_TIME)
   const schedId = useId()
 
   return (
@@ -724,8 +735,10 @@ function ScheduleGroup({
                 scheduling: {
                   mode: 'constraint',
                   type: value as ConstraintType,
-                  // 新约束的日期取「用户看到的开始日」，与下方字段同口径
-                  date: dates?.start ?? project.startDate,
+                  // 新约束的日期取「用户看到的开始日」，与下方字段同口径。
+                  // 播种的值必须是带时刻的 —— 与 §2.2 的类型契约一致（纯日期只是
+                  // 靠下游 toDateStr 兜底，不该把「未归一」的形状写进 store）。
+                  date: ensureDateTime(dates?.start ?? project.startDate, DEFAULT_START_TIME),
                 },
               },
             })

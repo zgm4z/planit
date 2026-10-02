@@ -80,12 +80,8 @@ export function formatCost(value: number): string | null {
   return rounded === null ? null : groupThousands(rounded)
 }
 
-/** `YYYY-MM-DD` 的判定（DateField 用它决定「这段输入能不能落盘」） */
+/** `YYYY-MM-DD` 的形状判定，只供 formatDate 复用（「能不能落盘」的闸门已迁回 dateTime.ts） */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-
-export function isDateInput(value: string): boolean {
-  return DATE_RE.test(value)
-}
 
 /**
  * 日期一律 `YYYY-MM-DD` 呈现（§1.3）。

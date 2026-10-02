@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MantineProvider } from '@mantine/core'
 
@@ -27,6 +27,30 @@ function renderPanel() {
       <ResourceInspector />
     </MantineProvider>,
   )
+}
+
+/**
+ * 驱动 `DateTimePicker` 的弹出日历，点选**当前显示月份**里的某一天。
+ * Mantine 9 的 `DateTimePicker` 是打开弹出层的 `<button>`（`valueFormat` 只管
+ * 显示），对按钮派发 change 无效 —— 必须先点开再点日历格。（详见 Inspector.test.tsx）
+ */
+async function pickDay(handle: HTMLElement, day: number): Promise<void> {
+  fireEvent.click(handle)
+  // 按 aria-controls 精确定位**本控件**的浮层：多个 DateTimePicker 的浮层可能同时
+  // 挂在 DOM 里（选中一天后浮层不自动关闭），用 document.querySelector 会拿错那个。
+  const dropdown = await waitFor(() => {
+    const id = handle.getAttribute('aria-controls')
+    const el = id ? document.getElementById(id) : null
+    if (!el) throw new Error('date picker dropdown did not open')
+    return el
+  })
+  // 排除相邻月的「补白日」：Mantine 会渲染上/下月的日子并标 data-outside，
+  // 否则三月视图里点 25 可能命中补白格（2 月 25 日）。
+  const cell = Array.from(dropdown.querySelectorAll('table button')).find(
+    (button) => button.textContent === String(day) && !button.hasAttribute('data-outside'),
+  )
+  if (!cell) throw new Error(`day cell ${day} not found in the displayed month`)
+  fireEvent.click(cell)
 }
 
 beforeEach(async () => {
@@ -84,13 +108,32 @@ describe('资源面板', () => {
     expect(useProjectStore.getState().project!.resources[resourceId].availability).toBeCloseTo(0.5)
   })
 
-  it('可用期间写回 availableFrom / availableUntil', () => {
+  it('可用期间写回 availableFrom / availableUntil', async () => {
+    // 先种一个可用期：DateTimePicker 打开的是「已存值所在月」（2026-03），
+    // 点选结果因此与真实时钟无关（空值控件打开的是今天所在月）。
+    const project = useProjectStore.getState().project!
+    useProjectStore.setState({
+      project: {
+        ...project,
+        resources: {
+          ...project.resources,
+          [resourceId]: {
+            ...project.resources[resourceId],
+            availableFrom: '2026-03-05T09:00',
+            availableUntil: '2026-03-20T18:00',
+          },
+        },
+      },
+    })
     renderPanel()
-    fireEvent.change(screen.getByLabelText('可用起始'), { target: { value: '2026-03-10' } })
-    fireEvent.change(screen.getByLabelText('可用结束'), { target: { value: '2026-04-01' } })
+
+    // 保留原有时刻：起始 09:00、结束 18:00（§4 默认时刻表）
+    await pickDay(screen.getByLabelText('可用起始'), 10)
+    await pickDay(screen.getByLabelText('可用结束'), 25)
+
     expect(useProjectStore.getState().project!.resources[resourceId]).toMatchObject({
-      availableFrom: '2026-03-10',
-      availableUntil: '2026-04-01',
+      availableFrom: '2026-03-10T09:00',
+      availableUntil: '2026-03-25T18:00',
     })
   })
 

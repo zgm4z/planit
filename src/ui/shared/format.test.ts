@@ -7,7 +7,6 @@ import {
   formatEffort,
   formatHours,
   formatPercent,
-  isDateInput,
 } from './format'
 
 /**
@@ -97,15 +96,5 @@ describe('formatDate（一律 YYYY-MM-DD）', () => {
     expect(formatDate(undefined)).toBeNull()
     expect(formatDate('2026/09/14')).toBeNull()
     expect(formatDate('下周三')).toBeNull()
-  })
-})
-
-describe('isDateInput（DateField 的落盘闸门）', () => {
-  it('只接受完整的 YYYY-MM-DD', () => {
-    expect(isDateInput('2026-03-02')).toBe(true)
-    expect(isDateInput('2026-3-2')).toBe(false)
-    expect(isDateInput('2026-03-02x')).toBe(false)
-    expect(isDateInput('')).toBe(false)
-    expect(isDateInput('26-03-02')).toBe(false)
   })
 })
