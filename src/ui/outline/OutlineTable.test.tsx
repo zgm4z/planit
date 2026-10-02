@@ -188,7 +188,7 @@ describe('OutlineTable 的列菜单', () => {
 })
 
 describe('OutlineTable 的列宽手柄', () => {
-  it('每个可见列恰好一个手柄，带 aria-label（含列名）', () => {
+  it('每个可见列恰好一个手柄、在所属表头单元格内部，且带含列名的 aria-label', () => {
     renderTable()
 
     const handles = screen.getAllByTestId(/^outline-resizer-/)
@@ -201,6 +201,18 @@ describe('OutlineTable 的列宽手柄', () => {
       .map((cell) => cell.getAttribute('data-testid')!.slice('outline-col-'.length))
     for (const key of headerKeys) {
       expect(screen.getByTestId(`outline-resizer-${key}`), key).toBeInTheDocument()
+    }
+
+    // 手柄必须在**所属表头单元格内部** —— `.outlineHeaderCell` 有 overflow: hidden
+    // （给文字省略号用的），手柄靠 position: absolute 贴在单元格右缘的内部。
+    // 若有人把它提成单元格的兄弟节点，上面的计数与按键存在性断言**照样全绿**，
+    // 但浏览器里它已脱出裁剪范围。jsdom 不做布局，只有包含性断言看得见这件事。
+    for (const key of headerKeys) {
+      const cell = screen.getByTestId(`outline-col-${key}`)
+      expect(
+        cell.contains(screen.getByTestId(`outline-resizer-${key}`)),
+        `${key} 的手柄不在它的表头单元格内部`,
+      ).toBe(true)
     }
   })
 
