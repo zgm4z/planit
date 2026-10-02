@@ -8,7 +8,13 @@ import type {
   TaskId,
 } from '../model/types'
 import type { ResourceBounds } from './effort'
-import { snapToWorkday, taskFinish, taskStart, workdaysBetween } from '../calendar/workdays'
+import {
+  snapToWorkday,
+  snapToWorkdayOrPrevious,
+  taskFinish,
+  taskStart,
+  workdaysBetween,
+} from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
 import { buildGraph } from './graph'
 import { backwardBound, forwardBound } from './constraints'
@@ -37,6 +43,9 @@ export interface CpmInput {
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
   const { tasks, dependencies, calendar, direction, projectStart, projectEnd, resourceBounds } = input
+  const latestProjectEnd = projectEnd
+    ? snapToWorkdayOrPrevious(projectEnd, calendar)
+    : undefined
 
   const graph = buildGraph(tasks, dependencies) // 可能抛出 CycleError
   const byId = new Map(tasks.map((task) => [task.id, task]))
@@ -99,7 +108,10 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 
       // 资源可用期的结束上界（availableUntil）—— 与任务自身的约束取较早者
       const latest = resourceBounds?.[id]?.latestFinish
-      if (latest && latest < finish) finish = latest
+      if (latest) {
+        const latestWorkday = snapToWorkdayOrPrevious(latest, calendar)
+        if (latestWorkday < finish) finish = latestWorkday
+      }
 
       for (const dep of graph.outgoing.get(id) ?? []) {
         const bound = backwardBound({
@@ -135,11 +147,14 @@ export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
 
   let reverseAnchor: DateStr
   if (direction === 'backward') {
-    reverseAnchor = projectEnd ?? forwardFinish
+    reverseAnchor = latestProjectEnd ?? forwardFinish
   } else {
     // forward 下 projectEnd 是「最晚必须完成」的期限：比算出的完成日更早时
     // 以它为准逆推，slack 自然变负，detectConflicts 会如实报出来。
-    reverseAnchor = projectEnd !== undefined && projectEnd < forwardFinish ? projectEnd : forwardFinish
+    reverseAnchor =
+      latestProjectEnd !== undefined && latestProjectEnd < forwardFinish
+        ? latestProjectEnd
+        : forwardFinish
   }
 
   const { lateStart, lateFinish } = backwardPass(reverseAnchor)
@@ -241,11 +256,13 @@ function constraintUpperBound(task: Task, cal: Calendar, projectFinish: DateStr)
   const date = toDateStr(task.scheduling.date)
   switch (type) {
     case 'finishOn':
-    case 'finishNoLaterThan':
       return date
+    case 'finishNoLaterThan':
+      return snapToWorkdayOrPrevious(date, cal)
     case 'startOn':
-    case 'startNoLaterThan':
       return taskFinish(date, task.duration, cal)
+    case 'startNoLaterThan':
+      return taskFinish(snapToWorkdayOrPrevious(date, cal), task.duration, cal)
     case 'startNoEarlierThan':
     case 'finishNoEarlierThan':
       return projectFinish

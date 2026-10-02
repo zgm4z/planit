@@ -41,6 +41,18 @@ export function snapToWorkday(iso: DateStr, cal: Calendar): DateStr {
   return isWorkday(iso, cal) ? iso : nextWorkday(iso, cal)
 }
 
+/** 上界归一：保留工作日，否则向前吸附到最近的工作日（当日或之前）。 */
+export function snapToWorkdayOrPrevious(iso: DateStr, cal: Calendar): DateStr {
+  let cursor = iso
+  for (let i = 0; i < MAX_SCAN_DAYS; i += 1) {
+    if (isWorkday(cursor, cal)) return cursor
+    cursor = addDays(cursor, -1)
+  }
+  throw new Error(
+    `snapToWorkdayOrPrevious: 从 ${iso} 起扫描 ${MAX_SCAN_DAYS} 天未找到工作日，请检查日历配置`,
+  )
+}
+
 /**
  * 在 `iso` 基础上推进 `n` 个工作日。`n` 可为负。
  * 起点若落在非工作日，先吸附到下一个工作日再计数。

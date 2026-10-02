@@ -12,6 +12,7 @@ import type {
 } from '../model/types'
 import { assignmentUnits } from '../model/units'
 import { toDateStr } from '../calendar/dateTime'
+import { snapToWorkdayOrPrevious } from '../calendar/workdays'
 
 /**
  * 一个任务的**资源可用期边界**：全部受约束资源的交集。
@@ -39,7 +40,10 @@ export function resourceBounds(project: Project, taskId: TaskId): ResourceBounds
     // 可用期是承载时刻的字段：取交集前先抹掉时刻（`toDateStr` 对纯日期恒等），
     // 否则带时刻的下界 / 上界进入 `>` / `<` 与后续 `addWorkdays` 会静默错。
     const from = resource.availableFrom ? toDateStr(resource.availableFrom) : undefined
-    const until = resource.availableUntil ? toDateStr(resource.availableUntil) : undefined
+    const calendar = project.calendars[project.calendarId]
+    const until = resource.availableUntil
+      ? snapToWorkdayOrPrevious(toDateStr(resource.availableUntil), calendar)
+      : undefined
 
     if (from && (earliestStart === undefined || from > earliestStart)) {
       earliestStart = from

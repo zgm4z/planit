@@ -200,6 +200,21 @@ describe('黄金判据 4：资源可用期间之外不被分配', () => {
   })
 })
 
+describe('黄金判据：周末项目截止日仍是硬上界', () => {
+  it('forward 截止日为周六但工期延至周一时保留负浮时', () => {
+    const { project, tasks } = projectWithChain([6])
+    project.endDate = '2026-03-07T18:00'
+
+    const result = solve(project)
+    const schedule = result.schedules[tasks[0].id]
+
+    expect(schedule.earlyFinish).toBe('2026-03-09')
+    expect(schedule.lateFinish).toBe('2026-03-06')
+    expect(schedule.totalSlack).toBe(-1)
+    expect(result.conflicts).toHaveLength(1)
+  })
+})
+
 describe('黄金判据 5：分配变更后下游重排正确', () => {
   it('给 T1 加一人使其工期缩短 → 后继 T2 的日期跟着提前', () => {
     const { project, tasks } = projectWithChain([1, 2])

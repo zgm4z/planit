@@ -109,6 +109,20 @@ describe('resourceBounds（可用期 → 排期边界）', () => {
     p.assignments[asg.id] = asg
     expect(resourceBounds(p, t)).toEqual({})
   })
+
+  it('availableUntil 落在周末时 latestFinish 归一到前一工作日', () => {
+    const p = project()
+    const t = addTask(p, createTask({ name: 'T' }))
+    const resource = {
+      ...createResource({ name: 'R' }),
+      availableUntil: '2026-03-07T18:00',
+    }
+    p.resources[resource.id] = resource
+    const assignment = createAssignment({ taskId: t, resourceId: resource.id })
+    p.assignments[assignment.id] = assignment
+
+    expect(resourceBounds(p, t).latestFinish).toBe('2026-03-06')
+  })
 })
 
 describe('collectCosts（成本派生）', () => {

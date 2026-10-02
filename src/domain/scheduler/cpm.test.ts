@@ -545,3 +545,109 @@ describe('runCpm — 自由宽延', () => {
     expect(r.A.totalSlack).toBe(2)
   })
 })
+
+describe('runCpm — 非工作日上界', () => {
+  const cal = createCalendar()
+
+  it('forward projectEnd 落在周六时向前归一并保留期限冲突', () => {
+    const result = runCpm({
+      tasks: [mk('T', 6)],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+      projectEnd: '2026-03-07',
+    })
+
+    expect(result.T.lateFinish).toBe('2026-03-06')
+    expect(result.T.totalSlack).toBe(-1)
+  })
+
+  it('backward projectEnd 落在周六时 ASAP 任务不排到下周一', () => {
+    const result = runCpm({
+      tasks: [mk('T', 1)],
+      dependencies: [],
+      calendar: cal,
+      direction: 'backward',
+      projectStart: '2026-03-02',
+      projectEnd: '2026-03-07',
+    })
+
+    expect(result.T.scheduledFinish).toBe('2026-03-06')
+  })
+
+  it('finishNoLaterThan 周六与 ALAP 不会被推到周一', () => {
+    const task = {
+      ...mk('T', 1),
+      schedulingOrder: 'alap' as const,
+      scheduling: { mode: 'constraint' as const, type: 'finishNoLaterThan' as const, date: '2026-03-07' },
+    }
+    const result = runCpm({
+      tasks: [task],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+
+    expect(result.T.scheduledFinish).toBe('2026-03-06')
+  })
+
+  it('startNoLaterThan 周六先归一开始上界再推导最晚完成', () => {
+    const task = {
+      ...mk('T', 2),
+      schedulingOrder: 'alap' as const,
+      scheduling: { mode: 'constraint' as const, type: 'startNoLaterThan' as const, date: '2026-03-07' },
+    }
+    const result = runCpm({
+      tasks: [task],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+
+    expect(result.T.scheduledStart).toBe('2026-03-06')
+    expect(result.T.scheduledFinish).toBe('2026-03-09')
+  })
+
+  it('自定义周六工作日可作为 backward projectEnd', () => {
+    const customCalendar = createCalendar()
+    customCalendar.exceptions['2026-03-07'] = {
+      kind: 'custom',
+      start: '2026-03-07T09:00',
+      end: '2026-03-07T18:00',
+    }
+    const result = runCpm({
+      tasks: [mk('T', 1)],
+      dependencies: [],
+      calendar: customCalendar,
+      direction: 'backward',
+      projectStart: '2026-03-02',
+      projectEnd: '2026-03-07',
+    })
+
+    expect(result.T.scheduledFinish).toBe('2026-03-07')
+  })
+
+  it('startOn 与 finishOn 周末仍按既有规则向前吸附', () => {
+    const startOn = {
+      ...mk('S', 1),
+      scheduling: { mode: 'constraint' as const, type: 'startOn' as const, date: '2026-03-07' },
+    }
+    const finishOn = {
+      ...mk('F', 1),
+      scheduling: { mode: 'constraint' as const, type: 'finishOn' as const, date: '2026-03-07' },
+    }
+    const result = runCpm({
+      tasks: [startOn, finishOn],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+
+    expect(result.S.earlyStart).toBe('2026-03-09')
+    expect(result.F.earlyFinish).toBe('2026-03-09')
+  })
+})
