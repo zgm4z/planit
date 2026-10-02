@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { DEFAULT_VISIBLE_COLUMNS } from './columnKeys'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN, TITLE_COLUMN_WIDTH_MIN, DEFAULT_VISIBLE_COLUMNS } from './columnKeys'
 import {
+  COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS,
   OUTLINE_COLUMNS_STORAGE_KEY,
+  OUTLINE_COLUMN_WIDTHS_STORAGE_KEY,
+  loadColumnWidths,
   loadVisibleColumns,
+  normalizeColumnWidths,
   normalizeVisibleColumns,
   useViewStore,
   __resetViewStoreForTests,
@@ -168,5 +172,116 @@ describe('资源树的折叠态（v0.7）', () => {
     useViewStore.getState().toggleResourceCollapsed('resource_9')
     __resetViewStoreForTests()
     expect(useViewStore.getState().collapsedResourceIds.size).toBe(0)
+  })
+})
+
+describe('normalizeColumnWidths', () => {
+  it('过滤不认识的 key', () => {
+    expect(normalizeColumnWidths({ title: 300, 'ghost-column': 100 })).toEqual({ title: 300 })
+  })
+
+  it('**认识但禁用**的 key 保留 —— 与 visibleColumns 的口径刻意不同', () => {
+    // acwp 本版禁用（依赖「实际成本录入」，无数据源）。它出现在 visibleColumns
+    // 里会卡住一个关不掉的空列，所以那里必须过滤；而禁用列根本不渲染，一条宽度
+    // 只是死数据 —— 零危害，留着还能在该列将来解禁时原地复活用户的偏好。
+    // 别把两处「统一」成同一个口径，那是有意的分歧。
+    expect(normalizeColumnWidths({ acwp: 200 })).toEqual({ acwp: 200 })
+  })
+
+  it('非有限数被丢弃（NaN / Infinity / 字符串 / null）', () => {
+    // 它们会让 `flex: 0 0 NaNpx` 成为无效值，整列宽度塌回 auto
+    expect(
+      normalizeColumnWidths({ title: NaN, start: Infinity, finish: '300', duration: null }),
+    ).toEqual({})
+  })
+
+  it('越界值被 clamp', () => {
+    expect(normalizeColumnWidths({ start: 5, title: 5, finish: 99999 })).toEqual({
+      start: COLUMN_WIDTH_MIN,
+      title: TITLE_COLUMN_WIDTH_MIN,
+      finish: COLUMN_WIDTH_MAX,
+    })
+  })
+
+  it('非对象输入退回空表而不是抛错', () => {
+    expect(normalizeColumnWidths(null)).toEqual({})
+    expect(normalizeColumnWidths('title')).toEqual({})
+    expect(normalizeColumnWidths([1, 2])).toEqual({})
+  })
+})
+
+describe('loadColumnWidths', () => {
+  it('没有存档时是空表', () => {
+    expect(loadColumnWidths()).toEqual({})
+  })
+
+  it('非法 JSON 退回空表，绝不因此崩溃', () => {
+    localStorage.setItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY, '{oops')
+    expect(loadColumnWidths()).toEqual({})
+  })
+})
+
+describe('viewStore 的列宽（columnWidths）', () => {
+  it('默认空 —— 没拖过的列用 COLUMN_META 的默认宽', () => {
+    expect(useViewStore.getState().columnWidths).toEqual({})
+  })
+
+  it('setColumnWidth 写入并 clamp', () => {
+    useViewStore.getState().setColumnWidth('start', 140)
+    expect(useViewStore.getState().columnWidths).toEqual({ start: 140 })
+
+    useViewStore.getState().setColumnWidth('start', 5)
+    expect(useViewStore.getState().columnWidths.start).toBe(COLUMN_WIDTH_MIN)
+
+    useViewStore.getState().setColumnWidth('title', 5)
+    expect(useViewStore.getState().columnWidths.title).toBe(TITLE_COLUMN_WIDTH_MIN)
+  })
+
+  it('resetColumnWidth 删除 key —— 是删除，不是写回默认宽', () => {
+    // 这条钉住「复位」的语义：title 的 flex 来自 COLUMN_META 的默认值，覆盖值
+    // 一删 flex 就回来了（见 applyColumnWidths）。若实现写成
+    // `setColumnWidth(key, 默认宽)`，title 会变成固定 240px 的刚性列 ——
+    // 下面的 `in` 断言会红。
+    useViewStore.getState().setColumnWidth('title', 300)
+    expect('title' in useViewStore.getState().columnWidths).toBe(true)
+
+    useViewStore.getState().resetColumnWidth('title')
+    expect('title' in useViewStore.getState().columnWidths).toBe(false)
+  })
+
+  it('拖拽中的连续写入只落盘一次（debounce 200ms）', () => {
+    vi.useFakeTimers()
+    try {
+      const { setColumnWidth } = useViewStore.getState()
+      setColumnWidth('start', 100)
+      setColumnWidth('start', 110)
+      setColumnWidth('start', 120)
+
+      // 拖拽进行中：一次都没落盘
+      expect(localStorage.getItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY)).toBeNull()
+
+      vi.advanceTimersByTime(COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS)
+
+      expect(
+        JSON.parse(localStorage.getItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY)!),
+      ).toEqual({ start: 120 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('__resetViewStoreForTests 清空列宽并取消挂起的落盘（否则跨用例泄漏）', () => {
+    vi.useFakeTimers()
+    try {
+      useViewStore.getState().setColumnWidth('start', 200)
+      __resetViewStoreForTests()
+      expect(useViewStore.getState().columnWidths).toEqual({})
+
+      // 挂起的定时器若没被取消，会在下一个用例里写进 localStorage
+      vi.advanceTimersByTime(COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS)
+      expect(localStorage.getItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY)).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

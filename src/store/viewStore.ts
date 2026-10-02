@@ -3,7 +3,9 @@ import type { ResourceId, TaskId } from '../domain/model/types'
 import {
   DEFAULT_VISIBLE_COLUMNS,
   OUTLINE_COLUMN_KEYS,
+  clampColumnWidth,
   isEnabledOutlineColumnKey,
+  isOutlineColumnKey,
   type OutlineColumnKey,
 } from './columnKeys'
 import { useProjectStore } from './projectStore'
@@ -30,6 +32,86 @@ export type InspectorTab = 'task' | 'project' | 'resource'
  */
 export const OUTLINE_COLUMNS_STORAGE_KEY = 'planit.outlineColumns'
 
+/**
+ * 列宽的存储键。**与 `OUTLINE_COLUMNS_STORAGE_KEY` 分开，刻意不合并**：
+ *
+ *   1. 两件事互不牵连 —— 宽度 JSON 解析失败不该连带毁掉列可见性配置；
+ *   2. 旧版本代码读到**非数组**的 `outlineColumns` 会走 `normalizeVisibleColumns`
+ *      的 `Array.isArray` 分支静默退回默认，把用户的列配置清空。新 key 天然
+ *      向后兼容 —— 旧版本不认识它、新版本不认识旧格式，各自安好。
+ */
+export const OUTLINE_COLUMN_WIDTHS_STORAGE_KEY = 'planit.outlineColumnWidths'
+
+/** 落盘的去抖窗口（ms）。见 `persistColumnWidthsDebounced`。 */
+export const COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS = 200
+
+/** 用户拖过的列宽覆盖。**只记改过的列** —— 没记的列用 COLUMN_META 的默认宽 */
+export type ColumnWidths = Partial<Record<OutlineColumnKey, number>>
+
+/** 落盘去抖的挂起句柄。模块级单例 —— 拖拽是全局唯一的交互，不存在并发写。 */
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 归一化：只保留**认识**的 key 且数值合法的项。
+ *
+ * **与 `normalizeVisibleColumns` 的口径刻意不对称**（那里用
+ * `isEnabledOutlineColumnKey`，这里用 `isOutlineColumnKey`）：禁用列一旦出现在
+ * `visibleColumns` 里，会卡住一个**关不掉的空列**（真实危害，必须过滤）；而禁用列
+ * 根本不渲染，一条宽度只是死数据 —— 零危害，留着还能让该列将来解禁时，用户的
+ * 宽度偏好原地复活。下一个人若想「统一」成同一个口径：先读这段。
+ */
+export function normalizeColumnWidths(input: unknown): ColumnWidths {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) return {}
+
+  const result: ColumnWidths = {}
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!isOutlineColumnKey(key)) continue
+    // 非有限数（NaN / Infinity / 字符串 / null）会让 `flex: 0 0 NaNpx` 成为
+    // 无效值、整列宽度塌回 auto，一律丢弃
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue
+    result[key] = clampColumnWidth(key, value)
+  }
+  return result
+}
+
+/** 从 localStorage 读列宽。任何异常（非法 JSON / 隐私模式）都退回空表，绝不抛 */
+export function loadColumnWidths(): ColumnWidths {
+  try {
+    const raw = localStorage.getItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY)
+    if (raw === null) return {}
+    return normalizeColumnWidths(JSON.parse(raw))
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 防抖落盘，**不是节流**：整个拖拽过程中一次都不写盘，松手后 200ms 落一次。
+ *
+ * 拖拽每帧都会调 `setColumnWidth`，若每次都 `setItem` 就是无意义的 IO ——
+ * store 写入廉价（zustand 一次 `set`），磁盘写入不必跟手。200ms 的静默窗口
+ * 也是「一次拖拽 = 一次写入」的保证。
+ */
+function persistColumnWidthsDebounced(widths: ColumnWidths): void {
+  if (persistTimer !== null) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    try {
+      localStorage.setItem(OUTLINE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(widths))
+    } catch {
+      // 忽略：持久化是锦上添花，不该让一次普通的列宽调整炸掉界面
+    }
+  }, COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS)
+}
+
+/** 仅供测试使用：取消挂起的落盘，避免定时器跨用例串扰 */
+export function __cancelColumnWidthsPersistForTests(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+}
+
 interface ViewState {
   zoom: ZoomLevel
   selectedTaskId: TaskId | null
@@ -40,6 +122,8 @@ interface ViewState {
   activeView: ActiveView
   /** 可见列的**集合**（顺序由 OUTLINE_COLUMN_KEYS 的注册顺序决定，不在这里） */
   visibleColumns: OutlineColumnKey[]
+  /** 用户拖过的列宽覆盖。与 visibleColumns 同族：「怎么看」，不进 Project、不进撤销栈 */
+  columnWidths: ColumnWidths
   /**
    * Inspector 右栏当前激活的 Tab。默认 `task`（与搬移前的组件 useState 初值一致）。
    * **不持久化** —— 与 activeView 同族：每次打开默认「任务」更符合直觉。
@@ -68,6 +152,10 @@ interface ViewState {
   setActiveView: (view: ActiveView) => void
   setVisibleColumns: (keys: readonly unknown[]) => void
   toggleColumn: (key: OutlineColumnKey) => void
+  /** 设一列的宽度（clamp 后写入并防抖落盘）。拖拽中每帧都会调 */
+  setColumnWidth: (key: OutlineColumnKey, width: number) => void
+  /** 复位一列到默认宽 —— **删除覆盖**，而不是写入默认值。见实现处注释 */
+  resetColumnWidth: (key: OutlineColumnKey) => void
   setActiveInspectorTab: (tab: InspectorTab) => void
   /** 选中一个资源（null = 清空，由消费方回落到第一个资源）。**刻意不 breakCoalescing** ——
    *  见实现处的说明：打断合并留在交互现场（Select 的 onChange），本动作是纯 setter。 */
@@ -131,6 +219,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   dayWidth: ZOOM_DAY_WIDTH.day,
   activeView: 'gantt',
   visibleColumns: loadVisibleColumns(),
+  columnWidths: loadColumnWidths(),
   activeInspectorTab: 'task',
   selectedResourceId: null,
   collapsedResourceIds: new Set<ResourceId>(),
@@ -166,6 +255,23 @@ export const useViewStore = create<ViewState>((set, get) => ({
     const current = get().visibleColumns
     const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
     get().setVisibleColumns(next)
+  },
+
+  setColumnWidth: (key, width) => {
+    const columnWidths = { ...get().columnWidths, [key]: clampColumnWidth(key, width) }
+    set({ columnWidths })
+    persistColumnWidthsDebounced(columnWidths)
+  },
+
+  // **删除 key，而不是写入默认宽**：title 的 `flex: true` 来自 COLUMN_META 的
+  // 默认值（见 applyColumnWidths），覆盖值一删 flex 就回来了。若写成
+  // `setColumnWidth(key, 默认宽)`，title 会变成固定 240px 的刚性列 ——
+  // 与「从没拖过」的初始状态不再等价。
+  resetColumnWidth: (key) => {
+    const columnWidths = { ...get().columnWidths }
+    delete columnWidths[key]
+    set({ columnWidths })
+    persistColumnWidthsDebounced(columnWidths)
   },
 
   selectTask: (taskId) => {
@@ -212,6 +318,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
 /** 仅供测试使用：把视图状态复位到初始值 */
 export function __resetViewStoreForTests(): void {
+  __cancelColumnWidthsPersistForTests()
   useViewStore.setState({
     zoom: 'day',
     selectedTaskId: null,
@@ -219,6 +326,7 @@ export function __resetViewStoreForTests(): void {
     dayWidth: ZOOM_DAY_WIDTH.day,
     activeView: 'gantt',
     visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],
+    columnWidths: {},
     activeInspectorTab: 'task',
     selectedResourceId: null,
     collapsedResourceIds: new Set(),
