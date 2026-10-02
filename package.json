@@ -14,10 +14,12 @@
   },
   "dependencies": {
     "@mantine/core": "^9.6.3",
+    "@mantine/dates": "^9.6.3",
     "@mantine/notifications": "^9.6.3",
     "@tabler/icons-react": "^3.48.0",
     "@tanstack/react-virtual": "^3.14.13",
     "date-fns": "^4.4.0",
+    "dayjs": "^1.11.23",
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
     "immer": "^11.1.18",
