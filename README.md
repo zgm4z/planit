@@ -92,10 +92,10 @@ pnpm e2e -g "底纹跟随用户日历"             # 按标题过滤
 
 ## 已知限制
 
-> **注意**：本节的两条限制都有对应的表征测试（`e2e/known-limitations.spec.ts`）。
+> **注意**：本节的三条限制都有对应的表征测试。
 > 修复其中任何一条时，请同步删除该测试与本节对应条目 —— 否则测试会变红而你需要知道那是**预期的**。
 
-以下两条均经实测（`e2e/perf.spec.ts` 与 `e2e/known-limitations.spec.ts`
+以下三条均经实测（`e2e/perf.spec.ts` 与 `e2e/known-limitations.spec.ts`
 可复现），属第一阶段有意保留、未处理的问题。
 
 ### 1. 大项目下的重算卡顿
@@ -134,6 +134,13 @@ pnpm e2e -g "底纹跟随用户日历"             # 按标题过滤
 这是**预存在**的行为：时间轴原点固定为 `project.startDate`，任何排期早于
 项目起点的任务（不止 `finishOn`，还有可能由负 lag 造成）都会被盖住。
 第一阶段未处理。`e2e/known-limitations.spec.ts` 固化了当前行为作为证据。
+
+### 3. 列宽不支持键盘调整
+
+大纲视图的列宽只能靠鼠标 / 触控拖动表头分隔线调整，双击可复位单列，
+但没有任何键盘入口（手柄是 `role="separator"` 的 `div`，没有 `tabindex`）。
+宽度偏好存于 `localStorage` 的 `planit.outlineColumnWidths`，不进项目文件、
+不进撤销栈。
 
 ## 范围
 

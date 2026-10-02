@@ -14,6 +14,7 @@ import type { FlatRow } from '../shared/flattenRows'
 import { cellFlex, OUTLINE_COLUMNS, type OutlineColumn } from './outlineColumns'
 import { useViewStore } from '../../store/viewStore'
 import { OutlineTree } from './OutlineTree'
+import { useColumnResize } from './useColumnResize'
 import styles from '../styles/ProjectView.module.scss'
 
 interface OutlineTableProps {
@@ -58,6 +59,12 @@ export function OutlineTable({
   const { t } = useTranslation()
   const visibleColumns = useViewStore((state) => state.visibleColumns)
   const toggleColumn = useViewStore((state) => state.toggleColumn)
+  const setColumnWidth = useViewStore((state) => state.setColumnWidth)
+  const resetColumnWidth = useViewStore((state) => state.resetColumnWidth)
+  const { begin, reset } = useColumnResize({
+    onResize: setColumnWidth,
+    onReset: resetColumnWidth,
+  })
 
   return (
     <div className={styles.outlineTable} data-testid="outline-table">
@@ -77,6 +84,35 @@ export function OutlineTable({
                 data-testid={`outline-col-${column.key}`}
               >
                 {t(column.labelKey)}
+                {/* 分隔线手柄：绝对定位在单元格**内部**右缘 —— 不能外凸，
+                    .outlineHeaderCell 的 overflow: hidden 会把它裁掉。
+                    testid **刻意不放在 `outline-col-` 前缀下**：那会让所有
+                    `[data-testid^="outline-col-"]`（组件测试与 e2e 都有）把
+                    手柄也一并数进去，凭空多出手指数量的断言。 */}
+                <div
+                  className={styles.columnResizer}
+                  data-testid={`outline-resizer-${column.key}`}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t('outline.resizeHandle', { column: t(column.labelKey) })}
+                  onPointerDown={(event) => {
+                    // 起始宽必须取**渲染**宽度，不能取 column.width：title 是 flex 列，没被拖过时
+                    // column.width 是 flex 基准（240），而浏览器会把它撑到剩余空间的实际宽度
+                    // （默认视图实测约 620 —— 大纲区 980 = 视口 1280 − 右栏 300，减去固定列
+                    // 100+100+80+80=360 后剩给 title）。用基准当起始宽会让**首次**右拖反而变窄
+                    // （240+80=320，远小于实际的 620）。非 flex 列两者相等，所以统一走渲染宽度是安全的。
+                    //
+                    // 回落到 column.width 覆盖两种量不出宽度的情形，且都用 `||` 而非 `??`：
+                    //   ① parentElement 为 null（结构意外，理论上不会）；
+                    //   ② 量得的宽度为 0 —— 无布局环境（jsdom 单测的 getBoundingClientRect
+                    //      恒返回 0），此时 parentElement 非 null，`??` 拦不住这个 0。
+                    // 真实浏览器里表头单元格最窄也有 40px（title 为 160），渲染宽绝不为 0，
+                    // 因此这个 0 回落只在无布局环境生效，不会吃掉真实宽度。
+                    const rendered = event.currentTarget.parentElement?.getBoundingClientRect().width
+                    begin(event, column.key, rendered || column.width)
+                  }}
+                  onDoubleClick={() => reset(column.key)}
+                />
               </div>
             ))}
           </div>

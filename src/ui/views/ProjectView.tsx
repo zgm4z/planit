@@ -13,6 +13,7 @@ import { OutlineTree } from '../outline/OutlineTree'
 import {
   GANTT_OUTLINE_COLUMNS,
   OUTLINE_COLUMNS,
+  applyColumnWidths,
   responsiveHiddenColumns,
 } from '../outline/outlineColumns'
 import { OutlineTable } from '../outline/OutlineTable'
@@ -66,6 +67,7 @@ export function ProjectView() {
   const dayWidth = useViewStore((state) => state.dayWidth)
   const activeView = useViewStore((state) => state.activeView)
   const visibleColumns = useViewStore((state) => state.visibleColumns)
+  const columnWidths = useViewStore((state) => state.columnWidths)
   const collapsedResourceIds = useViewStore((state) => state.collapsedResourceIds)
   const schedulesResult = useScheduleStore((state) => state.result)
 
@@ -91,12 +93,18 @@ export function ProjectView() {
   // §7 的响应式隐藏**叠加在用户偏好之上**，而不是改写它：`visibleColumns` 仍是
   // 用户在列菜单里配的那一份（并已落盘），窄屏只是**临时**再减掉几列。
   // 这样回到宽屏时，用户的列配置原封不动 —— 响应式**绝不**写回 store 或 localStorage。
+  //
+  // 用户的列宽覆盖在**这里**合并（applyColumnWidths）—— 这是宽度进入渲染的
+  // 唯一入口，下游的 OutlineTable / OutlineTree / cellFlex 因此零改动。
   const outlineColumns = useMemo(() => {
     const hidden = new Set(responsiveHiddenColumns(isNarrow, isCompact))
-    return OUTLINE_COLUMNS.filter(
-      (column) => visibleColumns.includes(column.key) && !hidden.has(column.key),
+    return applyColumnWidths(
+      OUTLINE_COLUMNS.filter(
+        (column) => visibleColumns.includes(column.key) && !hidden.has(column.key),
+      ),
+      columnWidths,
     )
-  }, [visibleColumns, isNarrow, isCompact])
+  }, [visibleColumns, columnWidths, isNarrow, isCompact])
 
   // 唯一的虚拟化器：调用次数必须恒定（hooks 规则），行数按视图取。
   // 四个视图共用**同一个** shared-scroll 节点（见下方 JSX）—— v0.3 的坑：

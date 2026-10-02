@@ -13,6 +13,7 @@ import {
 import {
   GANTT_OUTLINE_COLUMNS,
   OUTLINE_COLUMNS,
+  applyColumnWidths,
   cellFlex,
   getOutlineCellValue,
   responsiveHiddenColumns,
@@ -198,6 +199,15 @@ describe('outline 的三语文案', () => {
 
   it('outline 叶子键数量足够多（三语文案确实落盘了，不是空对象对空对象）', () => {
     expect(zhOutlineKeys.length).toBeGreaterThan(20)
+  })
+
+  it('列宽手柄的 aria-label 文案三语齐全，且都带 {{column}} 插值', () => {
+    for (const [name, dict] of [['zh', zhCN], ['en', enUS], ['ja', jaJP]] as const) {
+      const text = lookup(dict, 'outline.resizeHandle')
+      expect(text, `${name} 缺 outline.resizeHandle`).toBeTypeOf('string')
+      // 缺插值会渲染出「拖拽调整列宽」这种不知道是哪一列的文案
+      expect(text as string, `${name} 的文案缺 {{column}} 插值`).toContain('{{column}}')
+    }
   })
 })
 
@@ -467,5 +477,60 @@ describe('getOutlineCellValue', () => {
     for (const key of ENABLED_KEYS) {
       expect(getOutlineCellValue(key, rich).type, `${key} 没有取值口径`).not.toBe('empty')
     }
+  })
+})
+
+describe('applyColumnWidths — 用户宽度覆盖的唯一注入点', () => {
+  const columns = OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'start')
+
+  it('没有覆盖时返回原对象本身（title 的 flex 保持）', () => {
+    const result = applyColumnWidths(columns, {})
+    // `toBe` 而不是 `toEqual`：没覆盖的列必须**原样透传同一个引用**，
+    // 复制一份会让「有没有被拖过」这件事在渲染层变得不可分辨
+    expect(result[0]).toBe(columns[0])
+    expect(result[0].flex).toBe(true)
+    expect(cellFlex(result[0])).toBe('1 1 240px')
+  })
+
+  it('有覆盖时替换宽度并把 flex 置 false —— 这就是「拖了即固定」', () => {
+    const result = applyColumnWidths(columns, { title: 320 })
+    const title = result.find((c) => c.key === 'title')!
+    expect(title.width).toBe(320)
+    expect(title.flex).toBe(false)
+    // 不需要第二套机制：cellFlex 已经把 flex:false 翻成 `0 0 Wpx`
+    expect(cellFlex(title)).toBe('0 0 320px')
+  })
+
+  it('只影响被覆盖的那一列', () => {
+    const result = applyColumnWidths(columns, { start: 140 })
+    expect(result.find((c) => c.key === 'start')!.width).toBe(140)
+    expect(result.find((c) => c.key === 'title')!.width).toBe(240)
+    expect(result.find((c) => c.key === 'title')!.flex).toBe(true)
+  })
+
+  it('混合场景：被覆盖的列换新对象，未覆盖的列仍是同一个引用', () => {
+    // 把「透传」与「替换」放在**同一次调用**里断言 —— 分成两个用例时，
+    // 一个「永远深拷贝」或「永远返回原对象」的实现能各自蒙混过关；
+    // 合在一起则必须两条分支同时对。
+    const result = applyColumnWidths(columns, { start: 140 })
+    const [title, start] = result
+
+    expect(title).toBe(columns[0]) // 未覆盖 —— 同一引用
+    expect(start).not.toBe(columns[1]) // 被覆盖 —— 新对象
+  })
+
+  it('覆盖只改 width / flex，列描述的其余字段一个都不能丢', () => {
+    // `{ ...column, width, flex: false }` 的展开契约。将来给 OutlineColumn 加字段
+    // （比如某种列级配置）时，这里会立刻发现「被拖过的列丢了那个字段」——
+    // 否则症状是「拖过之后这一列行为变了」，极难定位。
+    //
+    // 期望用「原对象 + 恰好这两处改动」整对象比较：逐一列字段的话，将来给
+    // OutlineColumn 加字段时得记得补进期望表，漏补就退回原点；整对象比较则
+    // **自动**覆盖其余每个字段（含新增的），也顺带钉住「没有多出字段」。
+    const result = applyColumnWidths(columns, { title: 320 })
+    const title = result.find((c) => c.key === 'title')!
+    const original = columns.find((c) => c.key === 'title')!
+
+    expect(title).toEqual({ ...original, width: 320, flex: false })
   })
 })

@@ -186,3 +186,66 @@ describe('OutlineTable 的列菜单', () => {
   // 「title 不可取消」这条不变量的判别力在菜单项的 disabled 断言与 viewStore 的
   // normalize 断言里，不在这里重复。
 })
+
+describe('OutlineTable 的列宽手柄', () => {
+  it('每个可见列恰好一个手柄、在所属表头单元格内部，且带含列名的 aria-label', () => {
+    renderTable()
+
+    const handles = screen.getAllByTestId(/^outline-resizer-/)
+    expect(handles).toHaveLength(DEFAULT_VISIBLE_COLUMNS.length)
+
+    // 表头列与手柄一一对应（遍历表头反推，而不是硬编码数量 —— 数量断言
+    // 在「某列漏了手柄、另一列多了个手柄」时仍然通过）
+    const headerKeys = screen
+      .getAllByTestId(/^outline-col-/)
+      .map((cell) => cell.getAttribute('data-testid')!.slice('outline-col-'.length))
+    for (const key of headerKeys) {
+      expect(screen.getByTestId(`outline-resizer-${key}`), key).toBeInTheDocument()
+    }
+
+    // 手柄必须在**所属表头单元格内部** —— `.outlineHeaderCell` 有 overflow: hidden
+    // （给文字省略号用的），手柄靠 position: absolute 贴在单元格右缘的内部。
+    // 若有人把它提成单元格的兄弟节点，上面的计数与按键存在性断言**照样全绿**，
+    // 但浏览器里它已脱出裁剪范围。jsdom 不做布局，只有包含性断言看得见这件事。
+    for (const key of headerKeys) {
+      const cell = screen.getByTestId(`outline-col-${key}`)
+      expect(
+        cell.contains(screen.getByTestId(`outline-resizer-${key}`)),
+        `${key} 的手柄不在它的表头单元格内部`,
+      ).toBe(true)
+    }
+  })
+
+  it('手柄的 aria-label 是「动作 + 列名」，不是裸的 i18n key', () => {
+    renderTable()
+
+    const label = screen.getByTestId('outline-resizer-start').getAttribute('aria-label')!
+    expect(label).toContain('开始')
+    expect(label).not.toContain('outline.')
+  })
+
+  it('拖动手柄写入 store 的 columnWidths', () => {
+    renderTable()
+
+    // jsdom 不实现 setPointerCapture —— hook 用 try/catch 包住，这里无需 mock
+    fireEvent.pointerDown(screen.getByTestId('outline-resizer-start'), {
+      button: 0,
+      pointerId: 1,
+      clientX: 200,
+    })
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: 260 }))
+    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: 260 }))
+
+    // start 默认 100px，右移 60px
+    expect(useViewStore.getState().columnWidths.start).toBe(160)
+  })
+
+  it('双击手柄复位 —— 从 columnWidths 里删掉该 key', () => {
+    useViewStore.getState().setColumnWidth('start', 300)
+    renderTable()
+
+    fireEvent.dblClick(screen.getByTestId('outline-resizer-start'))
+
+    expect('start' in useViewStore.getState().columnWidths).toBe(false)
+  })
+})
