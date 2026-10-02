@@ -18,14 +18,24 @@ export function assignmentUnits(resource: Resource, assignment: Assignment): num
   return resource.availability * assignment.units * (resource.efficiency ?? 1)
 }
 
-/** 一个任务的**全部**分配之和。无分配时为 0；悬空（指向不存在资源）的分配被忽略 */
-export function sumUnits(project: UnitsInput, taskId: TaskId): number {
+/** 给定一组分配的 Σunits；指向不存在资源的分配被忽略。 */
+export function sumAssignmentUnits(
+  assignments: readonly Assignment[],
+  resources: Readonly<Record<string, Resource>>,
+): number {
   let total = 0
-  for (const assignment of Object.values(project.assignments)) {
-    if (assignment.taskId !== taskId) continue
-    const resource = project.resources[assignment.resourceId]
+  for (const assignment of assignments) {
+    const resource = resources[assignment.resourceId]
     if (!resource) continue
     total += assignmentUnits(resource, assignment)
   }
   return total
+}
+
+/** 一个任务的**全部**分配之和。无分配时为 0；悬空（指向不存在资源）的分配被忽略 */
+export function sumUnits(project: UnitsInput, taskId: TaskId): number {
+  const assignments = Object.values(project.assignments).filter(
+    (assignment) => assignment.taskId === taskId,
+  )
+  return sumAssignmentUnits(assignments, project.resources)
 }

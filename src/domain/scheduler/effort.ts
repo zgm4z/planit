@@ -27,20 +27,22 @@ export interface ResourceBounds {
   latestFinish?: DateStr
 }
 
-/** 由项目里该任务的全部分配算出可用期边界。不受限时返回 `{}` */
-export function resourceBounds(project: Project, taskId: TaskId): ResourceBounds {
+/** 从任务分配集合计算可用期交集；不受限时返回 `{}`。 */
+export function resourceBoundsFromAssignments(
+  assignments: readonly Assignment[],
+  resources: Readonly<Record<ResourceId, Resource>>,
+  calendar: Calendar,
+): ResourceBounds {
   let earliestStart: DateStr | undefined
   let latestFinish: DateStr | undefined
 
-  for (const assignment of Object.values(project.assignments)) {
-    if (assignment.taskId !== taskId) continue
-    const resource = project.resources[assignment.resourceId]
+  for (const assignment of assignments) {
+    const resource = resources[assignment.resourceId]
     if (!resource) continue
 
     // 可用期是承载时刻的字段：取交集前先抹掉时刻（`toDateStr` 对纯日期恒等），
     // 否则带时刻的下界 / 上界进入 `>` / `<` 与后续 `addWorkdays` 会静默错。
     const from = resource.availableFrom ? toDateStr(resource.availableFrom) : undefined
-    const calendar = project.calendars[project.calendarId]
     const until = resource.availableUntil
       ? snapToWorkdayOrPrevious(toDateStr(resource.availableUntil), calendar)
       : undefined
@@ -54,6 +56,18 @@ export function resourceBounds(project: Project, taskId: TaskId): ResourceBounds
   }
 
   return { earliestStart, latestFinish }
+}
+
+/** 由项目里该任务的全部分配算出可用期边界。不受限时返回 `{}` */
+export function resourceBounds(project: Project, taskId: TaskId): ResourceBounds {
+  const assignments = Object.values(project.assignments).filter(
+    (assignment) => assignment.taskId === taskId,
+  )
+  return resourceBoundsFromAssignments(
+    assignments,
+    project.resources,
+    project.calendars[project.calendarId],
+  )
 }
 
 /**
