@@ -309,21 +309,37 @@
 // 甘特图的行与任务条样式在 GanttPane.module.scss（GanttRows / TaskBar 使用）
 
 /* ── v0.7 资源视图 ─────────────────────────────── */
+// 与甘特 `.grid` 同一手法：容器宽到能容纳「树 + 时间线」，横向滚动由**唯一的**
+// shared-scroll 承担。此时日期轴表头（sticky top）与资源树（sticky left）各自
+// 相对 shared-scroll 钉住。反例：内层再开一个横向滚动口（overflow-x:auto）会成为
+// 最近的滚动祖先，表头的 sticky top 就失效（实测纵向滚动时表头跟着滚走）。
+// 不设 align-items:flex-start —— 用默认的 stretch，让主区（含日期轴表头的 containing
+// block）撑到与资源树等高。资源多、选中资源分配少时，二者高度差很大；若主区只有内容高，
+// sticky 的表头走不了几步就会脱钉（containing block 到顶了）。
 .resourceView {
   display: flex;
-  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
   min-height: 100%;
 }
 
+// 横向滚动时钉在左缘 —— 与甘特左列 `.outline` 同款。宽度定死 320px：一是树列本就
+// 窄，二是 TimeRuler 的月份标签要按这个宽度钉在时间线左缘（见 ResourceTimeline 的
+// stickyLabelLeft），二者必须是同一个数。
+// z-index 3 高于日期轴的 2（与甘特 `角标 .corner` 同为 3 是一个道理）：横向滚动时
+// 日期轴会滑到树底下，树必须压在它上面，否则表头会被日期轴的底色盖住。
 .resourceTree {
-  flex: 0 0 auto;
-  min-width: 320px;
+  flex: 0 0 320px;
+  width: 320px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--planit-bg-surface);
   border-right: 1px solid var(--planit-border);
 }
 
 .resourceMain {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
   padding: var(--planit-sp-16);
 }
 
@@ -333,11 +349,10 @@
   color: var(--planit-text-muted);
 }
 
-// 时间线（刻度 + 画布）的横向滚动口。**只有它滚动** —— 标题留在外面不跟着滚走。
-// 它同时是 TimeRuler 月份标签 `position: sticky` 的锚点（sticky 找最近的滚动容器），
-// 所以资源侧给 TimeRuler 传 `stickyLabelLeft="0"`：月名钉在时间线自身左缘。
+// 时间线（刻度 + 画布）的包装。**不再是滚动容器** —— 横向滚动已交给 shared-scroll
+// （见 .resourceView 的注释）；这里只是个普通块，让标题留在滚动之外。
 .resourceTimelineScroll {
-  overflow-x: auto;
+  position: relative;
 }
 
 .resourceTimelineBody {
@@ -346,8 +361,14 @@
 
 // 日期轴表头：高度与甘特侧同一个令牌（--planit-ruler-height），下沿一条强描边
 // 与甘特标尺一致（§2.3「只有标尺下方 1px 分隔」）。里面就是**同一个** TimeRuler。
+// 纵向滚动时钉在视口顶部（与甘特标尺同款）—— 资源多到需要纵向滚动时，日期轴不会滚走。
+// 需要不透明底色：否则下方行会从它背后透出来。
 .resourceTimelineRuler {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   height: var(--planit-ruler-height);
+  background: var(--planit-bg-surface);
   border-bottom: 1px solid var(--planit-border-strong);
 }
 
@@ -417,4 +438,22 @@
   font-size: var(--planit-fs-xs);
 }
 .calendarDayOff { background: var(--planit-bg-subtle); color: var(--planit-text-faint); }
+// 例外日的第三态（spec §5：工作日 / 非工作日 / **例外日**）。
+// 例外日可能落在工作日上（custom）也可能落在非工作日上（holiday），所以不能靠换底色
+// 与另两态区分 —— 改用**右上角三角标**：既有的 --planit-work（靛蓝），不引入新色相
+// （§4.2 一屏之内高饱和色 ≤ 2：靛蓝本就在用，红/绿/琥珀都没被本条动到）。
+// 角标比描边轻：不改变盒模型，也不与「选中」的左 2px 竖条抢同一侧。
+.calendarDayException {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-top: 6px solid var(--planit-work);
+    border-left: 6px solid transparent;
+    pointer-events: none;
+  }
+}
 .calendarDayPad { border-color: transparent; }

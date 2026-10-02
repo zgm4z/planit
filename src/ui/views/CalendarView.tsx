@@ -31,7 +31,13 @@ export function CalendarView() {
   const project = useProjectStore((state) => state.project)
   const dispatch = useProjectStore((state) => state.dispatch)
 
-  const [anchor, setAnchor] = useState<DateStr>('2026-03-01')
+  // 月网格锚点：**项目起始月**（不是硬编码的某一月）。
+  // 此前写死 '2026-03-01'，真实项目（起始 2026-09）打开日历显示的是与项目无关的 3 月。
+  // 进视图时按项目起始日期定月；左右翻月仍由 calendar-prev/next-month 调整。
+  // CalendarView 随 activeView 切换而挂载/卸载，故 anchor 每次进入都回到起始月。
+  const [anchor, setAnchor] = useState<DateStr>(
+    () => `${(project?.startDate ?? '2026-01-01').slice(0, 7)}-01`,
+  )
   const [rangeStart, setRangeStart] = useState('')
   const [rangeEnd, setRangeEnd] = useState('')
   const [kind, setKind] = useState<'holiday' | 'custom'>('holiday')
@@ -77,20 +83,32 @@ export function CalendarView() {
           {WEEKDAY_HEADERS.map((key) => (
             <div key={key} className={styles.calendarHead}>{t(`calendar.weekdays.${key}`)}</div>
           ))}
-          {cells.map((date, index) =>
-            date === null ? (
-              <div key={`pad-${index}`} className={`${styles.calendarDay} ${styles.calendarDayPad}`} />
-            ) : (
+          {cells.map((date, index) => {
+            if (date === null) {
+              return (
+                <div key={`pad-${index}`} className={`${styles.calendarDay} ${styles.calendarDayPad}`} />
+              )
+            }
+            const workday = isWorkday(date, calendar)
+            // 第三态：这一天是不是一条**例外**（日历里有它的条目）。
+            // 例外日与「非工作日」是两回事 —— 一个 custom 落在工作日上时 isWorkday 仍为 true，
+            // 只按 isWorkday 上色就看不出来（spec §5 要求三态：工作日 / 非工作日 / 例外日）。
+            const exception = calendar.exceptions[date]
+            return (
               <div
                 key={date}
-                className={`${styles.calendarDay} ${isWorkday(date, calendar) ? '' : styles.calendarDayOff}`}
+                className={`${styles.calendarDay} ${workday ? '' : styles.calendarDayOff} ${
+                  exception ? styles.calendarDayException : ''
+                }`}
                 data-testid={`calendar-day-${date}`}
-                data-workday={isWorkday(date, calendar) ? 'true' : 'false'}
+                data-workday={workday ? 'true' : 'false'}
+                // 例外日的第三态身份也挂在 data 上，供 e2e 断言（视觉上靠角标，不引入新色相）
+                data-exception={exception?.kind}
               >
                 {date.slice(8)}
               </div>
-            ),
-          )}
+            )
+          })}
         </div>
 
         <Text className={chrome.blockTitle}>{t('calendarView.customDays')}</Text>
@@ -130,8 +148,12 @@ export function CalendarView() {
       </section>
 
       <section className={styles.calendarRight}>
-        {/* 保留 calendar-settings 这个 testid：既有 e2e 靠它定位七个工作日复选框 */}
-        <Text className={chrome.blockTitle}>{t('calendarView.normalHours')}</Text>
+        {/* 保留 calendar-settings 这个 testid：既有 e2e 靠它定位七个工作日复选框。
+            区块标题另给一个 testid：e2e 用它断言「文案跟随语言」。它取代了已删的
+            CalendarSettings 里那个 t('calendar.title') 标题（那个键已随之删除）。 */}
+        <Text className={chrome.blockTitle} data-testid="calendar-normal-hours-title">
+          {t('calendarView.normalHours')}
+        </Text>
         <div className={chrome.weekdays} data-testid="calendar-settings">
           {WEEKDAY_KEYS.map((key, index) => (
             <Checkbox

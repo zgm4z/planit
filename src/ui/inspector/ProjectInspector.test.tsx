@@ -139,23 +139,23 @@ describe('ProjectInspector', () => {
     expect(screen.getByTestId('project-baseline')).toHaveTextContent('基线 2（共 2 条）')
   })
 
-  it('分组结构：名称置顶 + 四组，主分组（时间线 / 摘要）默认展开、次要分组（格式 / 工作日历）默认收起', () => {
+  it('分组结构：名称置顶 + 三组，主分组（时间线 / 摘要）默认展开、次要分组（格式）默认收起', () => {
     renderProjectInspector()
 
     // 名称不分组，置顶（存在即可见，不套 Accordion）
     expect(screen.getByLabelText('名称')).toHaveValue('测试项目')
 
-    // 四个分组头都是可折叠按钮（§3.5）
+    // 三个分组头都是可折叠按钮（§3.5）。
+    // v0.7：原「工作日历」分组随 CalendarSettings 一并删除（编辑迁到「日历」视图）。
     const expanded = (label: string) =>
       screen.getByRole('button', { name: label }).getAttribute('aria-expanded')
-    for (const label of ['时间线', '摘要', '格式', '工作日历']) {
+    for (const label of ['时间线', '摘要', '格式']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
     // 默认展开主分组、收起次要分组 —— 写反就会红
     expect(expanded('时间线')).toBe('true')
     expect(expanded('摘要')).toBe('true')
     expect(expanded('格式')).toBe('false')
-    expect(expanded('工作日历')).toBe('false')
   })
 
   it('投入单位换算可编辑并写回 hoursPerDay；货币是只读事实行而非禁用控件', () => {
@@ -196,5 +196,14 @@ describe('ProjectInspector', () => {
   it('基准日 hint 说明 EVM 以之为界（不出现裸 key）', () => {
     renderProjectInspector()
     expect(screen.getByText(/基准日为界/)).toBeInTheDocument()
+  })
+})
+
+// v0.7：工作日历的编辑迁到一等的「日历」视图。这条钉住右栏**不再**有旧入口 ——
+// 若 CalendarSettings 的分组被留下，queryByTestId 就会命中，测试立刻变红。
+describe('工作日历分组已迁出（v0.7）', () => {
+  it('项目面板里不再有「工作日历」分组', () => {
+    renderProjectInspector()
+    expect(screen.queryByTestId('project-group-calendar')).not.toBeInTheDocument()
   })
 })

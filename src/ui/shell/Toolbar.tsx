@@ -19,7 +19,7 @@ import styles from '../styles/Chrome.module.scss'
  *   [身份 8] 返回 · 项目名          —— 名字是 18px/600 的标题，与图标同组
  *   [菜单栏 16] 文件 编辑 视图 任务 项目 资源
  *   [弹性空档 —— 把「怎么看」的控件推到右缘]
- *   [视图 6] 甘特图 / 任务列表
+ *   [视图 6] 甘特图 / 任务列表 / 日历 / 资源（v0.7 从两种扩到四种）
  *   [组间 16]
  *   [缩放 6] 日 / 周 / 月
  *   [组间 16]
@@ -94,6 +94,8 @@ export function Toolbar() {
           data={[
             { value: 'gantt', label: <span data-testid="view-option-gantt">{t('toolbar.view.gantt')}</span> },
             { value: 'outline', label: <span data-testid="view-option-outline">{t('toolbar.view.outline')}</span> },
+            { value: 'calendar', label: <span data-testid="view-option-calendar">{t('toolbar.view.calendar')}</span> },
+            { value: 'resources', label: <span data-testid="view-option-resources">{t('toolbar.view.resources')}</span> },
           ]}
         />
       </div>

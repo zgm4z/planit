@@ -209,6 +209,22 @@ describe('MenuBar「视图」菜单的状态表达', () => {
   })
 })
 
+// v0.7：「视图」菜单从 2 项扩到 4 项。菜单是**完整**的操作清单 ——
+// 切换器条上只有 4 段，菜单里也必须能到每一个视图（否则窄屏收起了切换器就够不着）。
+describe('「视图」菜单的四个视图（v0.7）', () => {
+  it('菜单里有四个视图条目，点「资源」切到 resources', async () => {
+    renderBar()
+    await openMenu('view', 'menu-view-gantt')
+
+    for (const view of ['gantt', 'outline', 'calendar', 'resources'] as const) {
+      expect(screen.getByTestId(`menu-view-${view}`)).toBeInTheDocument()
+    }
+
+    fireEvent.click(screen.getByTestId('menu-view-resources'))
+    expect(useViewStore.getState().activeView).toBe('resources')
+  })
+})
+
 describe('MenuBar「编辑」菜单', () => {
   it('撤销栈为空时：撤销禁用、给出理由、不显示快捷键', async () => {
     renderBar()

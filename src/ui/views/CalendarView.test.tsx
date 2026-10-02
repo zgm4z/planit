@@ -7,7 +7,12 @@ import zhCN from '../../i18n/locales/zh-CN.json'
 import enUS from '../../i18n/locales/en-US.json'
 import jaJP from '../../i18n/locales/ja-JP.json'
 import { initCommands, __resetRegistryForTests } from '../../commands/registry'
-import { createProject, __resetIdCounterForTests } from '../../domain/model/factories'
+import {
+  createDependency,
+  createProject,
+  createTask,
+  __resetIdCounterForTests,
+} from '../../domain/model/factories'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { solve } from '../../domain/scheduler'
@@ -90,6 +95,58 @@ describe('日历视图（视图 A）', () => {
     renderView()
     fireEvent.change(screen.getByTestId('calendar-hours-per-day'), { target: { value: '6' } })
     expect(calendar().hoursPerDay).toBe(6)
+  })
+})
+
+/**
+ * 承接已删的 `CalendarSettings.test.tsx`：那两条用例断言的不只是「日历写回」，
+ * 还有**全项目排期真的因此重算**与**命令真的入撤销栈** —— 这是最容易在搬家中丢掉的
+ * 判别力（只断言 workingDays 变了，写成不 dispatch 的本地 state 也会通过）。
+ * 2026-03-02 是周一；A(3 天) 03-02→03-04，B(2 天，FS 依赖 A) 03-05→03-06。
+ */
+describe('日历编辑驱动排期（承接已删的 CalendarSettings 用例）', () => {
+  function fixtureWithDependency() {
+    const project = createProject('日历重排', '2026-03-02')
+    const a = createTask({ name: 'A', duration: 3 })
+    const b = createTask({ name: 'B', duration: 2 })
+    project.tasks[a.id] = a
+    project.tasks[b.id] = b
+    project.rootIds = [a.id, b.id]
+    const dep = createDependency(a.id, b.id)
+    project.dependencies[dep.id] = dep
+    useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+    useScheduleStore.setState({ result: solve(project), error: null })
+    return { aId: a.id, bId: b.id }
+  }
+
+  const finishOf = (taskId: string) =>
+    useScheduleStore.getState().result.schedules[taskId].earlyFinish
+
+  it('取消勾选「周五」→ 命令入栈一条，且 B 的完成日推到下周一', () => {
+    const { bId } = fixtureWithDependency()
+    renderView()
+
+    expect(finishOf(bId)).toBe('2026-03-06')
+    expect(useProjectStore.getState().undoStack).toHaveLength(0)
+
+    fireEvent.click(within(screen.getByTestId('calendar-settings')).getAllByRole('checkbox')[4])
+
+    expect(calendar().workingDays[4]).toBe(false)
+    expect(useProjectStore.getState().undoStack).toHaveLength(1) // 一条真实可撤销的命令
+    expect(finishOf(bId)).toBe('2026-03-09') // 排期**真的**重算了
+  })
+
+  it('把 03-03 设为假日 → 排期跳过该日，A 顺延到 03-05', () => {
+    const { aId } = fixtureWithDependency()
+    renderView()
+
+    expect(finishOf(aId)).toBe('2026-03-04')
+
+    fireEvent.change(screen.getByTestId('calendar-range-start'), { target: { value: '2026-03-03' } })
+    fireEvent.click(screen.getByTestId('calendar-range-submit'))
+
+    expect(exceptions()['2026-03-03']).toEqual({ kind: 'holiday' })
+    expect(finishOf(aId)).toBe('2026-03-05')
   })
 })
 

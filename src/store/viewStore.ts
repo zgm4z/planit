@@ -10,8 +10,12 @@ import { useProjectStore } from './projectStore'
 
 export type ZoomLevel = 'day' | 'week' | 'month'
 
-/** 两个并列的视图。不是一种布局的两种宽度 —— 见 spec §1 */
-export type ActiveView = 'gantt' | 'outline'
+/**
+ * 四个并列的视图。不是一种布局的两种宽度 —— 见 spec §1。
+ * v0.3 是二值（甘特 / 任务列表），v0.7 扩到四值：新增**日历**与**资源**，
+ * 它们各自是一等视图（不是甘特的某种模式），在切换器里与甘特平级。
+ */
+export type ActiveView = 'gantt' | 'outline' | 'calendar' | 'resources'
 
 /**
  * Inspector 右栏的激活 Tab。**提升到 store 是有理由的**：菜单栏的「资源 > 新建资源」

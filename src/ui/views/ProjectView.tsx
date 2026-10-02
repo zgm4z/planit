@@ -3,6 +3,9 @@ import type { CSSProperties } from 'react'
 import { Drawer } from '@mantine/core'
 
 import { flattenVisibleRows } from '../shared/flattenRows'
+import { flattenResourceRows } from '../shared/flattenResources'
+import { CalendarView } from './CalendarView'
+import { ResourceView } from './ResourceView'
 import { DependencyLayer } from '../gantt/DependencyLayer'
 import { GanttRows } from '../gantt/GanttRows'
 import { Inspector } from '../inspector/Inspector'
@@ -62,6 +65,7 @@ export function ProjectView() {
   const dayWidth = useViewStore((state) => state.dayWidth)
   const activeView = useViewStore((state) => state.activeView)
   const visibleColumns = useViewStore((state) => state.visibleColumns)
+  const collapsedResourceIds = useViewStore((state) => state.collapsedResourceIds)
   const schedulesResult = useScheduleStore((state) => state.result)
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -69,6 +73,13 @@ export function ProjectView() {
   const rows = useMemo(
     () => (project ? flattenVisibleRows(project, collapsedIds) : []),
     [project, collapsedIds],
+  )
+
+  // 资源树的扁平行：与任务树同一手法（前序 + 跳过折叠），但**另一个实体**（spec §6.1）。
+  // 只在这里算一次，向下传给 ResourceView / 虚拟化器 —— 树与时间线消费同一份行数。
+  const resourceRows = useMemo(
+    () => (project ? flattenResourceRows(project, collapsedResourceIds) : []),
+    [project, collapsedResourceIds],
   )
 
   const { isNarrow, isCompact } = useLayoutMode()
@@ -86,8 +97,14 @@ export function ProjectView() {
     )
   }, [visibleColumns, isNarrow, isCompact])
 
+  // 唯一的虚拟化器：调用次数必须恒定（hooks 规则），行数按视图取。
+  // 四个视图共用**同一个** shared-scroll 节点（见下方 JSX）—— v0.3 的坑：
+  // 换节点会让虚拟化器盯上一个已卸载的 DOM。
+  // calendar 视图没有虚拟化行（月网格不是行列表），故 rowCount 取 0。
+  const rowCount =
+    activeView === 'resources' ? resourceRows.length : activeView === 'calendar' ? 0 : rows.length
   // 两侧列消费同一份 virtualItems —— 行永远对齐
-  const virtualItems = useSharedVirtualizer(scrollRef, rows.length)
+  const virtualItems = useSharedVirtualizer(scrollRef, rowCount)
 
   const conflictIds = useMemo(
     () => new Set(schedulesResult.conflicts.map((c) => c.taskId)),
@@ -300,7 +317,7 @@ export function ProjectView() {
                 />
               </div>
             </div>
-          ) : (
+          ) : activeView === 'outline' ? (
             <OutlineTable
               project={project}
               rows={rows}
@@ -315,12 +332,24 @@ export function ProjectView() {
               onSelect={selectTask}
               onToggleCollapse={toggleCollapsed}
             />
+          ) : activeView === 'calendar' ? (
+            <CalendarView />
+          ) : (
+            <ResourceView
+              project={project}
+              rows={resourceRows}
+              virtualItems={virtualItems}
+              schedules={schedulesResult.schedules}
+              leveling={schedulesResult.leveling}
+              scale={scale}
+              totalDays={totalDays}
+            />
           )}
         </div>
 
         {/* 右栏内容 = Inspector 一个整体（自负滚动）。
-            日历设置已**并入项目 Tab**（见 CalendarSettings 的 IA 注释）——
-            右栏底部不再有常驻块，切到「资源」Tab 时底下也不会再挂着项目日历设置。
+            v0.7：工作日历的**编辑**已迁出右栏，改由一等的「日历」视图承担
+            （同一规则只能有一处可改 —— 见 spec §5）。右栏因此不再挂项目日历设置。
             **常驻面板与窄屏抽屉共用同一份内容** —— 两处各写一遍的话，将来给右栏
             加一块，漏改一处就会「宽屏有、窄屏没有」。 */}
         {isNarrow ? (
