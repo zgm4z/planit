@@ -49,6 +49,7 @@
   },
   "outline": {
     "columnTitle": "タスク",
+    "resizeHandle": "ドラッグで「{{column}}」列の幅を変更、ダブルクリックで初期幅に戻す",
     "expand": "サブタスクを展開",
     "collapse": "サブタスクを折りたたむ",
     "cell": {

@@ -200,6 +200,15 @@ describe('outline 的三语文案', () => {
   it('outline 叶子键数量足够多（三语文案确实落盘了，不是空对象对空对象）', () => {
     expect(zhOutlineKeys.length).toBeGreaterThan(20)
   })
+
+  it('列宽手柄的 aria-label 文案三语齐全，且都带 {{column}} 插值', () => {
+    for (const [name, dict] of [['zh', zhCN], ['en', enUS], ['ja', jaJP]] as const) {
+      const text = lookup(dict, 'outline.resizeHandle')
+      expect(text, `${name} 缺 outline.resizeHandle`).toBeTypeOf('string')
+      // 缺插值会渲染出「拖拽调整列宽」这种不知道是哪一列的文案
+      expect(text as string, `${name} 的文案缺 {{column}} 插值`).toContain('{{column}}')
+    }
+  })
 })
 
 describe('cellFlex — 表头与单元格共用的列宽口径', () => {
