@@ -1,4 +1,4 @@
-import type { ResourceKind } from '../../domain/model/types'
+
 
 /**
  * 资源树的列描述。与任务列的 `outlineColumns.ts` **同一手法**（注册表 + width + labelKey），
@@ -36,19 +36,9 @@ export const RESOURCE_COLUMNS: readonly ResourceColumn[] = [
   { key: 'name', width: 240, labelKey: 'resourceView.columns.name', flex: true },
 ]
 
-/**
- * `kind` 列可能出现的**全部**取值 —— 测量时据此取「最宽的那个标签」。
- *
- * 为什么列全部四种而不是「当前项目里出现的那几种」：列宽要**跨项目稳定**。
- * 若按项目里实际出现的 kind 来量，同一个资源在只含「人员」的项目（列窄）与
- * 含「设备」的项目（列宽）里宽度不同 —— 列宽会随数据抖动。取全集则恒定。
- *
- * 与 `ResourceInspector.tsx` 的 `KINDS` 是同一份取值集合（那边是下拉可选项）。
- * 本模块刻意不反向依赖 Inspector（依赖方向是 View → Store/Domain，不该指回
- * 另一个面板组件），故各持一份；`resourceColumns.test.ts` 会断言它与三语
- * `resource.kind_*` 的键集合相等 —— 一旦有人加/删 kind 而漏改这里就会红。
- */
-export const RESOURCE_KINDS: readonly ResourceKind[] = ['staff', 'equipment', 'material', 'group']
+// `RESOURCE_KINDS` 的唯一实现在 `domain/model/`（三层共用），此处只转出，
+// 让本模块的消费者仍能从列描述里拿到它。
+export { RESOURCE_KINDS } from '../../domain/model/resourceKinds'
 
 /**
  * 某列「由运行时测量决定宽度」时用的 CSS 变量名。

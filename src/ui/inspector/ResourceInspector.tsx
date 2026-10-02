@@ -31,7 +31,8 @@ import {
 import { formatCost, formatDays, formatHours } from '../shared/format'
 import styles from '../styles/Inspector.module.scss'
 
-const KINDS: ResourceKind[] = ['staff', 'equipment', 'material', 'group']
+// 四种类型的运行时清单在 `domain/model/`（views 与 persist 也在用）
+import { RESOURCE_KINDS as KINDS } from '../../domain/model/resourceKinds'
 
 /**
  * `send` 只服务本面板里**输入框驱动**的资源命令。把「命令类型 → payload」钉在一张

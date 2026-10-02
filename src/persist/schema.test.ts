@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createProject, createTask, SCHEMA_VERSION } from '../domain/model/factories'
 import { parsePersistedProject } from './schema'
+import { RESOURCE_KINDS } from '../domain/model/resourceKinds'
 import { migrateV2ToV3, migrateV3ToV4 } from './migrate'
 
 /** 手工构造一份 v1 存档：kind 时代之前的形状（isMilestone + 无新字段） */
@@ -222,7 +223,7 @@ describe('parsePersistedProject — v2 → v3 迁移', () => {
   it('迁移后的资源没有非法的 4 值之外的 kind，且丢掉旧的 cost.per / cost.rate', () => {
     const project = parsePersistedProject(v2Save())
     for (const resource of Object.values(project.resources)) {
-      expect(['staff', 'equipment', 'material', 'group']).toContain(resource.kind)
+      expect(RESOURCE_KINDS).toContain(resource.kind)
       expect(resource.cost).not.toHaveProperty('rate')
       expect(resource.cost).not.toHaveProperty('per')
     }
