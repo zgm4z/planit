@@ -10,6 +10,12 @@ import { buildScheduleContext } from './context'
 export { CycleError } from './graph'
 export { runCpm } from './cpm'
 export { summarizeParents, detectConflicts } from './summarize'
+export {
+  expandDependencies,
+  isPredecessorExpandable,
+  isSuccessorExpandable,
+} from './expandDependencies'
+export type { ExpandedDependencies, UnsupportedSummaryDependency } from './expandDependencies'
 
 /**
  * 排期求解的唯一入口。纯函数，不依赖任何 React 或 store。
@@ -42,7 +48,8 @@ export function solve(project: Project): ScheduleResult {
 
   const leafSchedules = runCpmWithGraph({
     tasks: leaves.map((leaf) => ({ ...leaf, duration: durations.get(leaf.id)! })),
-    dependencies: Object.values(project.dependencies),
+    // 消费展开后的叶子级依赖（摘要端点已展开，见 context.expandDependencies）
+    dependencies: [...context.dependencies],
     calendar,
     direction: project.schedulingDirection,
     // CPM 的起点 / 终点锚点消费的是日粒度：先把承载时刻的字段归一，

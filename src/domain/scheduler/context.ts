@@ -2,6 +2,7 @@ import type {
   Assignment,
   AssignmentId,
   Calendar,
+  Dependency,
   Project,
   ResourceId,
   Task,
@@ -11,11 +12,19 @@ import { assignmentUnits } from '../model/units'
 import type { ResourceBounds } from './effort'
 import { resourceBoundsFromAssignments } from './effort'
 import { buildGraph, type TaskGraph } from './graph'
+import { expandDependencies, type UnsupportedSummaryDependency } from './expandDependencies'
 
 export interface ScheduleContext {
   readonly project: Project
   readonly leaves: readonly Task[]
   readonly calendar: Calendar
+  /**
+   * 叶子级依赖（摘要端点中可精确展开者已展开，见 `expandDependencies`）。
+   * CPM 与构图消费的是这一份，不是 `project.dependencies`。
+   */
+  readonly dependencies: readonly Dependency[]
+  /** 无法在叶子级精确表达的摘要依赖（既不入图也不参与 CPM） */
+  readonly unsupportedDependencies: readonly UnsupportedSummaryDependency[]
   readonly graph: TaskGraph
   readonly assignmentsByTask: ReadonlyMap<TaskId, readonly Assignment[]>
   readonly assignmentsByResource: ReadonlyMap<ResourceId, readonly Assignment[]>
@@ -62,11 +71,16 @@ export function buildScheduleContext(project: Project): ScheduleContext {
     }
   }
 
+  // 摘要端点在进图前展开到叶子级（否则会被当作悬空边静默丢弃）。
+  const expanded = expandDependencies(project.tasks, Object.values(project.dependencies))
+
   return {
     project,
     leaves,
     calendar,
-    graph: buildGraph(leaves, Object.values(project.dependencies)),
+    dependencies: expanded.dependencies,
+    unsupportedDependencies: expanded.unsupported,
+    graph: buildGraph(leaves, expanded.dependencies),
     assignmentsByTask,
     assignmentsByResource,
     assignmentUnitsById,
