@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { IconLock } from '@tabler/icons-react'
 import type { Calendar, ComputedSchedule, Task } from '../../domain/model/types'
 import { taskFinish } from '../../domain/calendar/workdays'
 import {
@@ -80,6 +81,10 @@ export function TaskBar({
   // 横向定位走 barRect() —— DependencyLayer 复用同一个函数，端点才不会错位
   const { x, width } = barRect(scale, displayStart, displayFinish)
 
+  // manual 任务条加锁定标识（spec §4.2）：手动排期的区间被钉死，视觉上区别于 auto。
+  // 只是**观感**标记 —— 不改几何（barRect 的 x/width 一字不动），也不拦指针事件。
+  const isManual = task.scheduling.mode === 'manual'
+
   // 关键条高 2px（§3.2），仍垂直居中 —— 两种高度的纵向中心都是 ROW_HEIGHT / 2。
   const barHeight = schedule.isCritical ? BAR_HEIGHT_CRITICAL : BAR_HEIGHT
 
@@ -102,6 +107,16 @@ export function TaskBar({
       data-testid={`task-bar-${task.id}`}
       onPointerDown={(event) => onBarPointerDown?.(event, 'move')}
     >
+      {isManual && (
+        <span
+          className={styles.barManualMarker}
+          data-testid={`task-bar-manual-${task.id}`}
+          aria-hidden="true"
+        >
+          <IconLock size={10} />
+        </span>
+      )}
+
       <div
         className={styles.barProgress}
         style={{ width: `${task.progress}%` }}

@@ -8,7 +8,7 @@ import type {
   TaskId,
 } from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
-import { taskFinish, workdaysInclusive } from '../domain/calendar/workdays'
+import { manualInterval, taskFinish, workdaysInclusive } from '../domain/calendar/workdays'
 import { toDateStr } from '../domain/calendar/dateTime'
 import { sumUnits } from '../domain/model/units'
 import { reconcileKind } from './reconcileKind'
@@ -206,11 +206,8 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
 
     const duration = Math.max(1, Math.floor(payload.duration))
     task.duration = duration
-    task.scheduling = {
-      mode: 'manual',
-      start: payload.startDate,
-      finish: taskFinish(payload.startDate, duration, calendar),
-    }
+    // 区间形态收敛到 manualInterval（与拖拽影子共用同一处算式）
+    task.scheduling = manualInterval(payload.startDate, duration, calendar)
   },
 
   // ── v0.2 新增 ─────────────────────────────────────────

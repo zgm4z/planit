@@ -16,7 +16,7 @@ import {
   TextInput,
 } from '@mantine/core'
 import type { ScrollAreaProps } from '@mantine/core'
-import { IconTrash } from '@tabler/icons-react'
+import { IconTrash, IconX } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 
@@ -26,6 +26,7 @@ import type {
   DependencyType,
   EffortMode,
   FinishConstraintType,
+  Lag,
   SchedulingOrder,
   StartConstraintType,
   Task,
@@ -60,6 +61,19 @@ import { ResourceInspector } from './ResourceInspector'
 import styles from '../styles/Inspector.module.scss'
 
 const DEPENDENCY_TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF']
+
+/** lag 的三种单位（下拉顺序即展示顺序） */
+const LAG_KINDS: readonly Lag['kind'][] = ['workdays', 'elapsedDays', 'percent']
+
+/** 数值字段随单位走：percent 用 value，其余用 days —— 切换单位时原样搬运该数 */
+function lagNumber(lag: Lag): number {
+  return lag.kind === 'percent' ? lag.value : lag.days
+}
+
+/** 由单位 + 数值造 Lag（percent 写 value，其余写 days）—— setLag 的 payload 只此一处构造 */
+function makeLag(kind: Lag['kind'], n: number): Lag {
+  return kind === 'percent' ? { kind: 'percent', value: n } : { kind, days: n }
+}
 
 /**
  * Inspector（spec §2–§5）：右栏 = 「任务 / 项目 / 资源」三 Tab。
@@ -454,6 +468,9 @@ function InfoGroup({
   )
 
   const isGroup = task.kind === 'group'
+  // manual 任务的区间宽度即工期，`task.setDuration` 在命令层对 manual 是 no-op ——
+  // 不禁用就会留下一个「点了没反应」的输入框（分批原则），故禁用 + 注明（spec §4.1）。
+  const isManual = task.scheduling.mode === 'manual'
   const nameId = useId()
   const kindId = useId()
 
@@ -520,10 +537,12 @@ function InfoGroup({
           {/* 可编辑块：一眼看出「这些能改」—— 它们都是带边框的控件。
               行距 6px（§3.4）—— 属性行是横向的，行间距比「标签在上」的堆叠紧一档。 */}
           <Stack gap={GAP_INNER}>
+            {/* manual 下工期由区间宽度决定，命令层拒绝改它 —— 控件禁用并注明原因（spec §4.1） */}
             <NumberField
               label={t('inspector.duration')}
               digits={0}
               min={0}
+              disabled={isManual}
               value={task.duration}
               onBlur={breakCoalescing}
               onChange={(value) =>
@@ -535,6 +554,11 @@ function InfoGroup({
                 })
               }
             />
+            {isManual && (
+              <Text fz="xs" c="dimmed">
+                {t('inspector.manualDurationHint')}
+              </Text>
+            )}
 
             <NumberField
               label={t('inspector.progress')}
@@ -678,32 +702,11 @@ function ScheduleGroup({
   // 不在 UI 里重新推方向 —— 那是引擎的职责。
   const dates = schedule ? resolveScheduleDates(schedule) : null
 
-  // manual 分支两端都可编辑（区间即真相）；auto 分支只有**挂了约束的那一端**可编辑，
-  // 另一端显示派生排期值、只读。这样只有 Select 在设置约束类型，编辑日期不会偷换它。
-  const startEditable = !isSummary && (isManual || startConstraint !== undefined)
-  const finishEditable = !isSummary && (isManual || finishConstraint !== undefined)
+  // 摘要任务的日期由子任务汇总 —— task.setScheduling 对 group 本是 no-op，
+  // 整块控件禁用，避免出现「点了没反应」的控件（分批原则）。
+  const isEditable = !isSummary
 
-  // 约束日期已带时刻（DateTimeStr）；派生排期是纯日期（引擎产物），显示前补默认时刻 ——
-  // 于是「开始」显示 09:00、「结束」显示 18:00，与 §4 的默认时刻表一致。
-  const startValue = isManual
-    ? scheduling.start
-    : startConstraint
-      ? startConstraint.date
-      : ensureDateTime(dates?.start ?? '', DEFAULT_START_TIME)
-  const finishValue = isManual
-    ? scheduling.finish
-    : finishConstraint
-      ? finishConstraint.date
-      : ensureDateTime(dates?.finish ?? '', DEFAULT_FINISH_TIME)
-
-  // 一个 Select 承载「排期方式」全貌：auto / manual / 4 种约束。任务同时挂两条约束时，
-  // Select 显示 start 侧那一条（完整面板在 Task 5）。
-  const selectValue = isManual
-    ? 'manual'
-    : (startConstraint?.type ?? finishConstraint?.type ?? 'auto')
-
-  const schedId = useId()
-  // 新约束 / 新 manual 区间的播种值取「用户看到的排期端」，带时刻（与类型契约一致）。
+  // 约束日期 / manual 区间的播种值取「用户看到的排期端」，带时刻（与类型契约一致）。
   const seedStart = (): string => ensureDateTime(dates?.start ?? project.startDate, DEFAULT_START_TIME)
   const seedFinish = (): string => ensureDateTime(dates?.finish ?? project.startDate, DEFAULT_FINISH_TIME)
 
@@ -716,108 +719,147 @@ function ScheduleGroup({
     })
   }
 
+  // 切换排期方式：manual 用当前排期端播种区间；auto 清空全部约束（沿用旧下拉的契约）
+  const setMode = (mode: Task['scheduling']['mode']): void => {
+    if (mode === 'manual') {
+      setScheduling({ mode: 'manual', start: seedStart(), finish: seedFinish() })
+    } else {
+      setScheduling({ mode: 'auto' })
+    }
+  }
+
+  // auto 侧写（或清空）一条约束，**另一侧原样保留** ——
+  // 改 start 约束的类型 / 日期绝不能丢弃 finish 约束（反之亦然）。这是 Task 5 修的缺陷：
+  // 旧的单一「排期方式」下拉改类型时会整体重写 scheduling，把 sibling 吞掉。
+  const setStartConstraint = (
+    next: { type: StartConstraintType; date: string } | undefined,
+    coalesce = false,
+  ): void =>
+    setScheduling(
+      {
+        mode: 'auto',
+        ...(next ? { startConstraint: next } : {}),
+        ...(finishConstraint ? { finishConstraint } : {}),
+      },
+      coalesce ? `task.setScheduling:${taskId}` : undefined,
+    )
+  const setFinishConstraint = (
+    next: { type: FinishConstraintType; date: string } | undefined,
+    coalesce = false,
+  ): void =>
+    setScheduling(
+      {
+        mode: 'auto',
+        ...(startConstraint ? { startConstraint } : {}),
+        ...(next ? { finishConstraint: next } : {}),
+      },
+      coalesce ? `task.setScheduling:${taskId}` : undefined,
+    )
+
   return (
     <Stack gap={GAP_BLOCK}>
       <Stack gap={GAP_INNER}>
-        {/* 排期方式 Select：auto / manual / 4 种约束。它就是全 App 唯一在设置排期的控件。 */}
-        <FieldRow label={t('inspector.scheduling')} controlId={schedId}>
-        <Select
-          id={schedId}
-          value={selectValue}
-          // 摘要任务的日期由子任务汇总 —— task.setScheduling 对 group 本就是 no-op，
-          // 这里禁用是为了不出现「点了没反应」的控件（分批原则）
-          disabled={isSummary}
-          data={[
-            { value: 'auto', label: t('scheduling.auto') },
-            { value: 'manual', label: t('scheduling.manual') },
-            ...START_CONSTRAINT_TYPES.map((type) => ({
-              value: type,
-              label: t(`scheduling.${type}`),
-            })),
-            ...FINISH_CONSTRAINT_TYPES.map((type) => ({
-              value: type,
-              label: t(`scheduling.${type}`),
-            })),
-          ]}
-          onChange={(value) => {
-            if (!value || isSummary) return
-            if (value === 'auto') {
-              setScheduling({ mode: 'auto' })
-              return
+        {/* 排期方式切换：Auto / Manual —— 全 App 唯一在设置排期方式的控件 */}
+        <FieldRow label={t('inspector.scheduling')}>
+          <SegmentedControl
+            size="xs"
+            fullWidth
+            aria-label={t('inspector.scheduling')}
+            value={scheduling.mode}
+            disabled={isSummary}
+            data-testid="scheduling-mode"
+            onChange={(value) =>
+              value !== scheduling.mode && setMode(value as Task['scheduling']['mode'])
             }
-            if (value === 'manual') {
-              setScheduling({ mode: 'manual', start: seedStart(), finish: seedFinish() })
-              return
-            }
-            if (START_CONSTRAINT_TYPES.includes(value as StartConstraintType)) {
-              setScheduling({
-                mode: 'auto',
-                startConstraint: { type: value as StartConstraintType, date: seedStart() },
-              })
-              return
-            }
-            setScheduling({
-              mode: 'auto',
-              finishConstraint: { type: value as FinishConstraintType, date: seedFinish() },
-            })
-          }}
-        />
+            data={[
+              {
+                value: 'auto',
+                label: <span data-testid="scheduling-mode-auto">{t('scheduling.auto')}</span>,
+              },
+              {
+                value: 'manual',
+                label: <span data-testid="scheduling-mode-manual">{t('scheduling.manual')}</span>,
+              },
+            ]}
+          />
         </FieldRow>
-
-        {(isManual || startConstraint || finishConstraint) && (
+        {/* 提示只在 manual 下出现：带约束的 auto 任务仍能在约束窗口内自动移动，
+            对它说「无法自动移动」是错的 —— 这是 Task 5 修的 manualHint 误标。 */}
+        {isManual && (
           <Text fz="xs" c="dimmed">
             {t('inspector.manualHint')}
           </Text>
         )}
       </Stack>
 
-      <Stack gap={GAP_INNER}>
-        <DateField
-          label={t('inspector.start')}
-          value={startValue}
-          disabled={!startEditable}
-          onBlur={breakCoalescing}
-          onChange={(next) => {
-            // manual：改开始日、保留结束日（区间平移）
-            if (scheduling.mode === 'manual') {
-              setScheduling({ mode: 'manual', start: next, finish: scheduling.finish }, `task.setScheduling:${taskId}`)
-              return
+      {isManual ? (
+        // manual 分支：可编辑的 start / end 两个日期（区间即真相，两端都可改）
+        <Stack gap={GAP_INNER} data-testid="scheduling-manual">
+          <DateField
+            label={t('inspector.start')}
+            value={scheduling.start}
+            disabled={!isEditable}
+            onBlur={breakCoalescing}
+            onChange={(next) =>
+              setScheduling(
+                { mode: 'manual', start: next, finish: scheduling.finish },
+                `task.setScheduling:${taskId}`,
+              )
             }
-            // auto：只改当前 start 约束的日期，绝不新增 / 偷换类型。finish 约束原样保留。
-            if (!startConstraint) return
-            setScheduling(
-              {
-                mode: 'auto',
-                startConstraint: { ...startConstraint, date: next },
-                ...(finishConstraint ? { finishConstraint } : {}),
-              },
-              `task.setScheduling:${taskId}`,
-            )
-          }}
-        />
-
-        <DateField
-          label={t('inspector.finish')}
-          value={finishValue}
-          disabled={!finishEditable}
-          onBlur={breakCoalescing}
-          onChange={(next) => {
-            if (scheduling.mode === 'manual') {
-              setScheduling({ mode: 'manual', start: scheduling.start, finish: next }, `task.setScheduling:${taskId}`)
-              return
+          />
+          <DateField
+            label={t('inspector.finish')}
+            value={scheduling.finish}
+            disabled={!isEditable}
+            onBlur={breakCoalescing}
+            onChange={(next) =>
+              setScheduling(
+                { mode: 'manual', start: scheduling.start, finish: next },
+                `task.setScheduling:${taskId}`,
+              )
             }
-            if (!finishConstraint) return
-            setScheduling(
-              {
-                mode: 'auto',
-                finishConstraint: { ...finishConstraint, date: next },
-                ...(startConstraint ? { startConstraint } : {}),
-              },
-              `task.setScheduling:${taskId}`,
-            )
-          }}
-        />
-      </Stack>
+          />
+        </Stack>
+      ) : (
+        // auto 分支：start / finish 两组约束编辑（类型下拉 + 日期 + 清空）。
+        // 「每侧至多一条」是**结构保证**：一侧只有一个编辑器、一条约束对象 ——
+        // UI 层造不出「同侧两条」（spec §1.2 的非法形态因此不可达）。
+        <Stack gap={GAP_FIELD} data-testid="scheduling-auto">
+          <ConstraintEditor
+            side="start"
+            constraint={startConstraint}
+            types={START_CONSTRAINT_TYPES}
+            disabled={!isEditable}
+            seed={seedStart}
+            onSet={setStartConstraint}
+            onBlur={breakCoalescing}
+          />
+          <ConstraintEditor
+            side="finish"
+            constraint={finishConstraint}
+            types={FINISH_CONSTRAINT_TYPES}
+            disabled={!isEditable}
+            seed={seedFinish}
+            onSet={setFinishConstraint}
+            onBlur={breakCoalescing}
+          />
+          {/* 派生排期作为只读事实（§3.3）：约束是输入，这里是引擎算出的落点 */}
+          {dates && (
+            <StatList>
+              <StatRow
+                label={t('inspector.start')}
+                value={formatDate(dates.start)}
+                testId="schedule-start"
+              />
+              <StatRow
+                label={t('inspector.finish')}
+                value={formatDate(dates.finish)}
+                testId="schedule-finish"
+              />
+            </StatList>
+          )}
+        </Stack>
+      )}
 
       <FieldRow label={t('inspector.order')}>
         {/* 点击驱动 → 不传合并键（命令层注释里登记的约定） */}
@@ -914,6 +956,90 @@ function ScheduleGroup({
           —
         </Text>
       )}
+    </Stack>
+  )
+}
+
+/**
+ * 一组约束编辑（start 侧 或 finish 侧）：类型下拉 + 日期 + 清空按钮。
+ *
+ * **只负责一侧**：另一侧由父组件的 setter 原样带上，故改这一侧的类型 / 日期
+ * 绝不会丢弃 sibling（spec §4.2 的「两组约束编辑」+ Task 5 修的 sibling 丢失）。
+ *
+ * 泛型 T 让 start 侧只接受 StartConstraintType、finish 侧只接受 FinishConstraintType ——
+ * 类型下发的候选集因此天然正确，不用在组件里按 side 再判一遍。
+ */
+function ConstraintEditor<T extends StartConstraintType | FinishConstraintType>({
+  side,
+  constraint,
+  types,
+  disabled,
+  seed,
+  onSet,
+  onBlur,
+}: {
+  side: 'start' | 'finish'
+  constraint: { type: T; date: string } | undefined
+  types: readonly T[]
+  disabled: boolean
+  /** 新建约束时的播种日期（取当前排期端，带时刻） */
+  seed: () => string
+  /** coalesce=true 表示输入框驱动（日期编辑），需要合并键；点选类型 / 清空不需要 */
+  onSet: (next: { type: T; date: string } | undefined, coalesce?: boolean) => void
+  onBlur: () => void
+}) {
+  const { t } = useTranslation()
+  const title = t(`inspector.constraints.${side}`)
+  const dateLabel = t(`inspector.constraints.${side === 'start' ? 'startDate' : 'finishDate'}`)
+  const clearLabel = t(`inspector.constraints.${side === 'start' ? 'clearStart' : 'clearFinish'}`)
+  const selectId = useId()
+
+  return (
+    <Stack gap={GAP_INNER} data-testid={`constraint-${side}`}>
+      <Group gap="xs" wrap="nowrap" justify="space-between">
+        <Text fz="xs" fw={500} c="dimmed">
+          {title}
+        </Text>
+        {constraint && (
+          <ActionIcon
+            size="xs"
+            variant="subtle"
+            color="red"
+            disabled={disabled}
+            aria-label={clearLabel}
+            data-testid={`constraint-${side}-clear`}
+            onClick={() => onSet(undefined)}
+          >
+            <IconX size={12} />
+          </ActionIcon>
+        )}
+      </Group>
+
+      <Select
+        id={selectId}
+        size="xs"
+        aria-label={title}
+        disabled={disabled}
+        value={constraint?.type ?? null}
+        placeholder={t('inspector.constraints.none')}
+        data={types.map((type) => ({ value: type, label: t(`scheduling.${type}`) }))}
+        onChange={(value) => {
+          if (!value) return
+          // 换类型保留既有日期（没有则用播种日期）；sibling 由父组件保留
+          onSet({ type: value as T, date: constraint?.date ?? seed() })
+        }}
+      />
+
+      <DateField
+        ariaLabel={dateLabel}
+        value={constraint?.date ?? ''}
+        // 没有约束就没有可编辑的对象 —— 先在上面选类型才能设日期
+        disabled={disabled || !constraint}
+        onBlur={onBlur}
+        onChange={(next) => {
+          if (constraint) onSet({ ...constraint, date: next }, true)
+        }}
+      />
     </Stack>
   )
 }
@@ -1036,7 +1162,7 @@ function RelationSection({
             </Text>
             <Select
               size="xs"
-              w={72}
+              w={52}
               aria-label={`${title} ${otherName}`}
               value={dep.type}
               data={DEPENDENCY_TYPES.map((type) => ({ value: type, label: type }))}
@@ -1051,20 +1177,37 @@ function RelationSection({
             />
             <NumberField
               size="xs"
-              w={64}
+              w={48}
               digits={0}
               ariaLabel={`${t('inspector.lag')} ${otherName}`}
-              value={lag.kind === 'workdays' ? lag.days : 0}
-              // 单位选择器在后续任务中实现；在它落地前，非 workdays 的 lag 只读，
-              // 避免编辑时被静默降级为 workdays（当前无任何路径可创建非 workdays lag）
-              disabled={lag.kind !== 'workdays'}
+              value={lagNumber(lag)}
               onBlur={breakCoalescing}
               onChange={(value) =>
                 dispatch({
                   type: 'dependency.setLag',
                   label: 'commands.dependency.setLag',
-                  payload: { dependencyId: dep.id, lag: { kind: 'workdays', days: value ?? 0 } },
+                  // 保留当前单位，只改数值 —— 编辑数值绝不静默把单位降级为 workdays
+                  payload: { dependencyId: dep.id, lag: makeLag(lag.kind, value ?? 0) },
                   coalesceKey: `dependency.setLag:${dep.id}`,
+                })
+              }
+            />
+            <Select
+              size="xs"
+              w={68}
+              aria-label={`${t('inspector.lagUnit')} ${otherName}`}
+              value={lag.kind}
+              data={LAG_KINDS.map((kind) => ({
+                value: kind,
+                label: t(`inspector.lagUnits.${kind}`),
+              }))}
+              onChange={(value) =>
+                value &&
+                dispatch({
+                  type: 'dependency.setLag',
+                  label: 'commands.dependency.setLag',
+                  // 换单位保留当前数值（点击驱动 → 不带合并键）
+                  payload: { dependencyId: dep.id, lag: makeLag(value as Lag['kind'], lagNumber(lag)) },
                 })
               }
             />
@@ -1106,7 +1249,7 @@ function RelationSection({
             dispatch({
               type: 'dependency.create',
               label: 'commands.dependency.create',
-              payload: { ...makePayload(otherId), type: 'FS' as DependencyType, lag: 0 },
+              payload: { ...makePayload(otherId), type: 'FS' as DependencyType, lag: { kind: 'workdays', days: 0 } },
             })
           }}
           />

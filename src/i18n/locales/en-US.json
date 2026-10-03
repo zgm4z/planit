@@ -164,6 +164,16 @@
     "summaryHint": "This is a summary task. Its dates roll up from its children and cannot be edited directly.",
     "scheduling": "Scheduling",
     "manualHint": "This task is manually scheduled and cannot be moved automatically.",
+    "manualDurationHint": "Manual scheduling does not consume duration — the interval width is the duration.",
+    "constraints": {
+      "start": "Start constraint",
+      "finish": "Finish constraint",
+      "none": "No constraint",
+      "startDate": "Start constraint date",
+      "finishDate": "Finish constraint date",
+      "clearStart": "Clear start constraint",
+      "clearFinish": "Clear finish constraint"
+    },
     "start": "Start",
     "finish": "Finish",
     "order": "Order",
@@ -186,6 +196,8 @@
       "selectTask": "Choose a task…"
     },
     "lag": "Lag",
+    "lagUnit": "Lag unit",
+    "lagUnits": { "workdays": "Workdays", "elapsedDays": "Calendar days", "percent": "Percent" },
     "deletedTask": "(deleted)",
     "project": {
       "name": "Name",
@@ -254,8 +266,6 @@
   "scheduling": {
     "auto": "Automatic",
     "manual": "Manual",
-    "startOn": "Start on",
-    "finishOn": "Finish on",
     "startNoEarlierThan": "Start no earlier than",
     "startNoLaterThan": "Start no later than",
     "finishNoEarlierThan": "Finish no earlier than",

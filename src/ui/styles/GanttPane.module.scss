@@ -200,6 +200,20 @@
   pointer-events: none;
 }
 
+// manual 任务条的锁定标识（spec §4.2）：手动排期的区间被钉死，用一颗小锁区别于 auto。
+// **纯观感** —— 绝对定位在条内左侧、不改条本身的几何，且 pointer-events: none
+// 让指针事件穿透到条 / 左把手（连接柄与把手的命中区不受影响）。
+.barManualMarker {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  z-index: 3;
+}
+
 // §6：把手在悬停时淡入。命中区（width: 8px）始终存在、cursor 始终生效，
 // 只是**视觉**上不出现 —— 静态态保持干净，悬停才提示「这里可拉伸」。
 .barHandle {

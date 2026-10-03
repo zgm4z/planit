@@ -164,6 +164,16 @@
     "summaryHint": "これはサマリータスクです。日付は子タスクから集計されるため、直接編集できません。",
     "scheduling": "スケジューリング",
     "manualHint": "このタスクは手動で設定されており、自動では移動できません。",
+    "manualDurationHint": "手動スケジュールでは期間を消費しません —— 区間の幅が期間です。",
+    "constraints": {
+      "start": "開始制約",
+      "finish": "終了制約",
+      "none": "制約なし",
+      "startDate": "開始制約の日付",
+      "finishDate": "終了制約の日付",
+      "clearStart": "開始制約を消去",
+      "clearFinish": "終了制約を消去"
+    },
     "start": "開始",
     "finish": "終了",
     "order": "配置",
@@ -186,6 +196,8 @@
       "selectTask": "タスクを選択…"
     },
     "lag": "ラグ",
+    "lagUnit": "ラグ単位",
+    "lagUnits": { "workdays": "稼働日", "elapsedDays": "暦日", "percent": "パーセント" },
     "deletedTask": "（削除済み）",
     "project": {
       "name": "名前",
@@ -254,8 +266,6 @@
   "scheduling": {
     "auto": "自動",
     "manual": "手動",
-    "startOn": "開始日を固定",
-    "finishOn": "終了日を固定",
     "startNoEarlierThan": "開始は指定日以降",
     "startNoLaterThan": "開始は指定日以前",
     "finishNoEarlierThan": "終了は指定日以降",

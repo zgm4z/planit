@@ -13,7 +13,7 @@ import {
   createTask,
   __resetIdCounterForTests,
 } from '../../domain/model/factories'
-import type { Lag } from '../../domain/model/types'
+import type { Lag, Scheduling } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
@@ -639,198 +639,192 @@ describe('任务信息组', () => {
   })
 })
 
-describe('日程安排组', () => {
-  it('排期方式切到「开始不早于」写入 auto startConstraint', async () => {
+describe('日程安排组（mode 切换 + 双约束编辑）', () => {
+  /** 直接改选中任务的 scheduling（绕过 UI，用于构造初始形态） */
+  const setScheduling = (scheduling: Scheduling) => {
+    const project = useProjectStore.getState().project!
+    useProjectStore.setState({
+      project: {
+        ...project,
+        tasks: { ...project.tasks, [taskId]: { ...project.tasks[taskId], scheduling } },
+      },
+    })
+  }
+  const bothConstraints: Scheduling = {
+    mode: 'auto',
+    startConstraint: { type: 'startNoEarlierThan', date: '2026-03-05T09:00' },
+    finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-06T18:00' },
+  }
+
+  // ① mode 切换
+  it('默认 auto：显示两组约束编辑，无 manual 分支', () => {
+    renderInspector()
+    expect(screen.getByTestId('scheduling-auto')).toBeInTheDocument()
+    expect(screen.queryByTestId('scheduling-manual')).not.toBeInTheDocument()
+    // 每侧只有一个约束编辑容器 —— 「同侧两条」在 UI 层不可达（④）
+    expect(screen.getAllByTestId('constraint-start')).toHaveLength(1)
+    expect(screen.getAllByTestId('constraint-finish')).toHaveLength(1)
+    // 无约束：类型下拉显示占位，日期只读，且没有清空按钮
+    expect(screen.getByRole('combobox', { name: '开始约束' })).toHaveAttribute(
+      'placeholder',
+      '无约束',
+    )
+    expect(screen.getByLabelText('开始约束日期')).toBeDisabled()
+    expect(screen.queryByTestId('constraint-start-clear')).not.toBeInTheDocument()
+  })
+
+  it('切到「手动排期」出现 start/end 两个可编辑日期，工期输入禁用并注明不消费工期', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+    // auto 下工期可编辑
+    expect(screen.getByLabelText('工期')).not.toBeDisabled()
+
+    await user.click(screen.getByTestId('scheduling-mode-manual'))
+
+    // 区间初值 = 任务当前排期 [start, finish]（带默认时刻 09:00 / 18:00）
+    expect(currentTask().scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-02T09:00',
+      finish: '2026-03-04T18:00',
+    })
+    expect(screen.getByTestId('scheduling-manual')).toBeInTheDocument()
+    expect(screen.queryByTestId('scheduling-auto')).not.toBeInTheDocument()
+    // 两端都可编辑（区间即真相）
+    expect(screen.getByLabelText('开始')).not.toBeDisabled()
+    expect(screen.getByLabelText('结束')).not.toBeDisabled()
+    // 工期输入被禁用 + 注明原因（manual 不消费工期，spec §4.1）
+    expect(screen.getByLabelText('工期')).toBeDisabled()
+    expect(screen.getByText(/手动排期不消费工期/)).toBeInTheDocument()
+    // manual 提示出现
+    expect(screen.getByText(/此任务已手动安排/)).toBeInTheDocument()
+  })
+
+  it('切回「自动排期」清掉 manual 区间', async () => {
+    const user = userEvent.setup()
+    setScheduling({ mode: 'manual', start: '2026-03-02T09:00', finish: '2026-03-04T18:00' })
+    renderInspector()
+
+    await user.click(screen.getByTestId('scheduling-mode-auto'))
+
+    expect(currentTask().scheduling).toEqual({ mode: 'auto' })
+  })
+
+  // ② auto 两组约束编辑
+  it('选开始约束类型 → 写入 startConstraint（播种当前开始端 09:00）', async () => {
     const user = userEvent.setup()
     renderInspector()
 
-    // 初始读出的应是「自动排期」（Select 的 auto 项）
-    expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('自动排期')
+    await chooseOption(user, '开始约束', '开始不早于')
 
-    await chooseOption(user, '排期方式', '开始不早于')
-
-    // 播种值带默认时刻 09:00（§4 默认时刻表）；派生排期 scheduledStart 是纯日期
-    // '2026-03-02'，故写入 '2026-03-02T09:00'（DateTimeStr 契约）。
     expect(currentTask().scheduling).toEqual({
       mode: 'auto',
       startConstraint: { type: 'startNoEarlierThan', date: '2026-03-02T09:00' },
     })
   })
 
-  it('排期方式切到「结束不晚于」写入 auto finishConstraint', async () => {
+  it('选结束约束类型 → 写入 finishConstraint（播种当前结束端 18:00）', async () => {
     const user = userEvent.setup()
     renderInspector()
 
-    await chooseOption(user, '排期方式', '结束不晚于')
+    await chooseOption(user, '结束约束', '结束不晚于')
 
-    // 播种值取任务当前排期的**结束日**（03-04），带默认结束时刻 18:00（§4）
     expect(currentTask().scheduling).toEqual({
       mode: 'auto',
       finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-04T18:00' },
     })
   })
 
-  it('排期方式切到「手动排期」写入 manual 区间，两端都可编辑', async () => {
-    const user = userEvent.setup()
+  it('两条约束可并存，值分别读出（各至多一条）', () => {
+    setScheduling(bothConstraints)
     renderInspector()
 
-    await chooseOption(user, '排期方式', '手动排期')
+    expect(screen.getByRole('combobox', { name: '开始约束' })).toHaveValue('开始不早于')
+    expect(screen.getByRole('combobox', { name: '结束约束' })).toHaveValue('结束不晚于')
+    expect(screen.getByLabelText('开始约束日期')).toHaveTextContent('2026-03-05 09:00')
+    expect(screen.getByLabelText('结束约束日期')).toHaveTextContent('2026-03-06 18:00')
+  })
 
-    // 区间初值 = 任务当前排期 [start, finish]（带默认时刻 09:00 / 18:00）
+  // ③ 编辑 manual 区间 / 约束写回正确 payload
+  it('manual 任务改开始日期 → 写回区间（保留结束日）', async () => {
+    setScheduling({ mode: 'manual', start: '2026-03-02T09:00', finish: '2026-03-04T18:00' })
+    renderInspector()
+
+    await pickDay(screen.getByLabelText('开始'), 3)
+
     expect(currentTask().scheduling).toEqual({
-      mode: 'manual', start: '2026-03-02T09:00', finish: '2026-03-04T18:00',
+      mode: 'manual',
+      start: '2026-03-03T09:00',
+      finish: '2026-03-04T18:00',
     })
-    // manual 区间两端都可编辑（区间即真相）
-    expect(screen.getByLabelText('开始')).not.toBeDisabled()
-    expect(screen.getByLabelText('结束')).not.toBeDisabled()
   })
 
-  it('排期方式切回自动会清掉约束', async () => {
+  it('manual 任务改结束日期 → 写回区间（保留开始日）', async () => {
+    setScheduling({ mode: 'manual', start: '2026-03-02T09:00', finish: '2026-03-04T18:00' })
+    renderInspector()
+
+    await pickDay(screen.getByLabelText('结束'), 6)
+
+    expect(currentTask().scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-02T09:00',
+      finish: '2026-03-06T18:00',
+    })
+  })
+
+  it('改约束类型保留另一侧（sibling 不被丢弃）—— Task 5 修的缺陷', async () => {
     const user = userEvent.setup()
-    useProjectStore.setState({
-      project: {
-        ...useProjectStore.getState().project!,
-        tasks: {
-          ...useProjectStore.getState().project!.tasks,
-          [taskId]: {
-            ...currentTask(),
-            scheduling: {
-              mode: 'auto',
-              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
-            },
-          },
-        },
-      },
-    })
-
-    renderInspector()
-    await chooseOption(user, '排期方式', '自动排期')
-
-    expect(currentTask().scheduling).toEqual({ mode: 'auto' })
-  })
-
-  it('已存在的约束会被排期下拉正确读出', () => {
-    useProjectStore.setState({
-      project: {
-        ...useProjectStore.getState().project!,
-        tasks: {
-          ...useProjectStore.getState().project!.tasks,
-          [taskId]: {
-            ...currentTask(),
-            scheduling: {
-              mode: 'auto',
-              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
-            },
-          },
-        },
-      },
-    })
-
+    setScheduling(bothConstraints)
     renderInspector()
 
-    expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('结束不晚于')
-    // finish 族约束的日期显示在「结束」控件里；纯日期的约束值经 ensureDateTime
-    // 补默认时刻 09:00 显示。
-    expect(screen.getByLabelText('结束')).toHaveTextContent('2026-03-05 09:00')
-  })
+    await chooseOption(user, '开始约束', '开始不晚于')
 
-  it('下拉列出全部 6 种排期方式（auto / manual / 4 种约束）', async () => {
-    const user = userEvent.setup()
-    renderInspector()
-
-    await user.click(screen.getByRole('combobox', { name: '排期方式' }))
-    const options = [
-      '自动排期',
-      '手动排期',
-      '开始不早于',
-      '开始不晚于',
-      '结束不早于',
-      '结束不晚于',
-    ]
-    for (const label of options) {
-      expect(screen.getByRole('option', { name: label, hidden: true })).toBeInTheDocument()
-    }
-  })
-
-  it('自动模式下开始 / 结束都只读', () => {
-    renderInspector()
-    expect(screen.getByLabelText('开始')).toBeDisabled()
-    expect(screen.getByLabelText('结束')).toBeDisabled()
-  })
-
-  it('finish 族约束下「结束」可编辑、「开始」仍只读（族决定可编辑性）', () => {
-    const project = useProjectStore.getState().project!
-    useProjectStore.setState({
-      project: {
-        ...project,
-        tasks: {
-          ...project.tasks,
-          [taskId]: {
-            ...project.tasks[taskId],
-            scheduling: {
-              mode: 'auto',
-              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
-            },
-          },
-        },
-      },
-    })
-    renderInspector()
-
-    expect(screen.getByLabelText('结束')).not.toBeDisabled()
-    expect(screen.getByLabelText('开始')).toBeDisabled()
-  })
-
-  it('start 族约束下「开始」可编辑、「结束」仍只读（族是 start 侧）', () => {
-    const project = useProjectStore.getState().project!
-    useProjectStore.setState({
-      project: {
-        ...project,
-        tasks: {
-          ...project.tasks,
-          [taskId]: {
-            ...project.tasks[taskId],
-            scheduling: {
-              mode: 'auto',
-              startConstraint: { type: 'startNoEarlierThan', date: '2026-03-05' },
-            },
-          },
-        },
-      },
-    })
-    renderInspector()
-
-    expect(screen.getByLabelText('开始')).not.toBeDisabled()
-    expect(screen.getByLabelText('结束')).toBeDisabled()
-  })
-
-  it('编辑「结束」写回 finish 约束的日期（不偷换类型）', async () => {
-    const project = useProjectStore.getState().project!
-    useProjectStore.setState({
-      project: {
-        ...project,
-        tasks: {
-          ...project.tasks,
-          [taskId]: {
-            ...project.tasks[taskId],
-            scheduling: {
-              mode: 'auto',
-              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
-            },
-          },
-        },
-      },
-    })
-    renderInspector()
-
-    // 约束日期已有值（2026-03-05）→ 日历打开在 2026-03，点 9 日。原值带默认时刻 09:00。
-    await pickDay(screen.getByLabelText('结束'), 9)
-
-    // 类型仍是 finishNoLaterThan —— 编辑日期不允许把 Select 上的类型悄悄换掉
     expect(currentTask().scheduling).toEqual({
       mode: 'auto',
-      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-09T09:00' },
+      startConstraint: { type: 'startNoLaterThan', date: '2026-03-05T09:00' },
+      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-06T18:00' },
     })
+  })
+
+  it('编辑约束日期写回该侧约束，不偷换类型、不丢另一侧', async () => {
+    setScheduling(bothConstraints)
+    renderInspector()
+
+    await pickDay(screen.getByLabelText('开始约束日期'), 9)
+
+    expect(currentTask().scheduling).toEqual({
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-09T09:00' },
+      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-06T18:00' },
+    })
+  })
+
+  it('清空一侧约束时保留另一侧', async () => {
+    const user = userEvent.setup()
+    setScheduling(bothConstraints)
+    renderInspector()
+
+    await user.click(screen.getByTestId('constraint-start-clear'))
+
+    expect(currentTask().scheduling).toEqual({
+      mode: 'auto',
+      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-06T18:00' },
+    })
+  })
+
+  it('auto（含带约束）不显示「无法自动移动」的手动提示 —— Task 5 修的误标', () => {
+    setScheduling({
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-05T09:00' },
+    })
+    renderInspector()
+    expect(screen.queryByText(/此任务已手动安排/)).not.toBeInTheDocument()
+  })
+
+  it('摘要任务的排期方式切换禁用', () => {
+    useViewStore.setState({ selectedTaskId: parentId })
+    renderInspector()
+    expect(screen.getByRole('radio', { name: '自动排期' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: '手动排期' })).toBeDisabled()
   })
 
   it('「安排：尽晚」写回 schedulingOrder=alap，切回尽快写回 asap', async () => {
@@ -910,6 +904,7 @@ describe('日程安排组', () => {
   })
 
   it('日期输入不依赖原生 type=date —— 显示始终 YYYY-MM-DD HH:mm（§1.3）', () => {
+    setScheduling({ mode: 'manual', start: '2026-03-02T09:00', finish: '2026-03-04T18:00' })
     renderInspector()
     const start = screen.getByLabelText('开始')
 
@@ -921,6 +916,8 @@ describe('日程安排组', () => {
   })
 
   it('没有排期时：日期留空，浮时是弱化的 —（不是空白、也不是 0）', () => {
+    // 手动分支才有「开始」日期控件；区间留空（未设）以验占位串，派生排期也清空
+    setScheduling({ mode: 'manual', start: '', finish: '' })
     const result = useScheduleStore.getState().result
     useScheduleStore.setState({ result: { ...result, schedules: {} } })
 
@@ -933,13 +930,6 @@ describe('日程安排组', () => {
     // 注意不能再用 toHaveValue —— 该控件是 <button>，.value 恒为空串，
     // toHaveValue('') 会在控件坏掉时也恒绿（这正是本仓库最怕的恒真断言）。
     expect(screen.getByLabelText('开始')).toHaveTextContent('YYYY-MM-DD HH:mm')
-  })
-
-  it('手动模式下显示手动安排提示', async () => {
-    const user = userEvent.setup()
-    renderInspector()
-    await chooseOption(user, '排期方式', '手动排期')
-    expect(screen.getByText(/此任务已手动安排/)).toBeInTheDocument()
   })
 })
 
@@ -1067,6 +1057,76 @@ describe('相关性组（必要条件 / 从属两段）', () => {
     renderInspector()
     expect(screen.queryByRole('combobox', { name: '添加必要条件' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '添加从属' })).not.toBeInTheDocument()
+  })
+})
+
+// Task 5：依赖 lag 的单位选择（工作日 / 自然日 / 百分比）+ 正负值。
+describe('依赖 lag 单位选择', () => {
+  /** 当前项目里唯一那条依赖的 lag */
+  const onlyLag = () => Object.values(useProjectStore.getState().project!.dependencies)[0].lag
+
+  it('三种单位各自 dispatch 出正确的 Lag 形态（数值随单位搬运）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+    await chooseOption(user, '添加必要条件', '写代码', 'add-predecessor')
+
+    const lagInput = screen.getByLabelText('延迟 写代码')
+    const lagUnit = () => screen.getByRole('combobox', { name: '延迟单位 写代码' })
+    expect(lagUnit()).toHaveValue('工作日')
+
+    // 工作日：默认单位
+    await user.clear(lagInput)
+    await user.type(lagInput, '3')
+    expect(onlyLag()).toEqual({ kind: 'workdays', days: 3 })
+
+    // 自然日：数值 3 原样搬运，只换单位
+    await chooseOption(user, '延迟单位 写代码', '自然日')
+    expect(onlyLag()).toEqual({ kind: 'elapsedDays', days: 3 })
+
+    // 百分比：数值搬到 value 字段
+    await chooseOption(user, '延迟单位 写代码', '百分比')
+    expect(onlyLag()).toEqual({ kind: 'percent', value: 3 })
+  })
+
+  it('允许负 lag（工作日）', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+    await chooseOption(user, '添加必要条件', '写代码', 'add-predecessor')
+
+    const lagInput = screen.getByLabelText('延迟 写代码')
+    await user.clear(lagInput)
+    await user.type(lagInput, '-2')
+
+    expect(onlyLag()).toEqual({ kind: 'workdays', days: -2 })
+  })
+
+  it('非 workdays 的 lag 可查看且可编辑，不被静默改写为 workdays', async () => {
+    // 注入一条 elapsedDays lag —— 任务 1 的临时守卫曾把它标为只读（Task 5 替换）
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(siblingId, taskId, 'FS', 0)
+    useProjectStore.setState({
+      project: {
+        ...project,
+        dependencies: {
+          ...project.dependencies,
+          [dep.id]: { ...dep, lag: { kind: 'elapsedDays', days: 4 } },
+        },
+      },
+    })
+
+    renderInspector()
+
+    const lagInput = screen.getByLabelText('延迟 写代码')
+    // 值真实显示（不是 0）、单位读出「自然日」、且可编辑
+    expect(lagInput).toHaveValue('4')
+    expect(lagInput).not.toBeDisabled()
+    expect(screen.getByRole('combobox', { name: '延迟单位 写代码' })).toHaveValue('自然日')
+
+    // 改成 7 → 仍是 elapsedDays（绝不降级为 workdays）
+    const user = userEvent.setup()
+    await user.clear(lagInput)
+    await user.type(lagInput, '7')
+    expect(onlyLag()).toEqual({ kind: 'elapsedDays', days: 7 })
   })
 })
 

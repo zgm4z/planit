@@ -167,6 +167,16 @@
     "summaryHint": "这是摘要任务，其日期由子任务汇总而来，不可直接编辑。",
     "scheduling": "排期方式",
     "manualHint": "此任务已手动安排，且无法自动移动。",
+    "manualDurationHint": "手动排期不消费工期 —— 区间宽度即工期。",
+    "constraints": {
+      "start": "开始约束",
+      "finish": "结束约束",
+      "none": "无约束",
+      "startDate": "开始约束日期",
+      "finishDate": "结束约束日期",
+      "clearStart": "清除开始约束",
+      "clearFinish": "清除结束约束"
+    },
     "start": "开始",
     "finish": "结束",
     "order": "安排",
@@ -189,6 +199,8 @@
       "selectTask": "选择任务…"
     },
     "lag": "延迟",
+    "lagUnit": "延迟单位",
+    "lagUnits": { "workdays": "工作日", "elapsedDays": "自然日", "percent": "百分比" },
     "deletedTask": "(已删除)",
     "project": {
       "name": "名称",
@@ -257,8 +269,6 @@
   "scheduling": {
     "auto": "自动排期",
     "manual": "手动排期",
-    "startOn": "固定开始日期",
-    "finishOn": "固定结束日期",
     "startNoEarlierThan": "开始不早于",
     "startNoLaterThan": "开始不晚于",
     "finishNoEarlierThan": "结束不早于",

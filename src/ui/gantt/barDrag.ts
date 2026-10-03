@@ -1,6 +1,12 @@
 import type { Calendar, DateStr, Project, Task, TaskId } from '../../domain/model/types'
 import { solve } from '../../domain/scheduler'
-import { addWorkdays, snapToWorkday, taskFinish, workdaysBetween } from '../../domain/calendar/workdays'
+import {
+  addWorkdays,
+  manualInterval,
+  snapToWorkday,
+  taskFinish,
+  workdaysBetween,
+} from '../../domain/calendar/workdays'
 import type { Command } from '../../commands/types'
 
 export type DragMode = 'move' | 'resizeStart' | 'resizeEnd'
@@ -163,14 +169,8 @@ export function buildHypothetical(
   const hypotheticalTask: Task = {
     ...task,
     duration: preview.duration,
-    scheduling: {
-      mode: 'manual',
-      start: preview.startDate,
-      // 日历缺失（畸形项目）时退回 startDate 本身，绝不产出非法日期。
-      finish: calendar
-        ? taskFinish(preview.startDate, preview.duration, calendar)
-        : preview.startDate,
-    },
+    // 与 task.resize 落盘走**同一处**区间构造（manualInterval），影子与提交不再各写一份
+    scheduling: manualInterval(preview.startDate, preview.duration, calendar),
   }
 
   return { ...project, tasks: { ...project.tasks, [taskId]: hypotheticalTask } }

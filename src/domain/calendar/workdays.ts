@@ -1,4 +1,4 @@
-import type { Calendar, DateStr } from '../model/types'
+import type { Calendar, DateStr, Scheduling } from '../model/types'
 import { addDays, parseDate } from '../dateUtils'
 
 // 把基础日期工具转出去，让 calendar/ 的调用方不必同时 import 两个模块
@@ -97,6 +97,24 @@ export function taskFinish(start: DateStr, duration: number, cal: Calendar): Dat
 export function taskStart(finish: DateStr, duration: number, cal: Calendar): DateStr {
   if (duration <= 0) return snapToWorkday(finish, cal)
   return addWorkdays(finish, -(duration - 1), cal)
+}
+
+/**
+ * 一个 manual 排期区间：从 `start` 起、宽 `duration` 个工作日。
+ *
+ * 「开始日 + 工期 → 结束日」的算式**只有 `taskFinish` 一处实现**；本函数把该算式与
+ * manual 的区间形态**绑成一个**，供命令层（moveTo / resize）与拖拽影子（barDrag）
+ * 共用 —— 免得各调用点各写一份 `taskFinish(...)` 而悄悄漂移（Task 2 的拖拽 / 命令
+ * 不一致正是这么来的）。
+ *
+ * 日历缺失（畸形项目）时退回 `finish = start`，绝不产出非法日期。
+ */
+export function manualInterval(
+  start: DateStr,
+  duration: number,
+  cal: Calendar | undefined,
+): Scheduling {
+  return { mode: 'manual', start, finish: cal ? taskFinish(start, duration, cal) : start }
 }
 
 /**
