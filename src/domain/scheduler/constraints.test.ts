@@ -265,7 +265,7 @@ describe('backwardBound — lag 黄金矩阵', () => {
     it('workdays +2 / 0 / −2', () => {
       // +2: B.finish 03-06 − 2 工作日 → 03-05(1) 03-04(2) = 03-04
       expect(bwd('FF', wd(2))).toBe('2026-03-04')
-      // 0: 03-06
+      // 0: addWorkdays(03-06, −0) = 03-06（−0 工作日即当日，不移动）
       expect(bwd('FF', wd(0))).toBe('2026-03-06')
       // −2: 03-06 + 2 工作日 → 03-09(1) 03-10(2) = 03-10
       expect(bwd('FF', wd(-2))).toBe('2026-03-10')
@@ -274,7 +274,7 @@ describe('backwardBound — lag 黄金矩阵', () => {
     it('elapsedDays +2 / 0 / −2', () => {
       // +2: addDays(03-06, −2)=03-04 → snapOrPrev = 03-04
       expect(bwd('FF', ed(2))).toBe('2026-03-04')
-      // 0: 03-06
+      // 0: snapToWorkdayOrPrevious(addDays(03-06, −0)=03-06) = 03-06（当日为工作日）
       expect(bwd('FF', ed(0))).toBe('2026-03-06')
       // −2: addDays(03-06, 2)=03-08(日) → snapOrPrev 向前吸附 = 03-06(五)，跨周末
       expect(bwd('FF', ed(-2))).toBe('2026-03-06')
@@ -283,7 +283,7 @@ describe('backwardBound — lag 黄金矩阵', () => {
     it('percent +50 / 0 / −50（A 工期 3）', () => {
       // +50: w=2 → 03-06 − 2 = 03-04
       expect(bwd('FF', pct(50))).toBe('2026-03-04')
-      // 0: w=0 → 03-06
+      // 0: w=ceil(0×3/100)=0 → addWorkdays(03-06, −0) = 03-06（0 工作日即当日）
       expect(bwd('FF', pct(0))).toBe('2026-03-06')
       // −50: w=−1 → 03-06 + 1 工作日 = 03-09
       expect(bwd('FF', pct(-50))).toBe('2026-03-09')
@@ -474,6 +474,8 @@ describe('lag 矩阵 — freeSlack 在 lag ≠ 0 的整链上（runCpm）', () =
     const r = solve([mk('A', 2), mk('B', 1)], [createDependency('A', 'B', 'FS', wd(2))])
     expect(r.B.earlyStart).toBe('2026-03-06')
     expect(r.A.freeSlack).toBe(0)
+    // B 是终端任务（无出边）：cpm.ts 直接把 freeSlack 回退成 totalSlack。
+    // 这条只 pin 终端回退行为，**不检验**边公式 —— 边公式的判别性在上一行的 A.freeSlack。
     expect(r.B.freeSlack).toBe(r.B.totalSlack)
   })
 
@@ -483,6 +485,8 @@ describe('lag 矩阵 — freeSlack 在 lag ≠ 0 的整链上（runCpm）', () =
     const r = solve([mk('A', 3), mk('B', 2)], [createDependency('A', 'B', 'SS', wd(1))])
     expect(r.B.earlyStart).toBe('2026-03-03')
     expect(r.A.freeSlack).toBe(0)
+    // B 是终端任务（无出边）：freeSlack = totalSlack = 0。同样只 pin 终端回退，
+    // 不检验边公式 —— 判别性在上一行的 A.freeSlack。
     expect(r.B.freeSlack).toBe(0)
   })
 
