@@ -258,7 +258,8 @@
     "totalHours": "总时数",
     "totalCost": "总成本",
     "overload": "超载：{{count}} 天",
-    "noOverload": "无超载"
+    "noOverload": "无超载",
+    "budgetExhausted": "资源平衡已达时间预算，上表为当前最优解（可稍后重试或降低计划规模）。"
   },
   "resourceView": {
     "columns": { "kind": "类型", "name": "资源" },

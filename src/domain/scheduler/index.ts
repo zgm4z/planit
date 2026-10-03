@@ -1,6 +1,7 @@
 import type { ComputedSchedule, Project, ScheduleResult, TaskId } from '../model/types'
 import { runCpmWithGraph } from './cpm'
 import { levelLeaves } from './leveling'
+import type { LevelingBudget } from './leveling'
 import { detectConflicts, summarizeParents } from './summarize'
 import { collectCosts, collectEfforts, effectiveDuration } from './effort'
 import { collectBaselineDiffs, collectEarnedValues } from './earnedValue'
@@ -30,8 +31,12 @@ export type { ExpandedDependencies, UnsupportedSummaryDependency } from './expan
  *
  * `fixedEffort` 任务的工期**必须**在 ① 算出来 —— 工期是 CPM 正推的输入。
  * 资源可用期在此翻译成任务级排期边界（见 ResourceBounds）。
+ *
+ * `budget`（可选）：资源平衡的安全预算，缺省见 `DEFAULT_BUDGET`。**只为可测性而暴露** ——
+ * 缺省的 `maxElapsedMs` 是**墙钟**，意味着同一输入在快/慢机器上可能平衡出不同日期
+ * （预算触发时会截断）。测试要断言确定性时，显式传一个足够大的预算即可绕开这一层。
  */
-export function solve(project: Project): ScheduleResult {
+export function solve(project: Project, budget?: LevelingBudget): ScheduleResult {
   const context = buildScheduleContext(project)
   const leaves = context.leaves
   const calendar = context.calendar
@@ -62,7 +67,7 @@ export function solve(project: Project): ScheduleResult {
   // ⑦ 资源平衡（v0.6）：用 CPM 算出的浮时，把资源超载处的任务往后推。
   //    必须在 ② 之后（要浮时）、在摘要汇总之前（产出的 scheduled* 要被汇总）。
   //    只覆盖叶子的 scheduledStart/Finish —— early/late/slack 一律不动（spec §3）。
-  const { result: leveling, dates } = levelLeaves(context, durations, leafSchedules)
+  const { result: leveling, dates } = levelLeaves(context, durations, leafSchedules, budget)
 
   const leveledLeaves: Record<TaskId, ComputedSchedule> = {}
   for (const [id, schedule] of Object.entries(leafSchedules)) {

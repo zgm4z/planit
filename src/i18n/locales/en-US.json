@@ -255,7 +255,8 @@
     "totalHours": "Total hours",
     "totalCost": "Total cost",
     "overload": "Overloaded: {{count}} day(s)",
-    "noOverload": "No overload"
+    "noOverload": "No overload",
+    "budgetExhausted": "Resource leveling hit its time budget; the schedule above is the best found so far (retry later or reduce the plan size)."
   },
   "resourceView": {
     "columns": { "kind": "Type", "name": "Resource" },

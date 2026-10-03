@@ -299,6 +299,14 @@ export interface LevelingResult {
   delays: Record<TaskId, number>
   /** 平衡后**仍无法消除**的超载（浮时耗尽 / 无可推候选）。空数组 = 完全平衡 */
   unresolved: ResourceOverload[]
+  /**
+   * 平衡是否因**安全预算**（迭代上限 / 墙钟）被提前中止（v0.7）。
+   * true ⇒ `unresolved` 可能还含「本可继续化解」的超载，但**绝不挂起**。
+   * 默认态 / 旧结果可省略（视为 false）。
+   */
+  budgetExhausted?: boolean
+  /** 本次平衡实际消耗的迭代轮数（可观测；默认态/旧结果可省略） */
+  iterations?: number
 }
 
 // ── 基线（v1.0）─────────────────────────────────────────

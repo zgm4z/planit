@@ -76,6 +76,9 @@ export function ResourceInspector() {
   const resourceTotals = useScheduleStore((state) => state.result.resourceTotals)
   // v0.6：平衡后仍存在的超载（浮时耗尽 / 无可推候选）。数据源唯一：引擎的 leveling.unresolved
   const unresolved = useScheduleStore((state) => state.result.leveling.unresolved)
+  // v0.7：平衡是否因**时间预算**提前收工。这与「尽力了但推不动」是两回事 ——
+  // 前者是「再算一会儿可能有解」，后者是「再算也推不动」，不区分就是在骗用户。
+  const budgetExhausted = useScheduleStore((state) => state.result.leveling.budgetExhausted)
 
   const resources = Object.values(project.resources)
   // 选中态来自 viewStore（菜单栏也要能改它）。悬空 id（删资源后残留）回落到第一个资源。
@@ -183,6 +186,14 @@ export function ResourceInspector() {
           {t('resource.noOverload')}
         </Text>
       )}
+
+      {/* 提前收工的**独立**告知：上面那行只说「还剩多少超载」，不说「为什么没消除」。
+          预算耗尽时结果是「当前最优解」而非「已尽力」，用户据此判断该不该等/该不该降规模。 */}
+      {budgetExhausted ? (
+        <Alert color="yellow" p="xs" data-testid="leveling-budget-exhausted">
+          {t('resource.budgetExhausted')}
+        </Alert>
+      ) : null}
 
       {/* ── 基本信息 ── 名称 / 类型 / 电子邮件。
           排序按「使用频率 × 重要性」：名称必填、类型（人员/设备/素材/群组）常改且

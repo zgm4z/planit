@@ -255,7 +255,8 @@
     "totalHours": "総時間",
     "totalCost": "総コスト",
     "overload": "超過負荷：{{count}} 日",
-    "noOverload": "超過負荷なし"
+    "noOverload": "超過負荷なし",
+    "budgetExhausted": "リソース平準化が時間予算に達しました。上記は現時点の最良解です（後で再試行するか、計画規模を縮小してください）。"
   },
   "resourceView": {
     "columns": { "kind": "種類", "name": "資源" },

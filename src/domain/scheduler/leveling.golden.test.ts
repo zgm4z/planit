@@ -239,6 +239,47 @@ describe('黄金判据（稳定性）：无超载时 dates 与 scheduled 逐字�
   })
 })
 
+describe('安全预算：到点即停，绝不挂起', () => {
+  it('迭代预算为 0 → 立即返回，如实上报未解超载（budgetExhausted=true）', () => {
+    const { project } = sharedResourceProject()
+    const { context, durations, schedules } = solveCpm(project)
+
+    const { result } = levelLeaves(context, durations, schedules, {
+      maxIterations: 0,
+      maxElapsedMs: Number.POSITIVE_INFINITY,
+    })
+
+    // 「慢而诚实」：预算截断后不假装成功 —— 超载原样留在 unresolved 里。
+    expect(result.budgetExhausted).toBe(true)
+    expect(result.iterations).toBe(0)
+    expect(result.unresolved.map((o) => o.date)).toEqual(['2026-03-02', '2026-03-03'])
+  })
+
+  it('墙钟预算为 0 → 同样立即返回（两条预算都能独立截断）', () => {
+    const { project } = sharedResourceProject()
+    const { context, durations, schedules } = solveCpm(project)
+
+    const { result } = levelLeaves(context, durations, schedules, {
+      maxIterations: Number.POSITIVE_INFINITY,
+      maxElapsedMs: 0,
+    })
+
+    expect(result.budgetExhausted).toBe(true)
+    expect(result.unresolved).not.toEqual([])
+  })
+
+  it('预算充足 → 正常收敛，budgetExhausted=false 且 iterations>0（默认态不误报截断）', () => {
+    const { project } = sharedResourceProject()
+    const { context, durations, schedules } = solveCpm(project)
+
+    const { result } = levelLeaves(context, durations, schedules)
+
+    expect(result.budgetExhausted).toBe(false)
+    expect(result.iterations).toBeGreaterThan(0)
+    expect(result.unresolved).toEqual([])
+  })
+})
+
 describe('回归 v0.6.1：冻结的格子若负载增长，必须被重新纳入考虑', () => {
   /** 用 manual 区间（单日）把任务钉死在某天 → slack = 0（设计上不可推走） */
   function pin(task: ReturnType<typeof createTask>, date: string): Task {
