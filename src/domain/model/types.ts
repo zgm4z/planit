@@ -35,18 +35,29 @@ export interface Calendar {
 
 // ── 任务 ────────────────────────────────────────────────
 
-export type ConstraintType =
-  | 'startOn'
-  | 'finishOn'
-  | 'startNoEarlierThan'
-  | 'startNoLaterThan'
-  | 'finishNoEarlierThan'
-  | 'finishNoLaterThan'
+/** start 侧的约束类型。约束日期是**输入锚点**，带时刻；引擎经 toDateStr 归一后再进 CPM。 */
+export type StartConstraintType = 'startNoEarlierThan' | 'startNoLaterThan'
+/** finish 侧的约束类型。约束日期是**输入锚点**，带时刻；引擎经 toDateStr 归一后再进 CPM。 */
+export type FinishConstraintType = 'finishNoEarlierThan' | 'finishNoLaterThan'
 
+/**
+ * 任务的排期方式（spec §1.2）。
+ *
+ * - `auto`：交由引擎在「依赖允许的时间窗」内排。可同时挂**一个 start 约束 + 一个 finish 约束**
+ *   （对齐 OmniPlan「每个任务一条 start 约束 + 一条 end 约束」）。
+ * - `manual`：用户钉死的区间。早链 / 晚链一律取该区间为定值；引擎**不消费** `Task.duration`
+ *   （区间宽度即真相）。里程碑 manual 时 `start === finish`。
+ *
+ * 旧形态的 `startOn` / `finishOn` 已移除：OmniPlan 没有「恰在当日」约束，钉死日期就是
+ * 手动排期（corpus 的 48 个 `locked-start-date` 即真实用法）。
+ */
 export type Scheduling =
-  | { mode: 'auto' }
-  // v0.8：约束日期是**输入锚点**，带时刻；引擎经 toDateStr 归一后再进 CPM（cpm.ts:221/241）
-  | { mode: 'constraint'; type: ConstraintType; date: DateTimeStr }
+  | {
+      mode: 'auto'
+      startConstraint?: { type: StartConstraintType; date: DateTimeStr }
+      finishConstraint?: { type: FinishConstraintType; date: DateTimeStr }
+    }
+  | { mode: 'manual'; start: DateTimeStr; finish: DateTimeStr }
 
 export type EffortMode = 'fixedDuration' | 'fixedEffort'
 

@@ -17,7 +17,9 @@ function buildProject(startDate: string, constraintDate?: string) {
   p.rootIds = []
   const t1 = createTask({ name: 'A', duration: 2 })
   const t2 = createTask({ name: 'B', duration: 3 })
-  if (constraintDate) t1.scheduling = { mode: 'constraint', type: 'startOn', date: constraintDate }
+  if (constraintDate) {
+    t1.scheduling = { mode: 'manual', start: constraintDate, finish: constraintDate }
+  }
   p.tasks = { [t1.id]: t1, [t2.id]: t2 }
   p.rootIds = [t1.id, t2.id]
   p.dependencies = {}

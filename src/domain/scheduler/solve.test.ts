@@ -202,9 +202,8 @@ describe('solve — 中性不可行冲突', () => {
     const project = createProject('资源边界冲突', '2026-03-02')
     const task = createTask({ name: '受约束任务', duration: 2 })
     task.scheduling = {
-      mode: 'constraint',
-      type: 'startNoEarlierThan',
-      date: '2026-03-10T09:00',
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-10T09:00' },
     }
     addTask(project, task)
 

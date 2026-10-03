@@ -65,7 +65,7 @@ export function GanttRows({
         if (!schedule) return null
 
         // 影子来自「假设项目解出来的排期」，被拖的那根条也走同一个来源 ——
-        // 这样影子与松手后真正落盘的结果天然一致（含 finishOn 这类约束）。
+        // 这样影子与松手后真正落盘的结果天然一致（v6 起拖拽落 manual）。
         const shadow = dragShadow?.tasks[task.id]
 
         // 只有**确实挪动了**的条才画成影子：全量标影子会把没受影响的条也变灰，

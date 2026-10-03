@@ -2,6 +2,7 @@ import type {
   Calendar,
   ComputedSchedule,
   DateStr,
+  DateTimeStr,
   Dependency,
   SchedulingDirection,
   Task,
@@ -67,7 +68,18 @@ export function runCpmWithGraph(
 
     for (const id of graph.order) {
       const task = byId.get(id)!
-      let start = constraintLowerBound(task, calendar, anchor)
+
+      // manual：区间为定值 —— 直接取归一后的 manual 区间，**跳过**入边下界、
+      // 约束下界与资源可用期下界（availableFrom）的 max（spec §2.2 + Ruling 2：
+      // manual 不被任何机制移动，违反只报冲突）。其**出边照常**给后继提供下界。
+      if (task.scheduling.mode === 'manual') {
+        const span = manualSpan(task.scheduling, calendar)
+        earlyStart.set(id, span.start)
+        earlyFinish.set(id, span.finish)
+        continue
+      }
+
+      let start = schedulingLowerBound(task, calendar, anchor)
 
       // 资源可用期的开始下界（availableFrom）—— 与任务自身的约束取较晚者
       const earliest = resourceBounds?.[id]?.earliestStart
@@ -92,8 +104,8 @@ export function runCpmWithGraph(
       // 可用期是任务级的**上下界**：availableFrom = 下界（最早能开始），
       // availableUntil = 上界（最晚能结束）。二者**有意只各进一趟** ——
       // 下界只进正推（见上方 earliestStart），上界只进逆推（见 backwardPass 的
-      // latestFinish）。这与既有的约束机制 constraintLowerBound /
-      // constraintUpperBound 完全同构：下界刻画最早起点、上界刻画最晚终点，
+      // latestFinish）。这与既有的约束机制 schedulingLowerBound /
+      // schedulingUpperBound 完全同构：下界刻画最早起点、上界刻画最晚终点，
       // 各归其位。切勿为了「两趟都不越界」把两条边界都塞进两趟。
       //
       // 刻意**不**在正推里夹上界：earlyFinish 是任务的真实完成日，甘特条宽度、
@@ -114,7 +126,19 @@ export function runCpmWithGraph(
 
     for (const id of [...graph.order].reverse()) {
       const task = byId.get(id)!
-      let finish = constraintUpperBound(task, calendar, anchor)
+
+      // manual：区间为定值 —— lateStart / lateFinish 直接取归一后的 manual 区间，
+      // **跳过**出边上界、约束上界与资源可用期上界（availableUntil）的 min
+      // （spec §2.2：manual 不被任何机制移动）。其**入边照常**给前置提供上界 ——
+      // 前置被 manual 顶住 → 负浮时 → 冲突（由 detectConflicts 如实上报）。
+      if (task.scheduling.mode === 'manual') {
+        const span = manualSpan(task.scheduling, calendar)
+        lateStart.set(id, span.start)
+        lateFinish.set(id, span.finish)
+        continue
+      }
+
+      let finish = schedulingUpperBound(task, calendar, anchor)
 
       // 资源可用期的结束上界（availableUntil）—— 与任务自身的约束取较早者
       const latest = resourceBounds?.[id]?.latestFinish
@@ -238,46 +262,68 @@ export function runCpmWithGraph(
   return result
 }
 
-/** 约束给出的「最早开始」下界。auto 任务下界即项目起点 */
-function constraintLowerBound(task: Task, cal: Calendar, projectStart: DateStr): DateStr {
-  if (task.scheduling.mode === 'auto') return projectStart
-
-  // 约束日期是承载时刻的字段：进入 `taskStart` / `taskFinish` / 直接作为边界返回前先归一。
-  const { type } = task.scheduling
-  const date = toDateStr(task.scheduling.date)
-  switch (type) {
-    case 'startOn':
-    case 'startNoEarlierThan':
-      return date
-    case 'finishOn':
-    case 'finishNoEarlierThan':
-      return taskStart(date, task.duration, cal)
-    case 'startNoLaterThan':
-    case 'finishNoLaterThan':
-      return projectStart
+/**
+ * manual 任务的**归一区间**：两端都向前吸附到工作日（`snapToWorkday`，与拖拽落点
+ * 同口径）。向前吸附（而非 finish 向前吸附）保证区间有序（start ≤ finish）、
+ * 里程碑 `start === finish` 成立，且早链晚链取值一致 —— manual 不被任何机制移动。
+ *
+ * 引擎**不消费** `Task.duration`：区间宽度即真相。
+ */
+function manualSpan(
+  scheduling: { start: DateTimeStr; finish: DateTimeStr },
+  cal: Calendar,
+): { start: DateStr; finish: DateStr } {
+  return {
+    start: snapToWorkday(toDateStr(scheduling.start), cal),
+    finish: snapToWorkday(toDateStr(scheduling.finish), cal),
   }
 }
 
-/** 约束给出的「最晚结束」上界。auto 任务上界即项目完成日 */
-function constraintUpperBound(task: Task, cal: Calendar, projectFinish: DateStr): DateStr {
-  if (task.scheduling.mode === 'auto') return projectFinish
+/**
+ * 任务给出的「最早开始」下界（spec §2.3「各归其位」）：
+ * - auto + `startConstraint.startNoEarlierThan` → 该日期
+ * - auto + `finishConstraint.finishNoEarlierThan` → `taskStart(date, duration)` 折算
+ * - 无 start 侧下界约束 → 项目起点
+ *
+ * 约束日期是承载时刻的字段：进入 `taskStart` / 直接作为边界返回前先 `toDateStr` 归一。
+ * 两条下界同时存在时取较晚者（任务须同时满足）。
+ */
+function schedulingLowerBound(task: Task, cal: Calendar, projectStart: DateStr): DateStr {
+  const s = task.scheduling
+  if (s.mode === 'manual') return manualSpan(s, cal).start
 
-  // 约束日期是承载时刻的字段：进入 `taskStart` / `taskFinish` / 直接作为边界返回前先归一。
-  const { type } = task.scheduling
-  const date = toDateStr(task.scheduling.date)
-  switch (type) {
-    case 'finishOn':
-      return date
-    case 'finishNoLaterThan':
-      return snapToWorkdayOrPrevious(date, cal)
-    case 'startOn':
-      return taskFinish(date, task.duration, cal)
-    case 'startNoLaterThan':
-      return taskFinish(snapToWorkdayOrPrevious(date, cal), task.duration, cal)
-    case 'startNoEarlierThan':
-    case 'finishNoEarlierThan':
-      return projectFinish
+  const bounds: DateStr[] = []
+  if (s.startConstraint?.type === 'startNoEarlierThan') {
+    bounds.push(toDateStr(s.startConstraint.date))
   }
+  if (s.finishConstraint?.type === 'finishNoEarlierThan') {
+    bounds.push(taskStart(toDateStr(s.finishConstraint.date), task.duration, cal))
+  }
+  return bounds.length === 0 ? projectStart : bounds.reduce((a, b) => (a > b ? a : b))
+}
+
+/**
+ * 任务给出的「最晚结束」上界（spec §2.3）：
+ * - auto + `finishConstraint.finishNoLaterThan` → `snapToWorkdayOrPrevious(date)`
+ * - auto + `startConstraint.startNoLaterThan` → `taskFinish(snapToWorkdayOrPrevious(date), duration)`
+ * - 无 finish 侧上界约束 → 项目完成日
+ *
+ * 周末上界语义（`snapToWorkdayOrPrevious` 一族）保持不动。两条上界同时存在时取较早者。
+ */
+function schedulingUpperBound(task: Task, cal: Calendar, projectFinish: DateStr): DateStr {
+  const s = task.scheduling
+  if (s.mode === 'manual') return manualSpan(s, cal).finish
+
+  const bounds: DateStr[] = []
+  if (s.finishConstraint?.type === 'finishNoLaterThan') {
+    bounds.push(snapToWorkdayOrPrevious(toDateStr(s.finishConstraint.date), cal))
+  }
+  if (s.startConstraint?.type === 'startNoLaterThan') {
+    bounds.push(
+      taskFinish(snapToWorkdayOrPrevious(toDateStr(s.startConstraint.date), cal), task.duration, cal),
+    )
+  }
+  return bounds.length === 0 ? projectFinish : bounds.reduce((a, b) => (a < b ? a : b))
 }
 
 function latestOf(dates: DateStr[], fallback: DateStr): DateStr {

@@ -17,7 +17,7 @@ import type { Task } from '../model/types'
  * 解释文字都矛盾；此处按表实现。
  *
  * 与 Task.scheduling 的分工（两者不冲突，别在别处再定义一遍）：
- *   Task.scheduling   定义**可行窗口** —— constraintLowerBound / constraintUpperBound
+ *   Task.scheduling   定义**可行窗口** —— schedulingLowerBound / schedulingUpperBound
  *                     给出 [下界, 上界]，硬日期约束把窗口夹紧
  *   schedulingOrder   在窗口**之内**选端点 —— early 取早端，late 取晚端
  *

@@ -22,11 +22,12 @@ import type { TFunction } from 'i18next'
 
 import type {
   ComputedSchedule,
-  ConstraintType,
   Dependency,
   DependencyType,
   EffortMode,
+  FinishConstraintType,
   SchedulingOrder,
+  StartConstraintType,
   Task,
   TaskId,
 } from '../../domain/model/types'
@@ -57,15 +58,6 @@ import { formatCost, formatDate, formatDays, formatEffort } from '../shared/form
 import { ProjectInspector } from './ProjectInspector'
 import { ResourceInspector } from './ResourceInspector'
 import styles from '../styles/Inspector.module.scss'
-
-const CONSTRAINT_TYPES: ConstraintType[] = [
-  'startOn',
-  'finishOn',
-  'startNoEarlierThan',
-  'startNoLaterThan',
-  'finishNoEarlierThan',
-  'finishNoLaterThan',
-]
 
 const DEPENDENCY_TYPES: DependencyType[] = ['FS', 'SS', 'FF', 'SF']
 
@@ -650,10 +642,13 @@ function InfoGroup({
   )
 }
 
-// 约束按「它钉住的是开始还是结束」分成两族 —— 决定哪个日期字段可编辑（偏差 3）
-const START_TYPES: readonly ConstraintType[] = ['startOn', 'startNoEarlierThan', 'startNoLaterThan']
-const FINISH_TYPES: readonly ConstraintType[] = [
-  'finishOn',
+// v6 起 auto 任务可同时挂**一个 start 约束 + 一个 finish 约束**（spec §1.2），
+// 约束按「钉住的是开始还是结束」分成两族，各自只决定对应端的日期字段是否可编辑。
+const START_CONSTRAINT_TYPES: readonly StartConstraintType[] = [
+  'startNoEarlierThan',
+  'startNoLaterThan',
+]
+const FINISH_CONSTRAINT_TYPES: readonly FinishConstraintType[] = [
   'finishNoEarlierThan',
   'finishNoLaterThan',
 ]
@@ -674,75 +669,102 @@ function ScheduleGroup({
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
-  const constraint = task.scheduling.mode === 'constraint' ? task.scheduling : null
+  const scheduling = task.scheduling
+  const isManual = scheduling.mode === 'manual'
+  const startConstraint = scheduling.mode === 'auto' ? scheduling.startConstraint : undefined
+  const finishConstraint = scheduling.mode === 'auto' ? scheduling.finishConstraint : undefined
+
   // 排期日期一律取引擎输出（v0.2 已把「方向 × 顺序」烤进 scheduledStart/Finish），
   // 不在 UI 里重新推方向 —— 那是引擎的职责。
   const dates = schedule ? resolveScheduleDates(schedule) : null
 
-  // 一个任务只有**一条** Scheduling（{mode, type, date}），所以「对应族」的字段才可编辑：
-  // start* 族 → 开始可编辑；finish* 族 → 结束可编辑；另一个显示派生排期值、只读。
-  // 这样只有 Select 在设置 type，编辑日期不会偷换类型（偏差 2 + 3）。
-  const startType = constraint && START_TYPES.includes(constraint.type) ? constraint.type : null
-  const finishType = constraint && FINISH_TYPES.includes(constraint.type) ? constraint.type : null
+  // manual 分支两端都可编辑（区间即真相）；auto 分支只有**挂了约束的那一端**可编辑，
+  // 另一端显示派生排期值、只读。这样只有 Select 在设置约束类型，编辑日期不会偷换它。
+  const startEditable = !isSummary && (isManual || startConstraint !== undefined)
+  const finishEditable = !isSummary && (isManual || finishConstraint !== undefined)
 
-  const startEditable = !isSummary && startType !== null
-  const finishEditable = !isSummary && finishType !== null
-  // 约束日期已带时刻（Task 3 起是 DateTimeStr）；派生排期是纯日期（引擎产物），
-  // 显示前补默认时刻 —— 于是「开始」显示 09:00、「结束」显示 18:00，与 §4 的默认时刻表一致。
-  const startValue = startType
-    ? constraint!.date
-    : ensureDateTime(dates?.start ?? '', DEFAULT_START_TIME)
-  const finishValue = finishType
-    ? constraint!.date
-    : ensureDateTime(dates?.finish ?? '', DEFAULT_FINISH_TIME)
+  // 约束日期已带时刻（DateTimeStr）；派生排期是纯日期（引擎产物），显示前补默认时刻 ——
+  // 于是「开始」显示 09:00、「结束」显示 18:00，与 §4 的默认时刻表一致。
+  const startValue = isManual
+    ? scheduling.start
+    : startConstraint
+      ? startConstraint.date
+      : ensureDateTime(dates?.start ?? '', DEFAULT_START_TIME)
+  const finishValue = isManual
+    ? scheduling.finish
+    : finishConstraint
+      ? finishConstraint.date
+      : ensureDateTime(dates?.finish ?? '', DEFAULT_FINISH_TIME)
+
+  // 一个 Select 承载「排期方式」全貌：auto / manual / 4 种约束。任务同时挂两条约束时，
+  // Select 显示 start 侧那一条（完整面板在 Task 5）。
+  const selectValue = isManual
+    ? 'manual'
+    : (startConstraint?.type ?? finishConstraint?.type ?? 'auto')
+
   const schedId = useId()
+  // 新约束 / 新 manual 区间的播种值取「用户看到的排期端」，带时刻（与类型契约一致）。
+  const seedStart = (): string => ensureDateTime(dates?.start ?? project.startDate, DEFAULT_START_TIME)
+  const seedFinish = (): string => ensureDateTime(dates?.finish ?? project.startDate, DEFAULT_FINISH_TIME)
+
+  const setScheduling = (next: Task['scheduling'], coalesceKey?: string): void => {
+    dispatch({
+      type: 'task.setScheduling',
+      label: 'commands.task.setScheduling',
+      payload: { taskId, scheduling: next },
+      ...(coalesceKey ? { coalesceKey } : {}),
+    })
+  }
 
   return (
     <Stack gap={GAP_BLOCK}>
       <Stack gap={GAP_INNER}>
-        {/* 合并的排期方式 Select（偏差 2）：一个控件同时设 mode 与 type。
-            auto + 6 种 ConstraintType —— 它就是全 App 唯一在设置约束的控件。 */}
+        {/* 排期方式 Select：auto / manual / 4 种约束。它就是全 App 唯一在设置排期的控件。 */}
         <FieldRow label={t('inspector.scheduling')} controlId={schedId}>
         <Select
           id={schedId}
-          value={constraint ? constraint.type : 'auto'}
+          value={selectValue}
           // 摘要任务的日期由子任务汇总 —— task.setScheduling 对 group 本就是 no-op，
           // 这里禁用是为了不出现「点了没反应」的控件（分批原则）
           disabled={isSummary}
           data={[
             { value: 'auto', label: t('scheduling.auto') },
-            ...CONSTRAINT_TYPES.map((type) => ({ value: type, label: t(`scheduling.${type}`) })),
+            { value: 'manual', label: t('scheduling.manual') },
+            ...START_CONSTRAINT_TYPES.map((type) => ({
+              value: type,
+              label: t(`scheduling.${type}`),
+            })),
+            ...FINISH_CONSTRAINT_TYPES.map((type) => ({
+              value: type,
+              label: t(`scheduling.${type}`),
+            })),
           ]}
           onChange={(value) => {
             if (!value || isSummary) return
             if (value === 'auto') {
-              dispatch({
-                type: 'task.setScheduling',
-                label: 'commands.task.setScheduling',
-                payload: { taskId, scheduling: { mode: 'auto' } },
+              setScheduling({ mode: 'auto' })
+              return
+            }
+            if (value === 'manual') {
+              setScheduling({ mode: 'manual', start: seedStart(), finish: seedFinish() })
+              return
+            }
+            if (START_CONSTRAINT_TYPES.includes(value as StartConstraintType)) {
+              setScheduling({
+                mode: 'auto',
+                startConstraint: { type: value as StartConstraintType, date: seedStart() },
               })
               return
             }
-            dispatch({
-              type: 'task.setScheduling',
-              label: 'commands.task.setScheduling',
-              payload: {
-                taskId,
-                scheduling: {
-                  mode: 'constraint',
-                  type: value as ConstraintType,
-                  // 新约束的日期取「用户看到的开始日」，与下方字段同口径。
-                  // 播种的值必须是带时刻的 —— 与 §2.2 的类型契约一致（纯日期只是
-                  // 靠下游 toDateStr 兜底，不该把「未归一」的形状写进 store）。
-                  date: ensureDateTime(dates?.start ?? project.startDate, DEFAULT_START_TIME),
-                },
-              },
+            setScheduling({
+              mode: 'auto',
+              finishConstraint: { type: value as FinishConstraintType, date: seedFinish() },
             })
           }}
         />
         </FieldRow>
 
-        {constraint && (
+        {(isManual || startConstraint || finishConstraint) && (
           <Text fz="xs" c="dimmed">
             {t('inspector.manualHint')}
           </Text>
@@ -756,17 +778,21 @@ function ScheduleGroup({
           disabled={!startEditable}
           onBlur={breakCoalescing}
           onChange={(next) => {
-            // 只改日期、不改类型：startType 来自当前约束，绝不在编辑时改写它
-            if (!startType) return
-            dispatch({
-              type: 'task.setScheduling',
-              label: 'commands.task.setScheduling',
-              payload: {
-                taskId,
-                scheduling: { mode: 'constraint', type: startType, date: next },
+            // manual：改开始日、保留结束日（区间平移）
+            if (scheduling.mode === 'manual') {
+              setScheduling({ mode: 'manual', start: next, finish: scheduling.finish }, `task.setScheduling:${taskId}`)
+              return
+            }
+            // auto：只改当前 start 约束的日期，绝不新增 / 偷换类型。finish 约束原样保留。
+            if (!startConstraint) return
+            setScheduling(
+              {
+                mode: 'auto',
+                startConstraint: { ...startConstraint, date: next },
+                ...(finishConstraint ? { finishConstraint } : {}),
               },
-              coalesceKey: `task.setScheduling:${taskId}`,
-            })
+              `task.setScheduling:${taskId}`,
+            )
           }}
         />
 
@@ -776,16 +802,19 @@ function ScheduleGroup({
           disabled={!finishEditable}
           onBlur={breakCoalescing}
           onChange={(next) => {
-            if (!finishType) return
-            dispatch({
-              type: 'task.setScheduling',
-              label: 'commands.task.setScheduling',
-              payload: {
-                taskId,
-                scheduling: { mode: 'constraint', type: finishType, date: next },
+            if (scheduling.mode === 'manual') {
+              setScheduling({ mode: 'manual', start: scheduling.start, finish: next }, `task.setScheduling:${taskId}`)
+              return
+            }
+            if (!finishConstraint) return
+            setScheduling(
+              {
+                mode: 'auto',
+                finishConstraint: { ...finishConstraint, date: next },
+                ...(startConstraint ? { startConstraint } : {}),
               },
-              coalesceKey: `task.setScheduling:${taskId}`,
-            })
+              `task.setScheduling:${taskId}`,
+            )
           }}
         />
       </Stack>

@@ -442,7 +442,12 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
           ...project.tasks,
           [taskId]: {
             ...project.tasks[taskId],
-            scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-02' },
+            // auto + finish 上界 03-04：早链被依赖顶到 03-04、晚链被上界拉到 03-04——
+            // lateStart 02-26/03-02 与 earlyStart 03-04 之差给出 -2 的负浮时。
+            scheduling: {
+              mode: 'auto',
+              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-04' },
+            },
           },
         },
       },
@@ -452,7 +457,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
 
     const alert = screen.getByRole('alert')
     expect(alert).toHaveTextContent('排期不可行：该任务浮时为负（-2 个工作日）')
-    expect(alert).not.toHaveTextContent('startOn')
+    expect(alert).not.toHaveTextContent('finishNoLaterThan')
   })
 
   it('切换到 English 后标签变英文', async () => {
@@ -604,38 +609,49 @@ describe('任务信息组', () => {
 })
 
 describe('日程安排组', () => {
-  it('排期方式切到固定开始日期会写入约束', async () => {
+  it('排期方式切到「开始不早于」写入 auto startConstraint', async () => {
     const user = userEvent.setup()
     renderInspector()
 
-    // 初始读出的应是「自动排期」（合并 Select 的 auto 项）
+    // 初始读出的应是「自动排期」（Select 的 auto 项）
     expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('自动排期')
 
-    await chooseOption(user, '排期方式', '固定开始日期')
+    await chooseOption(user, '排期方式', '开始不早于')
 
-    const scheduling = currentTask().scheduling
-    expect(scheduling.mode).toBe('constraint')
-    if (scheduling.mode !== 'constraint') throw new Error('unreachable')
-    expect(scheduling.type).toBe('startOn')
-    // 这条断言测的是「UI 把用户看到的开始日写进约束日期」。**期望值必须是字面量**：
-    // 从 scheduledStart 现取再比是循环论证（同一份实现写一次读一次，两边一起错也绿）。
-    // 播种值带默认时刻 09:00（§4 默认时刻表），派生排期 scheduledStart 是纯日期
-    // '2026-03-02'，故写入的是 '2026-03-02T09:00'（DateTimeStr 契约）。
-    expect(scheduling.date).toBe('2026-03-02T09:00')
+    // 播种值带默认时刻 09:00（§4 默认时刻表）；派生排期 scheduledStart 是纯日期
+    // '2026-03-02'，故写入 '2026-03-02T09:00'（DateTimeStr 契约）。
+    expect(currentTask().scheduling).toEqual({
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-02T09:00' },
+    })
   })
 
-  it('排期方式切到固定结束日期会写入 finishOn', async () => {
+  it('排期方式切到「结束不晚于」写入 auto finishConstraint', async () => {
     const user = userEvent.setup()
     renderInspector()
 
-    await chooseOption(user, '排期方式', '固定结束日期')
+    await chooseOption(user, '排期方式', '结束不晚于')
 
+    // 播种值取任务当前排期的**结束日**（03-04），带默认结束时刻 18:00（§4）
     expect(currentTask().scheduling).toEqual({
-      mode: 'constraint',
-      type: 'finishOn',
-      // 播种值带默认时刻 09:00（§4）—— 纯日期靠下游 toDateStr 兜底会掩盖「未归一」
-      date: '2026-03-02T09:00',
+      mode: 'auto',
+      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-04T18:00' },
     })
+  })
+
+  it('排期方式切到「手动排期」写入 manual 区间，两端都可编辑', async () => {
+    const user = userEvent.setup()
+    renderInspector()
+
+    await chooseOption(user, '排期方式', '手动排期')
+
+    // 区间初值 = 任务当前排期 [start, finish]（带默认时刻 09:00 / 18:00）
+    expect(currentTask().scheduling).toEqual({
+      mode: 'manual', start: '2026-03-02T09:00', finish: '2026-03-04T18:00',
+    })
+    // manual 区间两端都可编辑（区间即真相）
+    expect(screen.getByLabelText('开始')).not.toBeDisabled()
+    expect(screen.getByLabelText('结束')).not.toBeDisabled()
   })
 
   it('排期方式切回自动会清掉约束', async () => {
@@ -647,7 +663,10 @@ describe('日程安排组', () => {
           ...useProjectStore.getState().project!.tasks,
           [taskId]: {
             ...currentTask(),
-            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+            scheduling: {
+              mode: 'auto',
+              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
+            },
           },
         },
       },
@@ -667,7 +686,10 @@ describe('日程安排组', () => {
           ...useProjectStore.getState().project!.tasks,
           [taskId]: {
             ...currentTask(),
-            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+            scheduling: {
+              mode: 'auto',
+              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
+            },
           },
         },
       },
@@ -675,22 +697,20 @@ describe('日程安排组', () => {
 
     renderInspector()
 
-    expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('固定结束日期')
-    // Task 4 把「约束日期」并入开始/结束两个字段：finishOn 属「结束」族，
-    // 约束的日期就显示在「结束」控件里（断言强度不变，只是换了控件位置）。
-    // 控件不再是 <input>（DateTimePicker 渲染按钮），故断显示文案而非 .value；
-    // 纯日期的约束值经 ensureDateTime 补默认时刻 09:00 显示。
+    expect(screen.getByRole('combobox', { name: '排期方式' })).toHaveValue('结束不晚于')
+    // finish 族约束的日期显示在「结束」控件里；纯日期的约束值经 ensureDateTime
+    // 补默认时刻 09:00 显示。
     expect(screen.getByLabelText('结束')).toHaveTextContent('2026-03-05 09:00')
   })
 
-  it('下拉列出全部 6 种 ConstraintType（一个控件即可设置任一约束）', async () => {
+  it('下拉列出全部 6 种排期方式（auto / manual / 4 种约束）', async () => {
     const user = userEvent.setup()
     renderInspector()
 
     await user.click(screen.getByRole('combobox', { name: '排期方式' }))
     const options = [
-      '固定开始日期',
-      '固定结束日期',
+      '自动排期',
+      '手动排期',
       '开始不早于',
       '开始不晚于',
       '结束不早于',
@@ -707,7 +727,7 @@ describe('日程安排组', () => {
     expect(screen.getByLabelText('结束')).toBeDisabled()
   })
 
-  it('endOn 约束下「结束」可编辑、「开始」仍只读（偏差 3：族决定可编辑性）', () => {
+  it('finish 族约束下「结束」可编辑、「开始」仍只读（族决定可编辑性）', () => {
     const project = useProjectStore.getState().project!
     useProjectStore.setState({
       project: {
@@ -716,19 +736,21 @@ describe('日程安排组', () => {
           ...project.tasks,
           [taskId]: {
             ...project.tasks[taskId],
-            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+            scheduling: {
+              mode: 'auto',
+              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
+            },
           },
         },
       },
     })
     renderInspector()
 
-    // finishOn 属于「结束」族 → 结束可编辑、开始只读
     expect(screen.getByLabelText('结束')).not.toBeDisabled()
     expect(screen.getByLabelText('开始')).toBeDisabled()
   })
 
-  it('startOn 约束下「开始」可编辑、「结束」仍只读（族是 start 侧）', () => {
+  it('start 族约束下「开始」可编辑、「结束」仍只读（族是 start 侧）', () => {
     const project = useProjectStore.getState().project!
     useProjectStore.setState({
       project: {
@@ -737,7 +759,10 @@ describe('日程安排组', () => {
           ...project.tasks,
           [taskId]: {
             ...project.tasks[taskId],
-            scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-05' },
+            scheduling: {
+              mode: 'auto',
+              startConstraint: { type: 'startNoEarlierThan', date: '2026-03-05' },
+            },
           },
         },
       },
@@ -748,7 +773,7 @@ describe('日程安排组', () => {
     expect(screen.getByLabelText('结束')).toBeDisabled()
   })
 
-  it('编辑「结束」写回 finishOn 约束的日期（不偷换类型）', async () => {
+  it('编辑「结束」写回 finish 约束的日期（不偷换类型）', async () => {
     const project = useProjectStore.getState().project!
     useProjectStore.setState({
       project: {
@@ -757,22 +782,23 @@ describe('日程安排组', () => {
           ...project.tasks,
           [taskId]: {
             ...project.tasks[taskId],
-            scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-05' },
+            scheduling: {
+              mode: 'auto',
+              finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05' },
+            },
           },
         },
       },
     })
     renderInspector()
 
-    // 约束日期已有值（2026-03-05）→ 日历打开在 2026-03，点 9 日。
-    // 原值带默认时刻 09:00，故结果保留 09:00。
+    // 约束日期已有值（2026-03-05）→ 日历打开在 2026-03，点 9 日。原值带默认时刻 09:00。
     await pickDay(screen.getByLabelText('结束'), 9)
 
-    // 类型仍是 finishOn —— 编辑日期不允许把 Select 上的类型悄悄换成 startOn
+    // 类型仍是 finishNoLaterThan —— 编辑日期不允许把 Select 上的类型悄悄换掉
     expect(currentTask().scheduling).toEqual({
-      mode: 'constraint',
-      type: 'finishOn',
-      date: '2026-03-09T09:00',
+      mode: 'auto',
+      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-09T09:00' },
     })
   })
 
@@ -881,7 +907,7 @@ describe('日程安排组', () => {
   it('手动模式下显示手动安排提示', async () => {
     const user = userEvent.setup()
     renderInspector()
-    await chooseOption(user, '排期方式', '固定开始日期')
+    await chooseOption(user, '排期方式', '手动排期')
     expect(screen.getByText(/此任务已手动安排/)).toBeInTheDocument()
   })
 })

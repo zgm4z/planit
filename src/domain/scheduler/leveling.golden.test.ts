@@ -240,9 +240,9 @@ describe('黄金判据（稳定性）：无超载时 dates 与 scheduled 逐字�
 })
 
 describe('回归 v0.6.1：冻结的格子若负载增长，必须被重新纳入考虑', () => {
-  /** 用 startOn 把任务钉死在某天 → slack = 0（设计上不可推走） */
+  /** 用 manual 区间（单日）把任务钉死在某天 → slack = 0（设计上不可推走） */
   function pin(task: ReturnType<typeof createTask>, date: string): Task {
-    return { ...task, scheduling: { mode: 'constraint', type: 'startOn', date } }
+    return { ...task, scheduling: { mode: 'manual', start: date, finish: date } }
   }
 
   // 场景（单一资源 R）：

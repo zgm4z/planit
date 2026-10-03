@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createCalendar, createDependency, createProject, createTask } from '../../domain/model/factories'
 import type { Project, Scheduling, TaskId } from '../../domain/model/types'
-import { addDays } from '../../domain/calendar/workdays'
+import { addDays, taskFinish } from '../../domain/calendar/workdays'
 import { solve } from '../../domain/scheduler'
 import { __resetRegistryForTests, execute, registerHandler } from '../../commands/registry'
 import { taskHandlers } from '../../commands/taskCommands'
@@ -120,14 +120,17 @@ describe('computeDragPreview — resizeStart（改开始）', () => {
 const SCHEDULINGS: { name: string; scheduling: Scheduling }[] = [
   { name: 'auto', scheduling: { mode: 'auto' } },
   {
-    name: 'startOn 03-04',
-    scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-04' },
+    // manual 区间 [03-04, 03-06]（工期 3）。钉死不动。
+    name: 'manual 03-04',
+    scheduling: { mode: 'manual', start: '2026-03-04', finish: '2026-03-06' },
   },
   {
-    // 关键用例：完成日被钉住、开始日由工期**反推**。
-    // 影子若把 scheduling 改写成 startOn，开始日就不再随工期移动 —— 影子会骗人。
-    name: 'finishOn 03-04',
-    scheduling: { mode: 'constraint', type: 'finishOn', date: '2026-03-04' },
+    // auto + start 约束：开始下界 03-04（宽于项目起点），与 manual 情形可对照。
+    name: 'auto + startNoEarlierThan 03-04',
+    scheduling: {
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-04' },
+    },
   },
 ]
 
@@ -236,54 +239,43 @@ describe('不变式：影子预览与提交结果一致', () => {
     expect(mismatches).toEqual([])
   })
 
-  it('锁定 finishOn × resizeEnd 的具体数字（回归：影子曾经显示 03-02→03-06，实际是 02-26→03-04）', () => {
-    const project = buildProject({ mode: 'constraint', type: 'finishOn', date: '2026-03-04' })
+  it('manual × resizeEnd 的具体数字（拖右把手加宽区间，下游跟着顺移）', () => {
+    const project = buildProject({ mode: 'manual', start: '2026-03-04', finish: '2026-03-06' })
     const taskId = project.rootIds[0]
 
-    const originTask = { startDate: '2026-03-02', duration: 3 }
-    const dropDate = addDays(dragAnchorDate('resizeEnd', originTask, cal), 2) // 03-04 + 2
+    const originTask = { startDate: '2026-03-04', duration: 3 }
+    const dropDate = addDays(dragAnchorDate('resizeEnd', originTask, cal), 2) // 03-06 + 2
     const preview = computeDragPreview('resizeEnd', originTask, dropDate, cal)
+    expect(preview).toEqual({ startDate: '2026-03-04', duration: 4 })
 
     const shadow = solve(buildHypothetical(project, taskId, 'resizeEnd', preview)).schedules
 
-    // finishOn 被保留：结束日仍是 03-04，工期 5 → 开始日反推到 02-26
-    // 影子描述的是「用户看到的排期」，故断言 scheduled*
-    expect(shadow[taskId].scheduledStart).toBe('2026-02-26')
-    expect(shadow[taskId].scheduledFinish).toBe('2026-03-04')
-    // 下游跟着回退 —— 而不是被错误地推到 03-09
-    expect(shadow[project.rootIds[1]].scheduledStart).toBe('2026-03-05')
+    // 开始日不动、结束日右移到 03-09；影子描述的是「用户看到的排期」，故断言 scheduled*
+    expect(shadow[taskId].scheduledStart).toBe('2026-03-04')
+    expect(shadow[taskId].scheduledFinish).toBe('2026-03-09')
+    // 下游 FS 紧随其后 → 03-10
+    expect(shadow[project.rootIds[1]].scheduledStart).toBe('2026-03-10')
   })
 
-  it('假设项目按模式改写字段：move/resizeStart 钉 startOn，resizeEnd 保留原 scheduling', () => {
-    const finishOn: Scheduling = { mode: 'constraint', type: 'finishOn', date: '2026-03-04' }
-    const project = buildProject(finishOn)
+  it('假设项目一律改写成 manual（三种模式同形：区间 = 落点 + 工期）', () => {
+    const scheduling: Scheduling = { mode: 'manual', start: '2026-03-04', finish: '2026-03-06' }
+    const project = buildProject(scheduling)
     const taskId = project.rootIds[0]
-    const originTask = { startDate: '2026-03-02', duration: 3 }
+    const originTask = { startDate: '2026-03-04', duration: 3 }
 
     const previewFor = (mode: DragMode) =>
       computeDragPreview(mode, originTask, addDays(dragAnchorDate(mode, originTask, cal), 2), cal)
 
-    // move：提交 task.moveTo（= startOn），假设项目同样钉 startOn
-    const moved = buildHypothetical(project, taskId, 'move', previewFor('move'))
-    expect(moved.tasks[taskId].scheduling).toEqual({
-      mode: 'constraint',
-      type: 'startOn',
-      date: previewFor('move').startDate,
-    })
-    expect(moved.tasks[taskId].duration).toBe(3) // move 不改工期
-
-    // resizeStart：提交 task.resize（= startOn + 工期）
-    const resizedStart = buildHypothetical(project, taskId, 'resizeStart', previewFor('resizeStart'))
-    expect(resizedStart.tasks[taskId].scheduling).toEqual({
-      mode: 'constraint',
-      type: 'startOn',
-      date: previewFor('resizeStart').startDate,
-    })
-    expect(resizedStart.tasks[taskId].duration).toBe(previewFor('resizeStart').duration)
-
-    // resizeEnd：提交 task.setDuration —— scheduling 必须原样保留
-    const resizedEnd = buildHypothetical(project, taskId, 'resizeEnd', previewFor('resizeEnd'))
-    expect(resizedEnd.tasks[taskId].scheduling).toEqual(finishOn)
-    expect(resizedEnd.tasks[taskId].duration).toBe(previewFor('resizeEnd').duration)
+    for (const mode of MODES) {
+      const preview = previewFor(mode)
+      const hypothetical = buildHypothetical(project, taskId, mode, preview)
+      // 三种模式都落 manual：start 取落点、finish 由工期折算 —— 与 dragCommitCommands 同形
+      expect(hypothetical.tasks[taskId].scheduling).toEqual({
+        mode: 'manual',
+        start: preview.startDate,
+        finish: taskFinish(preview.startDate, preview.duration, cal),
+      })
+      expect(hypothetical.tasks[taskId].duration).toBe(preview.duration)
+    }
   })
 })

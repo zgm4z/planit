@@ -104,10 +104,19 @@ function leveledForwardPass(
   calendar: Calendar,
   base: Readonly<Record<TaskId, LeveledDates>>,
   delays: ReadonlyMap<TaskId, number>,
+  manualIds: ReadonlySet<TaskId>,
 ): Record<TaskId, LeveledDates> {
   const out: Record<TaskId, LeveledDates> = {}
 
   for (const id of graph.order) {
+    // manual：区间为定值 —— 跳过延迟与全部入边下界（与 runCpm 的正推同一条规则，
+    // spec §2.2：manual 不被任何机制移动）。其**出边照常**给后继提供下界（out 已落表）。
+    // 不特判会让 base 里的 manual.start 被前驱的 forwardBound 顶掉 —— 那正是「被机制移动」。
+    if (manualIds.has(id)) {
+      out[id] = { start: base[id]!.start, finish: base[id]!.finish }
+      continue
+    }
+
     let start = addWorkdays(base[id]!.start, delays.get(id) ?? 0, calendar)
 
     for (const dep of graph.incoming.get(id) ?? []) {
@@ -185,7 +194,7 @@ function exceedsLateStart(
  * 旧实现把「推不动」的格子永久 `blocked`。但「推不动」只对**当时的候选集**成立：
  * 后续别的格子被推时，可能把新的**可动**任务挪到这一格上，负载反而增长，
  * 而此时循环再也不回来看它 —— 真实数据里 `黄伟斌 @ 2026-09-21` 因此从本来
- * 不可约的 6 涨到 8（6 个 `startOn` 锁死任务 + 2 个本可推走的 auto 任务）。
+ * 不可约的 6 涨到 8（6 个锁死任务 + 2 个本可推走的 auto 任务）。
  *
  * 修法：`frozenAt: cellKey → 冻结时的负载`。每轮**只跳过「当前负载 ≤ 冻结负载」**的格子；
  * 一旦负载增长（说明有新候选落到该格上，旧冻结失效）就重新纳入考虑。
@@ -212,6 +221,10 @@ export function levelLeaves(
 
   const base: Record<TaskId, LeveledDates> = {}
   const slack = new Map<TaskId, number>()
+  // manual 任务：区间为定值，平衡不得推动（spec §2.5）。它们在 CPM 里 slack 恒 0，
+  // 剩余浮时本就不会被推；但延迟正推的**基线**若被前驱下界改写同样算「被移动」，
+  // 故这里显式收集，交给 leveledForwardPass 跳过。
+  const manualIds = new Set<TaskId>()
   for (const leaf of leaves) {
     const schedule = schedules[leaf.id]
     base[leaf.id] = schedule
@@ -219,6 +232,7 @@ export function levelLeaves(
       // 无排期兜底：这两处日期随后进 `addWorkdays`，必须是纯日期 —— 先归一。
       : { start: toDateStr(project.startDate), finish: toDateStr(project.startDate) }
     slack.set(leaf.id, schedule ? remainingSlack(schedule, calendar) : 0)
+    if (leaf.scheduling.mode === 'manual') manualIds.add(leaf.id)
   }
 
   // 初始延迟 = 用户 delay（工作日，floor），夹到剩余浮时（偏差 2）
@@ -227,7 +241,7 @@ export function levelLeaves(
     delays.set(leaf.id, Math.min(Math.max(0, Math.round(leaf.delay)), slack.get(leaf.id) ?? 0))
   }
 
-  let dates = leveledForwardPass(graph, durations, calendar, base, delays)
+  let dates = leveledForwardPass(graph, durations, calendar, base, delays, manualIds)
 
   // 推不动的超载（资源@日期）→ 记录**冻结时的负载**（不是永久标记）。
   // 只在「当前负载 ≤ 冻结负载」时跳过：负载一旦增长就说明旧冻结的候选集已失效，
@@ -270,7 +284,7 @@ export function levelLeaves(
       if ((delays.get(candidate.id) ?? 0) >= (slack.get(candidate.id) ?? 0)) continue // 浮时耗尽
 
       delays.set(candidate.id, (delays.get(candidate.id) ?? 0) + 1)
-      const next = leveledForwardPass(graph, durations, calendar, base, delays)
+      const next = leveledForwardPass(graph, durations, calendar, base, delays, manualIds)
       if (exceedsLateStart(next, schedules)) {
         delays.set(candidate.id, (delays.get(candidate.id) ?? 0) - 1) // 回退
         continue

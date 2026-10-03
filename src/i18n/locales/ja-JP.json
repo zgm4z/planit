@@ -253,6 +253,7 @@
   },
   "scheduling": {
     "auto": "自動",
+    "manual": "手動",
     "startOn": "開始日を固定",
     "finishOn": "終了日を固定",
     "startNoEarlierThan": "開始は指定日以降",

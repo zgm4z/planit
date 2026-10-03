@@ -64,8 +64,8 @@ export interface BarDragApi {
  * 影子是**假设排期**：把被拖任务按该模式真正会提交的变更塞进一份临时 project，
  * 跑一次纯函数 `solve`。它只用于渲染，不进 store、不进撤销栈。
  *
- * 注意影子的几何**不**直接来自 `preview`：`preview` 只是日期算术，对
- * `finishOn` 之类的约束并不等于最终结果（详见 buildShadowTasks 的注释）。
+ * 注意影子的几何**不**直接来自 `preview`：被拖任务本身虽与 `preview` 同形（v6 起拖拽
+ * 一律落 manual），但下游条要重算 —— 故整条链路照旧走 buildShadowTasks（见其注释）。
  */
 export function useBarDrag({ project, calendar, dayWidth, onCommit }: UseBarDragOptions): BarDragApi {
   const dragRef = useRef<DragState | null>(null)

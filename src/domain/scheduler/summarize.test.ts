@@ -120,7 +120,7 @@ describe('summarizeParents', () => {
 describe('detectConflicts', () => {
   it('有约束的负浮时任务只报告不可行与浮时，不推断成因', () => {
     const t = task('A', {
-      scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-04' },
+      scheduling: { mode: 'manual', start: '2026-03-04', finish: '2026-03-04' },
     })
     const tasks = { A: t }
     const schedules = { A: sch({ totalSlack: -3, earlyStart: '2026-03-09' }) }

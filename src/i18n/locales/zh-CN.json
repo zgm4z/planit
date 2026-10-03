@@ -256,6 +256,7 @@
   },
   "scheduling": {
     "auto": "自动排期",
+    "manual": "手动排期",
     "startOn": "固定开始日期",
     "finishOn": "固定结束日期",
     "startNoEarlierThan": "开始不早于",

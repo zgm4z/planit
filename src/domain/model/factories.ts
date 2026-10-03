@@ -20,7 +20,7 @@ import { DEFAULT_START_TIME, ensureDateTime } from '../calendar/dateTime'
 export const DEFAULT_CALENDAR_ID: CalendarId = 'default'
 
 /** 与设计文档一致的 schema 版本，持久化时用于校验 */
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 let counter = 0
 

@@ -1,11 +1,17 @@
 import type {
   Calendar,
   CalendarException,
+  Dependency,
+  Lag,
   Project,
   Resource,
   ResourceCost,
+  Scheduling,
   Task,
 } from '../domain/model/types'
+import { createCalendar } from '../domain/model/factories'
+import { toDateStr } from '../domain/calendar/dateTime'
+import { taskFinish, taskStart } from '../domain/calendar/workdays'
 import { deriveKind } from '../domain/model/kind'
 import {
   DEFAULT_FINISH_TIME,
@@ -133,17 +139,47 @@ export function migrateV2ToV3(project: V2Project): V3Project {
   }
 
   const { schemaVersion: _drop, resources: _resources, ...rest } = project
-  return { ...rest, schemaVersion: 3, resources }
+  // 任务 / 依赖原样透传（本跳只动资源）。产出锚在 V3Project 的 v5 任务形态上 ——
+  // v1/v2 的任务只可能是 auto，形状上兼容 V5Task 的 scheduling；这里的断言只是让
+  // 「逐跳链中间态是 v5 形态」这一契约显式化，不改变任何运行时行为。
+  return { ...rest, schemaVersion: 3, resources } as unknown as V3Project
+}
+
+// ── v5 形状（scheduling 仍是旧的 auto | constraint，lag 可为裸数字）────────────
+//
+// v5 → v6 之前的每一跳都在这套形状上走：任务的 scheduling 还是旧的六型 constraint、
+// 依赖的 lag 还可能是裸数字。把旧形态**写在本文件里**（而不是从 domain 引「当前」
+// Scheduling）是刻意的 —— persist 层不依赖 domain 的当前类型，否则每次语义重构都会
+// 让历史迁移的入参类型跟着漂移，旧存档的形状表述也就失去了独立性。
+
+/** v5 的约束类型（含 v6 已移除的 startOn / finishOn） */
+type V5ConstraintType =
+  | 'startOn'
+  | 'finishOn'
+  | 'startNoEarlierThan'
+  | 'startNoLaterThan'
+  | 'finishNoEarlierThan'
+  | 'finishNoLaterThan'
+
+type V5Scheduling =
+  | { mode: 'auto' }
+  | { mode: 'constraint'; type: V5ConstraintType; date: string }
+
+type V5Task = Omit<Task, 'scheduling'> & { scheduling: V5Scheduling }
+type V5Dependency = Omit<Dependency, 'lag'> & { lag: Lag | number }
+
+type V5Project = Omit<Project, 'tasks' | 'dependencies'> & {
+  schemaVersion: number
+  tasks: Record<string, V5Task>
+  dependencies: Record<string, V5Dependency>
 }
 
 /** v3 存档的形状：**没有** baselines / activeBaselineId / statusDate */
-type V3Project = Omit<Project, 'baselines' | 'activeBaselineId' | 'statusDate'> & {
-  schemaVersion: number
-}
+type V3Project = Omit<V5Project, 'baselines' | 'activeBaselineId' | 'statusDate'>
 
 /** v4 存档形状：**与 v5 在 TS 上同形**（DateStr 与 DateTimeStr 都是 `string`），
  *  差别只在语义 —— v4 的承载字段是纯日期，v5 带时刻。别名让逐跳链的签名对称。 */
-type V4Project = Project
+type V4Project = V5Project
 
 /**
  * v3 项目整体迁到 **v4**（**不是**当前版本）。纯函数，入参不被改动。
@@ -162,17 +198,20 @@ export function migrateV3ToV4(project: V3Project): V4Project {
 }
 
 /**
- * v4 项目整体迁到 **v5**（= 当前版本）。纯函数，入参不被改动。
+ * v4 项目整体迁到 **v5**（**不是**当前版本）。纯函数，入参不被改动。
  *
  * 把承载时刻的字段从纯日期补上默认时刻（spec §4）：项目起止 / 基准日、任务约束
  * 日期、资源可用期、`custom` 例外的时段。**不碰** `Calendar.exceptions` 的键
  * （`isWorkday` 按日查表，带时刻会静默漏查）、也**不碰** `BaselineEntry`
  * （快照冻结在当时的日粒度，见 spec 判断 B）。
+ *
+ * 返回类型是 `V5Project` 而**不是** `Project`（与前面几跳对称）：逐跳链下它只承诺
+ * 产出 v5 形状，v6 的 scheduling / lag 重构由 `migrateV5ToV6` 负责。
  */
-export function migrateV4ToV5(project: V4Project): Project {
+export function migrateV4ToV5(project: V4Project): V5Project {
   const { schemaVersion: _drop, ...rest } = project
 
-  const tasks: Record<string, Task> = {}
+  const tasks: Record<string, V5Task> = {}
   for (const [id, task] of Object.entries(project.tasks)) {
     tasks[id] =
       task.scheduling.mode === 'constraint'
@@ -231,4 +270,90 @@ export function migrateV4ToV5(project: V4Project): Project {
     resources,
     calendars,
   }
+}
+
+/**
+ * 单任务的 scheduling：v5 形态 → v6 形态（spec §1.3 映射表）。
+ *
+ * - `startOn(d)`  → `manual { start: d, finish: d + 工期 − 1 工作日 }`
+ * - `finishOn(d)` → `manual { start: d − 工期 + 1 工作日, finish: d }`
+ * - 四个 `*NoEarlier/NoLaterThan(d)` → `auto` + 对应侧的约束
+ *
+ * **幂等**：已是 v6 形态（`auto` 带约束 / `manual`）的 scheduling 原样保留 ——
+ * 非 `constraint` 的 mode 一律直接透传。
+ */
+export function migrateSchedulingV5ToV6(
+  scheduling: V5Scheduling | Scheduling,
+  duration: number,
+  calendar: Calendar,
+): Scheduling {
+  const mode = (scheduling as { mode?: string }).mode
+  // 已是 v6 形态（auto 带约束 / manual）原样保留 —— 幂等。
+  if (mode !== 'constraint') return scheduling as Scheduling
+
+  const { type, date } = scheduling as { type: V5ConstraintType; date: string }
+  switch (type) {
+    case 'startOn':
+      return {
+        mode: 'manual',
+        start: date,
+        finish: taskFinish(toDateStr(date), duration, calendar),
+      }
+    case 'finishOn':
+      return {
+        mode: 'manual',
+        start: taskStart(toDateStr(date), duration, calendar),
+        finish: date,
+      }
+    case 'startNoEarlierThan':
+      return { mode: 'auto', startConstraint: { type: 'startNoEarlierThan', date } }
+    case 'startNoLaterThan':
+      return { mode: 'auto', startConstraint: { type: 'startNoLaterThan', date } }
+    case 'finishNoEarlierThan':
+      return { mode: 'auto', finishConstraint: { type: 'finishNoEarlierThan', date } }
+    case 'finishNoLaterThan':
+      return { mode: 'auto', finishConstraint: { type: 'finishNoLaterThan', date } }
+  }
+}
+
+/**
+ * 单条依赖的 lag：裸数字 → `workdays` 包装；已是 `Lag` 对象则原样（幂等）。
+ *
+ * 刻意**不**复用 scheduler 的 `asLag` —— persist 层不依赖 scheduler 内部实现，
+ * 迁移自己写出 `{ kind: 'workdays', days: n }`。
+ */
+export function migrateLagV5ToV6(lag: Lag | number): Lag {
+  return typeof lag === 'number' ? { kind: 'workdays', days: lag } : lag
+}
+
+/**
+ * v5 项目整体迁到 **v6**（= 当前版本）。纯函数，入参不被改动。
+ *
+ * v5 → v6 是本计划**唯一**的一次 schema 跳变：把 `Scheduling` 从旧的
+ * `auto | constraint` 六型重构为 `auto(成对约束) | manual`，把 `Dependency.lag`
+ * 从裸数字统一成带单位的 `Lag` 联合类型。逐行映射见 spec §1.3。
+ *
+ * manual 换算用项目日历按 `taskFinish` / `taskStart` 口径折算（与引擎同一份工作日
+ * 原语）—— 日历取 `project.calendarId` 指向的日历，缺省兜底标准日历。
+ *
+ * ⚠️ 写死字面量 `6` 而**不是** `SCHEMA_VERSION`（逐跳契约，见 migrateV1ToV2 说明）。
+ */
+export function migrateV5ToV6(project: V5Project): Project {
+  const calendar = project.calendars[project.calendarId] ?? createCalendar()
+
+  const tasks: Record<string, Task> = {}
+  for (const [id, task] of Object.entries(project.tasks)) {
+    tasks[id] = {
+      ...task,
+      scheduling: migrateSchedulingV5ToV6(task.scheduling, task.duration, calendar),
+    }
+  }
+
+  const dependencies: Record<string, Dependency> = {}
+  for (const [id, dep] of Object.entries(project.dependencies)) {
+    dependencies[id] = { ...dep, lag: migrateLagV5ToV6(dep.lag) }
+  }
+
+  const { schemaVersion: _drop, tasks: _tasks, dependencies: _deps, ...rest } = project
+  return { ...rest, schemaVersion: 6, tasks, dependencies }
 }

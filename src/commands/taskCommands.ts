@@ -8,6 +8,7 @@ import type {
   TaskId,
 } from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
+import { taskFinish } from '../domain/calendar/workdays'
 import { sumUnits } from '../domain/model/units'
 import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
@@ -19,7 +20,12 @@ export interface TaskSetDurationPayload { taskId: TaskId; duration: number }
 export interface TaskSetProgressPayload { taskId: TaskId; progress: number }
 export interface TaskToggleMilestonePayload { taskId: TaskId }
 export interface TaskSetSchedulingPayload { taskId: TaskId; scheduling: Scheduling }
-export interface TaskMoveToPayload { taskId: TaskId; startDate: DateStr }
+export interface TaskMoveToPayload {
+  taskId: TaskId
+  startDate: DateStr
+  /** 缺省时按 `taskFinish(startDate, task.duration)` 用项目日历折算出结束日 */
+  finishDate?: DateStr
+}
 export interface TaskResizePayload { taskId: TaskId; startDate: DateStr; duration: number }
 export interface TaskSetSchedulingOrderPayload { taskId: TaskId; order: SchedulingOrder }
 export interface TaskSetNotePayload { taskId: TaskId; note: string }
@@ -113,6 +119,9 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     if (!task) return
     if (task.kind === 'group') return // 摘要任务由汇总决定
     if (task.kind === 'milestone') return // 里程碑恒为 0
+    // manual 任务：引擎不消费其 duration（区间宽度即真相），拒绝改工期。
+    // UI 上 manual 分支的工期输入应禁用并注明（Task 5）。
+    if (task.scheduling.mode === 'manual') return
     task.duration = Math.max(0, Math.floor(payload.duration))
   },
 
@@ -141,25 +150,42 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     task.scheduling = payload.scheduling
   },
 
+  // 平移任务 = 落成 manual（spec §1.2：钉死区间就是手动排期，旧的 startOn 已移除）。
+  // 结束日缺省时按项目日历 taskFinish 折算；拖拽路径已把落点吸附到工作日。
   'task.moveTo': (draft, payload: TaskMoveToPayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.kind === 'group') return
-    task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
+    const calendar = draft.calendars[draft.calendarId]
+    if (!calendar) return
+
+    task.scheduling = {
+      mode: 'manual',
+      start: payload.startDate,
+      finish: payload.finishDate ?? taskFinish(payload.startDate, task.duration, calendar),
+    }
   },
 
-  // 拖拽左把手会同时改变「开始日期」与「工期」两个维度。
+  // 拖拽左/右把手会同时改变「开始日期」与「工期」两个维度。
   // 若拆成 task.setDuration + task.moveTo 两条命令，撤销栈里会留下两条记录 ——
   // 按一次 Ctrl+Z 只退回半步（日期回来了、工期还留着）。
   // 这条命令把两个字段放进**同一次**变更，因此只产生一条撤销记录、一次撤销即可完全复原。
+  // manual 下同时写 start 与 finish（区间宽度即真相）。
   'task.resize': (draft, payload: TaskResizePayload) => {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.kind === 'group') return // 摘要任务日期只读
     if (task.kind === 'milestone') return // 里程碑恒为 0 工期
+    const calendar = draft.calendars[draft.calendarId]
+    if (!calendar) return
 
-    task.duration = Math.max(1, Math.floor(payload.duration))
-    task.scheduling = { mode: 'constraint', type: 'startOn', date: payload.startDate }
+    const duration = Math.max(1, Math.floor(payload.duration))
+    task.duration = duration
+    task.scheduling = {
+      mode: 'manual',
+      start: payload.startDate,
+      finish: taskFinish(payload.startDate, duration, calendar),
+    }
   },
 
   // ── v0.2 新增 ─────────────────────────────────────────

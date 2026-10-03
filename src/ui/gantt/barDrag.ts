@@ -122,12 +122,14 @@ export function dragCommitCommands(
       ]
 
     case 'resizeEnd':
-      // 只改工期，**不动 scheduling**
+      // 拖右把手 = 改结束日、保开始日 → 落 manual（start 取 preview 里保留的原开始日）。
+      // 与左把手共用 task.resize：manual 下 setDuration 是 no-op，若仍提交 setDuration，
+      // 右把手在 manual 任务上会「点了没反应」。
       return [
         {
-          type: 'task.setDuration',
-          label: 'commands.task.setDuration',
-          payload: { taskId, duration: preview.duration },
+          type: 'task.resize',
+          label: 'commands.task.resize',
+          payload: { taskId, startDate: preview.startDate, duration: preview.duration },
         },
       ]
   }
@@ -139,31 +141,37 @@ export function dragCommitCommands(
  * **核心不变式：被拖任务的那几个字段，必须与 `dragCommitCommands` 落盘的结果
  * 完全一致。** 否则影子会骗人 —— 用户看到的是另一个项目算出来的排期。
  *
- * 所以这里不能一律写成 `startOn`：
- * - `move` 提交 `task.moveTo`（= startOn）→ 假设项目也用 startOn
- * - `resizeStart` 提交 `task.resize`（= startOn + 工期）→ 假设项目也用 startOn
- * - `resizeEnd` 提交 `task.setDuration` —— **只改工期、保留原有 scheduling**。
- *   若这里也钉成 startOn，一个原本 `finishOn 03-04` 的任务会被假设成
- *   `startOn 03-02`：影子显示 `03-02 → 03-06`，实际落盘却是 `02-26 → 03-04`，
- *   连下游都会被带偏。
+ * v6 起三种拖拽模式**都落 manual**（钉死区间 = 手动排期），因此假设项目统一写成
+ * 「manual{start: preview.startDate, finish: taskFinish(preview.startDate, preview.duration)}」：
+ * - `move` 提交 `task.moveTo {startDate}` → manual{start, taskFinish(start, task.duration)}；
+ *   而 move 的 preview.duration === task.duration，故两者一致。
+ * - `resizeStart` / `resizeEnd` 提交 `task.resize {startDate, duration}` → manual 同上。
+ *
+ * manual 语义天然使「影子」与「落盘」同形 —— 不再有 finishOn 那类「假设项目钉错边」
+ * 的坑。`mode` 仅为签名对称保留。
  */
 export function buildHypothetical(
   project: Project,
   taskId: TaskId,
-  mode: DragMode,
+  _mode: DragMode,
   preview: DragPreview,
 ): Project {
   const task = project.tasks[taskId]
   if (!task) return project
 
-  const hypotheticalTask: Task =
-    mode === 'resizeEnd'
-      ? { ...task, duration: preview.duration }
-      : {
-          ...task,
-          duration: preview.duration,
-          scheduling: { mode: 'constraint', type: 'startOn', date: preview.startDate },
-        }
+  const calendar = project.calendars[project.calendarId]
+  const hypotheticalTask: Task = {
+    ...task,
+    duration: preview.duration,
+    scheduling: {
+      mode: 'manual',
+      start: preview.startDate,
+      // 日历缺失（畸形项目）时退回 startDate 本身，绝不产出非法日期。
+      finish: calendar
+        ? taskFinish(preview.startDate, preview.duration, calendar)
+        : preview.startDate,
+    },
+  }
 
   return { ...project, tasks: { ...project.tasks, [taskId]: hypotheticalTask } }
 }
@@ -178,11 +186,9 @@ export interface ShadowTask {
  * **渲染用的**影子排期：把假设项目解一遍，得到每根条应当画在哪里。
  *
  * 关键点：**被拖的那根条也走这里**，不要拿 `preview` 直接渲染。
- * `preview` 只是「抓住的那条边移到了哪」的日期算术，它对 `auto` / `startOn`
- * 任务恰好等于最终结果，但对 `finishOn` 任务不是 —— 例如 `finishOn 03-04`
- * 工期 3 的任务，右把手右拖 2 天：`preview` 是 `{03-02, 5}`（渲染成 03-02→03-06），
- * 而真正落盘的是 `{02-26, 5}`（03-04 仍被钉住，开始日反推）。若用 `preview`
- * 渲染，影子就显示了一个从未发生过的结果。
+ * v6 起拖拽一律落 manual，而 manual 区间就是 `preview` 描述的那段日期算术 ——
+ * 于是影子和落盘天然同形（不再有旧 `finishOn` 那种「假设项目钉错边」的坑）。
+ * 但下游条仍要靠 solve 重算，故整条链路照旧走 `buildShadowTasks`。
  *
  * 走 solve 之后，「被拖条」「下游条」「提交结果」三者天然同源。
  */

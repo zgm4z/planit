@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { createProject, createTask, SCHEMA_VERSION } from '../domain/model/factories'
 import { parsePersistedProject } from './schema'
 import { RESOURCE_KINDS } from '../domain/model/resourceKinds'
-import { migrateV2ToV3, migrateV3ToV4 } from './migrate'
+import { migrateV2ToV3, migrateV3ToV4, migrateV5ToV6 } from './migrate'
+import { solve } from '../domain/scheduler'
 
 /** 手工构造一份 v1 存档：kind 时代之前的形状（isMilestone + 无新字段） */
 function v1Save() {
@@ -236,9 +237,9 @@ describe('parsePersistedProject — v2 → v3 迁移', () => {
     expect(project.resources.r1.availableUntil).toBeUndefined()
   })
 
-  it('v2 存档迁移后到达当前版本（v5）', () => {
+  it('v2 存档迁移后到达当前版本（v6）', () => {
     expect(parsePersistedProject(v2Save()).schemaVersion).toBe(SCHEMA_VERSION)
-    expect(SCHEMA_VERSION).toBe(5)
+    expect(SCHEMA_VERSION).toBe(6)
   })
 
   it('v1 存档经 v2 → v3 两步迁移也能到当前版本（逐跳链式）', () => {
@@ -334,9 +335,9 @@ describe('parsePersistedProject — v3 → v4 迁移', () => {
     expect(parsePersistedProject(v3Save()).statusDate).toBeUndefined()
   })
 
-  it('迁移后 project.schemaVersion 更新为当前版本（v5）', () => {
+  it('迁移后 project.schemaVersion 更新为当前版本（v6）', () => {
     expect(parsePersistedProject(v3Save()).schemaVersion).toBe(SCHEMA_VERSION)
-    expect(SCHEMA_VERSION).toBe(5)
+    expect(SCHEMA_VERSION).toBe(6)
   })
 
   it('v1 / v2 存档经逐跳链也能到 v4（三跳）', () => {
@@ -425,15 +426,16 @@ function v4Save() {
   }
 }
 
-describe('parsePersistedProject — v4 → v5 迁移', () => {
-  it('承载时刻的字段补上默认时刻（09:00 / 18:00）', () => {
+describe('parsePersistedProject — v4 存档经 v5 → v6 迁到当前版本', () => {
+  it('承载时刻的字段补上默认时刻（09:00 / 18:00），排期迁成 manual 区间', () => {
     const project = parsePersistedProject(v4Save())
-    expect(project.schemaVersion).toBe(5)
+    expect(project.schemaVersion).toBe(6)
     expect(project.startDate).toBe('2026-03-02T09:00')
     expect(project.endDate).toBe('2026-06-30T18:00')
     expect(project.statusDate).toBe('2026-03-04T18:00')
+    // v4 的 startOn(03-05, 工期 2) 经 v5 补时刻、经 v6 迁成 manual 区间 [03-05, 03-06]
     expect(project.tasks.t1.scheduling).toEqual({
-      mode: 'constraint', type: 'startOn', date: '2026-03-05T09:00',
+      mode: 'manual', start: '2026-03-05T09:00', finish: '2026-03-06',
     })
     expect(project.resources.r1.availableFrom).toBe('2026-03-10T09:00')
     expect(project.resources.r1.availableUntil).toBe('2026-04-01T18:00')
@@ -456,10 +458,10 @@ describe('parsePersistedProject — v4 → v5 迁移', () => {
     })
   })
 
-  it('v1 / v2 / v3 存档经逐跳链都能到 v5（四跳）', () => {
-    expect(parsePersistedProject(v1Save()).schemaVersion).toBe(5)
-    expect(parsePersistedProject(v2Save()).schemaVersion).toBe(5)
-    expect(parsePersistedProject(v3Save()).schemaVersion).toBe(5)
+  it('v1 / v2 / v3 存档经逐跳链都能到当前版本（六跳）', () => {
+    expect(parsePersistedProject(v1Save()).schemaVersion).toBe(6)
+    expect(parsePersistedProject(v2Save()).schemaVersion).toBe(6)
+    expect(parsePersistedProject(v3Save()).schemaVersion).toBe(6)
   })
 
   it('migrateV3ToV4 产出的是 v4 字面量，而不是 SCHEMA_VERSION（偏差 6）', () => {
@@ -471,5 +473,155 @@ describe('parsePersistedProject — v4 → v5 迁移', () => {
     const snapshot = JSON.stringify(raw)
     expect(parsePersistedProject(raw)).toEqual(parsePersistedProject(v4Save()))
     expect(JSON.stringify(raw)).toBe(snapshot)
+  })
+})
+
+/** v5 任务的默认字段（用例只关心 scheduling / duration，其余给合法的缺省值） */
+function v5Task(id: string, scheduling: unknown, duration = 1) {
+  return {
+    id, name: id, parentId: null, childIds: [] as string[], kind: 'task',
+    duration, scheduling, progress: 0, effortMode: 'fixedDuration',
+    schedulingOrder: 'asap', note: '', allowSplitting: false, priority: 0, delay: 0,
+  }
+}
+
+/**
+ * 手工构造一份 v5 存档：scheduling 是旧的 auto | constraint 六型，lag 可为裸数字。
+ * 末尾两个任务刻意写成**已是 v6 形态**的值 —— 用于验证迁移的幂等保留。
+ */
+function v5Save() {
+  const now = '2026-03-01T00:00:00.000Z'
+  return {
+    schemaVersion: 5,
+    updatedAt: now,
+    project: {
+      id: 'proj_v5',
+      name: 'v5 项目',
+      schemaVersion: 5,
+      startDate: '2026-03-02T09:00',
+      schedulingDirection: 'forward',
+      calendarId: 'default',
+      calendars: {
+        default: {
+          id: 'default', name: '标准日历',
+          workingDays: [true, true, true, true, true, false, false],
+          hoursPerDay: 8, exceptions: {},
+        },
+      },
+      tasks: {
+        t_auto: v5Task('t_auto', { mode: 'auto' }),
+        t_startOn: v5Task('t_startOn', { mode: 'constraint', type: 'startOn', date: '2026-03-05T09:00' }, 2),
+        t_finishOn: v5Task('t_finishOn', { mode: 'constraint', type: 'finishOn', date: '2026-03-05T09:00' }, 2),
+        t_sne: v5Task('t_sne', { mode: 'constraint', type: 'startNoEarlierThan', date: '2026-03-05T09:00' }),
+        t_snl: v5Task('t_snl', { mode: 'constraint', type: 'startNoLaterThan', date: '2026-03-05T09:00' }),
+        t_fne: v5Task('t_fne', { mode: 'constraint', type: 'finishNoEarlierThan', date: '2026-03-05T09:00' }),
+        t_fnl: v5Task('t_fnl', { mode: 'constraint', type: 'finishNoLaterThan', date: '2026-03-05T09:00' }),
+        // 幂等：已是 v6 形态（部分迁移 / 手工改过）
+        t_manual: v5Task('t_manual', { mode: 'manual', start: '2026-03-09T09:00', finish: '2026-03-10T18:00' }),
+        t_auto2: v5Task('t_auto2', {
+          mode: 'auto',
+          startConstraint: { type: 'startNoEarlierThan', date: '2026-03-09T09:00' },
+          finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-20T18:00' },
+        }),
+      },
+      rootIds: ['t_auto', 't_startOn', 't_finishOn', 't_sne', 't_snl', 't_fne', 't_fnl', 't_manual', 't_auto2'],
+      dependencies: {
+        d_num: { id: 'd_num', fromTaskId: 't_auto', toTaskId: 't_startOn', type: 'FS', lag: 3 },
+        d_obj: { id: 'd_obj', fromTaskId: 't_auto', toTaskId: 't_finishOn', type: 'FS', lag: { kind: 'elapsedDays', days: 2 } },
+      },
+      resources: {},
+      assignments: {},
+      baselines: [],
+      activeBaselineId: null,
+      createdAt: now, updatedAt: now,
+    },
+  }
+}
+
+describe('parsePersistedProject — v5 → v6 迁移矩阵（spec §1.3 逐行）', () => {
+  const migrated = () => parsePersistedProject(v5Save())
+  const schedulingOf = (id: string) => migrated().tasks[id].scheduling
+
+  it('lag: n → { kind: "workdays", days: n }', () => {
+    expect(migrated().dependencies.d_num.lag).toEqual({ kind: 'workdays', days: 3 })
+  })
+
+  it('已是 Lag 对象的 lag 原样保留（幂等）', () => {
+    expect(migrated().dependencies.d_obj.lag).toEqual({ kind: 'elapsedDays', days: 2 })
+  })
+
+  it('startOn(d) → manual { start: d, finish: d + 工期 − 1 工作日 }', () => {
+    expect(schedulingOf('t_startOn')).toEqual({
+      mode: 'manual', start: '2026-03-05T09:00', finish: '2026-03-06',
+    })
+  })
+
+  it('finishOn(d) → manual { start: d − 工期 + 1 工作日, finish: d }', () => {
+    expect(schedulingOf('t_finishOn')).toEqual({
+      mode: 'manual', start: '2026-03-04', finish: '2026-03-05T09:00',
+    })
+  })
+
+  it('startNoEarlierThan(d) → auto + startConstraint', () => {
+    expect(schedulingOf('t_sne')).toEqual({
+      mode: 'auto', startConstraint: { type: 'startNoEarlierThan', date: '2026-03-05T09:00' },
+    })
+  })
+
+  it('startNoLaterThan(d) → auto + startConstraint', () => {
+    expect(schedulingOf('t_snl')).toEqual({
+      mode: 'auto', startConstraint: { type: 'startNoLaterThan', date: '2026-03-05T09:00' },
+    })
+  })
+
+  it('finishNoEarlierThan(d) → auto + finishConstraint', () => {
+    expect(schedulingOf('t_fne')).toEqual({
+      mode: 'auto', finishConstraint: { type: 'finishNoEarlierThan', date: '2026-03-05T09:00' },
+    })
+  })
+
+  it('finishNoLaterThan(d) → auto + finishConstraint', () => {
+    expect(schedulingOf('t_fnl')).toEqual({
+      mode: 'auto', finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-05T09:00' },
+    })
+  })
+
+  it('auto → auto（恒等）', () => {
+    expect(schedulingOf('t_auto')).toEqual({ mode: 'auto' })
+  })
+
+  it('manual 原样保留（幂等）', () => {
+    expect(schedulingOf('t_manual')).toEqual({
+      mode: 'manual', start: '2026-03-09T09:00', finish: '2026-03-10T18:00',
+    })
+  })
+
+  it('auto + 双约束原样保留（幂等）', () => {
+    expect(schedulingOf('t_auto2')).toEqual({
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-09T09:00' },
+      finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-20T18:00' },
+    })
+  })
+
+  it('产出 schemaVersion === 6 字面量（逐跳契约）', () => {
+    expect(migrated().schemaVersion).toBe(6)
+    expect(migrateV5ToV6(v5Save().project as never).schemaVersion).toBe(6)
+  })
+
+  it('迁移是纯函数：同一份输入跑两次结果逐字段相同且不改动入参', () => {
+    const raw = v5Save()
+    const snapshot = JSON.stringify(raw)
+    expect(parsePersistedProject(raw)).toEqual(parsePersistedProject(v5Save()))
+    expect(JSON.stringify(raw)).toBe(snapshot)
+  })
+})
+
+describe('parsePersistedProject — v5 存档载入即解（集成）', () => {
+  it('含数字 lag + startOn 的 v5 存档：solve() 不抛错，manual 任务取原 startOn', () => {
+    const project = parsePersistedProject(v5Save())
+    const result = solve(project) // 不抛错
+    expect(result.schedules.t_startOn.scheduledStart).toBe('2026-03-05')
+    expect(result.schedules.t_finishOn.scheduledFinish).toBe('2026-03-05')
   })
 })

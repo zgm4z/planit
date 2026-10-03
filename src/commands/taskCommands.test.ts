@@ -142,6 +142,26 @@ describe('task.setDuration', () => {
     const p3 = run(p2, 'task.setDuration', { taskId: id, duration: 5 })
     expect(p3.tasks[id].duration).toBe(0)
   })
+
+  it('manual 任务的工期不可改（引擎不消费其 duration，区间宽度即真相）', () => {
+    const p1 = run(project, 'task.create', { name: 'A' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.moveTo', { taskId: id, startDate: '2026-03-20' }) // → manual
+
+    const result = execute(p2, {
+      type: 'task.setDuration',
+      label: '操作',
+      payload: { taskId: id, duration: 9 },
+    })
+
+    expect(result.project.tasks[id].duration).toBe(1) // 不变
+    expect(result.project.tasks[id].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-20',
+      finish: '2026-03-20',
+    })
+    expect(result.patches).toHaveLength(0) // 无变更 → 不入撤销栈
+  })
 })
 
 describe('task.setProgress', () => {
@@ -183,28 +203,57 @@ describe('task.toggleMilestone', () => {
 describe('task.setScheduling / task.moveTo', () => {
   beforeEach(setup)
 
-  it('setScheduling 写入约束', () => {
+  it('setScheduling 写入 auto 约束（新成对形态）', () => {
     const p1 = run(project, 'task.create', { name: 'A' })
     const id = firstRoot(p1)
-    const scheduling = { mode: 'constraint', type: 'startOn', date: '2026-03-16' } as const
+    const scheduling = {
+      mode: 'auto',
+      startConstraint: { type: 'startNoEarlierThan', date: '2026-03-16' },
+    } as const
 
     const p2 = run(p1, 'task.setScheduling', { taskId: id, scheduling })
     expect(p2.tasks[id].scheduling).toEqual(scheduling)
   })
 
-  it('moveTo 等价于设置 startOn 约束', () => {
+  it('setScheduling 写入 manual 区间', () => {
     const p1 = run(project, 'task.create', { name: 'A' })
+    const id = firstRoot(p1)
+    const scheduling = { mode: 'manual', start: '2026-03-16', finish: '2026-03-18' } as const
+
+    const p2 = run(p1, 'task.setScheduling', { taskId: id, scheduling })
+    expect(p2.tasks[id].scheduling).toEqual(scheduling)
+  })
+
+  it('moveTo 落成 manual 区间，finish 由工期按项目日历折算', () => {
+    const p1 = run(project, 'task.create', { name: 'A' }) // 工期 1
     const id = firstRoot(p1)
     const p2 = run(p1, 'task.moveTo', { taskId: id, startDate: '2026-03-20' })
 
+    // 工期 1 → 结束日即开始日
     expect(p2.tasks[id].scheduling).toEqual({
-      mode: 'constraint',
-      type: 'startOn',
-      date: '2026-03-20',
+      mode: 'manual',
+      start: '2026-03-20',
+      finish: '2026-03-20',
     })
   })
 
-  it('把约束改回 auto 让引擎重新自由排期', () => {
+  it('moveTo 显式 finishDate 时原样采用', () => {
+    const p1 = run(project, 'task.create', { name: 'A' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.moveTo', {
+      taskId: id,
+      startDate: '2026-03-20',
+      finishDate: '2026-03-25',
+    })
+
+    expect(p2.tasks[id].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-20',
+      finish: '2026-03-25',
+    })
+  })
+
+  it('把排期改回 auto 让引擎重新自由排期', () => {
     const p1 = run(project, 'task.create', { name: 'A' })
     const id = firstRoot(p1)
     const p2 = run(p1, 'task.moveTo', { taskId: id, startDate: '2026-03-20' })
@@ -229,12 +278,13 @@ describe('task.resize', () => {
       payload: { taskId: id, startDate: '2026-03-04', duration: 3 },
     })
 
-    // 两个维度在同一条命令里改掉 —— 这是「一次 Ctrl+Z 完全复原」的前提
+    // 两个维度在同一条命令里改掉 —— 这是「一次 Ctrl+Z 完全复原」的前提。
+    // manual 下同时写 start 与 finish（区间宽度即真相）。
     expect(result.project.tasks[id].duration).toBe(3)
     expect(result.project.tasks[id].scheduling).toEqual({
-      mode: 'constraint',
-      type: 'startOn',
-      date: '2026-03-04',
+      mode: 'manual',
+      start: '2026-03-04',
+      finish: '2026-03-06',
     })
     // 非空 patch 才会入撤销栈；且必须只有一条记录的数据来源
     expect(result.patches.length).toBeGreaterThan(0)

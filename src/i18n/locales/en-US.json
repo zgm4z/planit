@@ -253,6 +253,7 @@
   },
   "scheduling": {
     "auto": "Automatic",
+    "manual": "Manual",
     "startOn": "Start on",
     "finishOn": "Finish on",
     "startNoEarlierThan": "Start no earlier than",

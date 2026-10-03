@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createTask, createDependency } from '../model/factories'
-import type { ConstraintType, Dependency, Lag, SchedulingDirection, Task } from '../model/types'
+import type { Dependency, Lag, SchedulingDirection, Task } from '../model/types'
 import { workdaysBetween } from '../calendar/workdays'
 import { runCpm, runCpmWithGraph } from './cpm'
 import { buildGraph, CycleError } from './graph'
@@ -113,14 +113,15 @@ describe('runCpm — 依赖类型与 lag', () => {
 })
 
 // ── 调度约束 ────────────────────────────────────────────
-describe('runCpm — 调度约束', () => {
+describe('runCpm — 调度约束（manual 与 auto 下界）', () => {
   const cal = createCalendar()
 
-  it('startOn 把任务钉在指定日期', () => {
-    const a = mk('A', 2)
+  it('manual 把任务钉在指定区间，不被依赖移动', () => {
+    const a = mk('A', 2) // 03-02 → 03-03
     const b: Task = {
       ...mk('B', 2),
-      scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-16' },
+      // 依赖要求 B 最早 03-04 开始；manual 无视入边下界，仍取 03-16
+      scheduling: { mode: 'manual', start: '2026-03-16', finish: '2026-03-17' },
     }
     const r = runCpm({
       tasks: [a, b],
@@ -130,13 +131,18 @@ describe('runCpm — 调度约束', () => {
       projectStart: '2026-03-02',
     })
     expect(r.B.earlyStart).toBe('2026-03-16')
+    expect(r.B.earlyFinish).toBe('2026-03-17')
+    expect(r.B.totalSlack).toBe(0)
   })
 
   it('startNoEarlierThan 只设下界，任务仍可被依赖推后', () => {
     const a = mk('A', 5)
     const b: Task = {
       ...mk('B', 1),
-      scheduling: { mode: 'constraint', type: 'startNoEarlierThan', date: '2026-03-03' },
+      scheduling: {
+        mode: 'auto',
+        startConstraint: { type: 'startNoEarlierThan', date: '2026-03-03' },
+      },
     }
     const r = runCpm({
       tasks: [a, b],
@@ -147,24 +153,6 @@ describe('runCpm — 调度约束', () => {
     })
     // 下界 03-03 弱于依赖要求的 03-09，取较晚者
     expect(r.B.earlyStart).toBe('2026-03-09')
-  })
-
-  it('约束与依赖矛盾时浮时为负（冲突信号）', () => {
-    const a = mk('A', 5)
-    const b: Task = {
-      ...mk('B', 1),
-      scheduling: { mode: 'constraint', type: 'startOn', date: '2026-03-04' },
-    }
-    const r = runCpm({
-      tasks: [a, b],
-      dependencies: [createDependency('A', 'B')],
-      calendar: cal,
-      direction: 'forward',
-      projectStart: '2026-03-02',
-    })
-    // A 正推 03-02→03-06，B 最早只能 03-09；但 B 被钉在 03-04
-    expect(r.B.earlyStart).toBe('2026-03-09')
-    expect(r.B.totalSlack).toBeLessThan(0)
   })
 })
 
@@ -219,49 +207,144 @@ describe('runCpm — 边界情况', () => {
   })
 })
 
-// ── 六种约束类型 ────────────────────────────────────────
-describe('runCpm — 六种约束类型的上下界', () => {
-  // 单个工期 2 天的任务，约束日期 2026-03-16，项目起点 2026-03-02（周一）
+// ── 四型约束成对进场（spec §2.3）────────────────────────
+//
+// 拆对等价组：旧的六型约束在 v6 拆成「manual 区间」+「auto 成对约束」后，各约束的
+// 正 / 逆推边界必须**等价于**旧行为（手算日期，含周末上界 `snapToWorkdayOrPrevious` 回归）。
+describe('runCpm — 四型约束的上下界（拆对等价，ASAP / ALAP 各一条）', () => {
+  // 单个工期 2 天的任务，约束日期 2026-03-16（周一），项目起点 2026-03-02（周一）
   // 2 天工期的任务若结束于 03-16，则开始于 03-13
   const cal = createCalendar()
-  const run = (type: ConstraintType) =>
+  const run = (scheduling: Task['scheduling'], order: 'asap' | 'alap' = 'asap') =>
     runCpm({
-      tasks: [
-        { ...mk('A', 2), scheduling: { mode: 'constraint', type, date: '2026-03-16' } },
-      ],
+      tasks: [{ ...mk('A', 2), schedulingOrder: order, scheduling }],
       dependencies: [],
       calendar: cal,
       direction: 'forward',
       projectStart: '2026-03-02',
     })
 
-  it('startOn：钉住开始日期', () => {
-    expect(run('startOn').A.earlyStart).toBe('2026-03-16')
-    expect(run('startOn').A.earlyFinish).toBe('2026-03-17')
+  it('startNoEarlierThan：只设开始下界（ASAP / ALAP 都取该下界）', () => {
+    const s = {
+      mode: 'auto' as const,
+      startConstraint: { type: 'startNoEarlierThan' as const, date: '2026-03-16' },
+    }
+    expect(run(s).A.earlyStart).toBe('2026-03-16')
+    expect(run(s, 'alap').A.scheduledStart).toBe('2026-03-16')
   })
 
-  it('finishOn：钉住结束日期，开始由工期反推', () => {
-    expect(run('finishOn').A.earlyStart).toBe('2026-03-13')
-    expect(run('finishOn').A.earlyFinish).toBe('2026-03-16')
+  it('finishNoEarlierThan：经 taskStart 折算成开始下界（ASAP / ALAP 都取该下界）', () => {
+    const s = {
+      mode: 'auto' as const,
+      finishConstraint: { type: 'finishNoEarlierThan' as const, date: '2026-03-16' },
+    }
+    expect(run(s).A.earlyStart).toBe('2026-03-13')
+    expect(run(s).A.earlyFinish).toBe('2026-03-16')
+    expect(run(s, 'alap').A.scheduledStart).toBe('2026-03-13')
   })
 
-  it('startNoEarlierThan：只设开始下界', () => {
-    expect(run('startNoEarlierThan').A.earlyStart).toBe('2026-03-16')
+  it('startNoLaterThan：只设开始上界，最早排期不受影响（ALAP 落到上界）', () => {
+    const s = {
+      mode: 'auto' as const,
+      startConstraint: { type: 'startNoLaterThan' as const, date: '2026-03-16' },
+    }
+    const asap = run(s)
+    expect(asap.A.earlyStart).toBe('2026-03-02')
+    expect(asap.A.lateStart).toBe('2026-03-16')
+    expect(run(s, 'alap').A.scheduledStart).toBe('2026-03-16')
   })
 
-  it('startNoLaterThan：只设开始上界，最早排期不受影响', () => {
-    expect(run('startNoLaterThan').A.earlyStart).toBe('2026-03-02')
-    expect(run('startNoLaterThan').A.lateStart).toBe('2026-03-16')
+  it('finishNoLaterThan：只设结束上界，最早排期不受影响（ALAP 落到上界）', () => {
+    const s = {
+      mode: 'auto' as const,
+      finishConstraint: { type: 'finishNoLaterThan' as const, date: '2026-03-16' },
+    }
+    const asap = run(s)
+    expect(asap.A.earlyStart).toBe('2026-03-02')
+    expect(asap.A.lateFinish).toBe('2026-03-16')
+    expect(run(s, 'alap').A.scheduledFinish).toBe('2026-03-16')
+  })
+})
+
+// ── manual 定锚（spec §2.2）─────────────────────────────
+describe('runCpm — manual 任务定锚', () => {
+  const cal = createCalendar()
+  const manual = (task: Task, start: string, finish: string): Task => ({
+    ...task,
+    scheduling: { mode: 'manual', start, finish },
   })
 
-  it('finishNoEarlierThan：只设结束下界', () => {
-    expect(run('finishNoEarlierThan').A.earlyStart).toBe('2026-03-13')
-    expect(run('finishNoEarlierThan').A.earlyFinish).toBe('2026-03-16')
+  it('early = late = manual 区间（非工作日向前吸附）', () => {
+    // start 03-07（周六）→ 03-09；finish 03-09（周一）不变 → 区间 [03-09, 03-09]
+    const m = manual(mk('M', 5), '2026-03-07', '2026-03-09')
+    const r = runCpm({
+      tasks: [m],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.M.earlyStart).toBe('2026-03-09')
+    expect(r.M.earlyFinish).toBe('2026-03-09')
+    expect(r.M.lateStart).toBe('2026-03-09')
+    expect(r.M.lateFinish).toBe('2026-03-09')
+    expect(r.M.totalSlack).toBe(0)
   })
 
-  it('finishNoLaterThan：只设结束上界，最早排期不受影响', () => {
-    expect(run('finishNoLaterThan').A.earlyStart).toBe('2026-03-02')
-    expect(run('finishNoLaterThan').A.lateFinish).toBe('2026-03-16')
+  it('区间宽度即真相：manual 不消费 task.duration', () => {
+    // duration=1，但区间横跨 3 个工作日 → earlyFinish 由区间决定，而非 duration
+    const m = manual(mk('M', 1), '2026-03-02', '2026-03-04')
+    const r = runCpm({
+      tasks: [m],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.M.earlyStart).toBe('2026-03-02')
+    expect(r.M.earlyFinish).toBe('2026-03-04')
+  })
+
+  it('manual 的出边照常给后继提供下界', () => {
+    const m = manual(mk('M', 1), '2026-03-16', '2026-03-16')
+    const b = mk('B', 2)
+    const r = runCpm({
+      tasks: [m, b],
+      dependencies: [createDependency('M', 'B')],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    // manual M 完成于 03-16 → FS 后继最早 03-17
+    expect(r.B.earlyStart).toBe('2026-03-17')
+  })
+
+  it('前置被 manual 顶住 → 前置负浮时；manual 自身浮时恒 0', () => {
+    const a = mk('A', 5) // 03-02 → 03-06
+    const b = manual(mk('B', 1), '2026-03-04', '2026-03-04') // 早于依赖要求的 03-09
+    const r = runCpm({
+      tasks: [a, b],
+      dependencies: [createDependency('A', 'B')],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    // B 定值 03-04；逆推把 A 的最晚结束拉到 03-03（B.start − 1），A 最早结束 03-06 → 负浮时
+    expect(r.B.totalSlack).toBe(0)
+    expect(r.A.totalSlack).toBeLessThan(0)
+  })
+
+  it('里程碑 manual：start === finish', () => {
+    const m: Task = { ...manual(mk('M', 0), '2026-03-05', '2026-03-05'), kind: 'milestone' }
+    const r = runCpm({
+      tasks: [m],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.M.earlyStart).toBe('2026-03-05')
+    expect(r.M.earlyFinish).toBe('2026-03-05')
   })
 })
 
@@ -581,7 +664,10 @@ describe('runCpm — 非工作日上界', () => {
     const task = {
       ...mk('T', 1),
       schedulingOrder: 'alap' as const,
-      scheduling: { mode: 'constraint' as const, type: 'finishNoLaterThan' as const, date: '2026-03-07' },
+      scheduling: {
+        mode: 'auto' as const,
+        finishConstraint: { type: 'finishNoLaterThan' as const, date: '2026-03-07' },
+      },
     }
     const result = runCpm({
       tasks: [task],
@@ -598,7 +684,10 @@ describe('runCpm — 非工作日上界', () => {
     const task = {
       ...mk('T', 2),
       schedulingOrder: 'alap' as const,
-      scheduling: { mode: 'constraint' as const, type: 'startNoLaterThan' as const, date: '2026-03-07' },
+      scheduling: {
+        mode: 'auto' as const,
+        startConstraint: { type: 'startNoLaterThan' as const, date: '2026-03-07' },
+      },
     }
     const result = runCpm({
       tasks: [task],
@@ -631,17 +720,19 @@ describe('runCpm — 非工作日上界', () => {
     expect(result.T.scheduledFinish).toBe('2026-03-07')
   })
 
-  it('startOn 与 finishOn 周末仍按既有规则向前吸附', () => {
-    const startOn = {
+  it('manual 区间在周末仍按既有规则向前吸附', () => {
+    // 旧 startOn(dur=1) 与 finishOn(dur=1) 在 v6 都迁成单日 manual 区间；
+    // 周末日期向前吸附到周一 03-09。
+    const startSide = {
       ...mk('S', 1),
-      scheduling: { mode: 'constraint' as const, type: 'startOn' as const, date: '2026-03-07' },
+      scheduling: { mode: 'manual' as const, start: '2026-03-07', finish: '2026-03-07' },
     }
-    const finishOn = {
+    const finishSide = {
       ...mk('F', 1),
-      scheduling: { mode: 'constraint' as const, type: 'finishOn' as const, date: '2026-03-07' },
+      scheduling: { mode: 'manual' as const, start: '2026-03-07', finish: '2026-03-07' },
     }
     const result = runCpm({
-      tasks: [startOn, finishOn],
+      tasks: [startSide, finishSide],
       dependencies: [],
       calendar: cal,
       direction: 'forward',
