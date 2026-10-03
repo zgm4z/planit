@@ -1,10 +1,10 @@
 {
  "_meta": {
   "source": "农务标准版-抽签-排期.oplx",
-  "generatedBy": "scripts/importOmniPlan.py --expect",
-  "command": "python3 scripts/importOmniPlan.py \"/Users/boomgg/Library/Mobile Documents/iCloud~com~omnigroup~OmniPlan/Documents/农务标准版-抽签-排期.oplx\" --expect -o src/domain/scheduler/omniplan/fixtures/农务标准版-抽签-排期.parity.json",
+  "generatedBy": "scripts/omniplanParity.py",
+  "command": "python3 scripts/omniplanParity.py \"/Users/boomgg/Library/Mobile Documents/iCloud~com~omnigroup~OmniPlan/Documents/农务标准版-抽签-排期.oplx\" -o src/domain/scheduler/omniplan/fixtures/农务标准版-抽签-排期.parity.json",
   "predicate": "P3 (engine-independent). A leaf task is asserted iff: effort is a positive multiple of 28800s; it has a leveled-start; no dependency touching it has an unsupported summary endpoint; its UNLEVELED forward-CPM window (re-derived from the .oplx alone: project start floored, startNoEarlierThan/finishNoEarlierThan, dependencies with summary endpoints expanded per expandDependencies.ts, duration = ceil(effort / assignments)) does not overlap any other task's window on a shared resource; no direct predecessor is itself contested or transitively leveling-affected; and its CPM start equals OmniPlan's leveled-start.",
-  "dataConsistencyScreen": "A task whose CPM start cannot equal its leveled-start is untrustworthy ground truth. Proven cases: a task with no assignment, no dependency and no constraint past the project start must start AT the project start — across all 37 corpus files, every such \"free\" task contradicts its own file's <start-date> (e.g. this corpus's stale `leveled-start` caches). Such tasks are skipped as `stale-leveled-start`.",
+  "dataConsistencyScreen": "A task whose CPM start cannot equal its leveled-start is untrustworthy ground truth. Proven case: a task with no assignment, no dependency and no constraint past the project start must start AT the project start. Over the 37 corpus files, 7 contain such a \"free\" task and 4 of those have a leveled-start to compare against; in every one of those 4 files every comparable free task contradicts its own file's <start-date> (0/23, 0/8, 0/6, 0/4). Such tasks are skipped as `stale-leveled-start`.",
   "counts": {
    "leafTasks": 18,
    "dependencies": 1,
@@ -85,7 +85,8 @@
     "reason": "stale-leveled-start"
    }
   ],
-  "deferredNote": "Full `leveled-start` parity is DEFERRED to subproject 3 (resource leveling). This corpus's cached `leveled-start` is frequently inconsistent with the document's own <start-date> and depends on OmniPlan's leveling behavior, which subproject 1 does not model."
+  "deferredNote": "Full `leveled-start` parity is DEFERRED to subproject 3 (resource leveling). This corpus's cached `leveled-start` is frequently inconsistent with the document's own <start-date> and depends on OmniPlan's leveling behavior, which subproject 1 does not model. The asserted set is deliberately thin: these tasks are pre-filtered to those where an independent CPM already agrees AND leveling provably cannot intervene, so they exercise constraint-floor handling only - not dependency propagation, not leveling. This is not full parity coverage.",
+  "determinism": "Reproducible except for project.createdAt / project.updatedAt, which importOmniPlan stamps with the current time; all other fields (project, expected, _meta) regenerate byte-identically."
  },
  "project": {
   "id": "proj_imported",
@@ -1049,8 +1050,8 @@
   },
   "baselines": [],
   "activeBaselineId": null,
-  "createdAt": "2026-10-03T21:09:54.175Z",
-  "updatedAt": "2026-10-03T21:09:54.175Z"
+  "createdAt": "2026-10-03T21:18:11.603Z",
+  "updatedAt": "2026-10-03T21:18:11.603Z"
  },
  "expected": {
   "t61": "2024-07-11",
