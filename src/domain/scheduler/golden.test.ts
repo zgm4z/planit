@@ -250,14 +250,17 @@ describe('黄金判据 5：分配变更后下游重排正确', () => {
 // 出边打平），则该负浮时归因到该 manual 后继 —— conflictBinding。
 // 反之（约束 / 资源 / auto 后继顶住）保持中性的 infeasibleSchedule，绝不误报。
 describe('Task 4：负浮时归因到 manual 后继', () => {
-  /** A(auto) →FS→ B：B 由 over 决定形态（manual 钉死 / auto + 约束） */
-  function abProject(bOver: Partial<Task>): {
+  /** A(auto) →FS→ B：A / B 分别由 aOver / bOver 决定形态（manual 钉死 / auto + 约束） */
+  function abProject(
+    bOver: Partial<Task>,
+    aOver: Partial<Task> = {},
+  ): {
     project: Project
     a: Task
     b: Task
   } {
     const project = createProject('归因', START)
-    const a = createTask({ name: 'A', duration: 3 }) // 03-02..03-04
+    const a = { ...createTask({ name: 'A', duration: 3 }), ...aOver } // 03-02..03-04
     const b = { ...createTask({ name: 'B', duration: 2 }), ...bOver }
     project.tasks[a.id] = a
     project.tasks[b.id] = b
@@ -340,10 +343,14 @@ describe('Task 4：负浮时归因到 manual 后继', () => {
       project.assignments[assignment.id] = assignment
     }
 
-    const { leveling } = solve(project)
+    const { leveling, schedules } = solve(project)
 
     expect(leveling.delays[m.id]).toBe(0) // 用户 delay 被夹 0
     expect(leveling.delays[a.id]).toBeGreaterThan(0) // 真正可动的是 auto 那条
+    // delays=0 不足以证明「条没动」—— 直接钉住 manual 的平衡后落点仍是钉死区间
+    // （抓「delays 报 0 但 scheduled* 被 leveledForwardPass 挪走」这类假阴性）。
+    expect(schedules[m.id].scheduledStart).toBe('2026-03-02')
+    expect(schedules[m.id].scheduledFinish).toBe('2026-03-03')
   })
 
   it('⑤ backward + ALAP × manual：manual 钉死不动，被顶住的前置仍归因到该 manual 后继', () => {
@@ -397,7 +404,12 @@ describe('Task 4：负浮时归因到 manual 后继', () => {
     expect(schedules[b.id].totalSlack).toBe(0)
   })
 
-  it('⑥ startNoEarlierThan 把窗口顶负 → infeasibleSchedule（约束边界不是依赖）', () => {
+  it('⑥ startNoEarlierThan 把窗口顶负 → infeasibleSchedule（下界约束顶负，无出边可归因）', () => {
+    // 本用例**无依赖**（单任务）：`startNoEarlierThan` 抬高 earlyStart、endDate 压低锚，
+    // lateStart 反落到下界之前 → 负浮时。它隔离的是「**下界**约束造成的负浮时」这条
+    // 成因（与 ② 的「上界约束 / auto 后继」互补），此形状下 `edgeBounds` 为空，
+    // 归因结构上不可能，故断言只能是 infeasibleSchedule。
+    // 注：`nonEdgeBound > finish` 那道守卫的判别在 ②（有 auto 出边时仍不归因）。
     const project = createProject('约束', START)
     project.endDate = '2026-03-05T18:00'
     const a = {
@@ -415,6 +427,71 @@ describe('Task 4：负浮时归因到 manual 后继', () => {
     expect(schedules[a.id].totalSlack).toBeLessThan(0)
     expect(conflicts).toHaveLength(1)
     expect(conflicts[0].kind).toBe('infeasibleSchedule')
+  })
+
+  // ── 归因的判别边界：**打平**时不归因 ──────────────────────────────────
+  //
+  // 这两条钉住 Task 4 归因规则里两处**故意从严**的比较，防止回归时被「放宽一格」：
+  //   (a) 指向 manual 后继的最小出边若与某条**非 manual** 出边打平 → 不归因
+  //       （守住 `tightest.every(manual)`，放宽成 `some` 立即变红）；
+  //   (b) 约束 / 资源上界若与 manual 出边**打平** → 不归因
+  //       （守住 `nonEdgeBound > finish` 的**严格**不等，放宽成 `>=` 立即变红）。
+  // 二者都只改「归因标签」，负浮时本身照旧上报，故只断言 kind。
+
+  it('⑦ manual 出边与 auto 出边打平 → 不归因（every(manual) 守卫）', () => {
+    // A(auto 3d) →FS→ B(manual 钉 03-04) 且 A →FS→ C(auto 1d, finishNoLaterThan 03-04)。
+    // 两条出边回推 A.lateFinish 都得 03-03（B.lateStart−1 / C.lateStart−1）→ 打平，
+    // 且严格紧于约束锚（03-05）→ 进入归因分支，但有一条非 manual 打平 → 不归因。
+    const project = createProject('打平-a', START)
+    const a = createTask({ name: 'A', duration: 3 }) // 03-02..03-04
+    const b = {
+      ...createTask({ name: 'B', duration: 1 }),
+      scheduling: { mode: 'manual' as const, start: '2026-03-04', finish: '2026-03-04' },
+    }
+    const c = {
+      ...createTask({ name: 'C', duration: 1 }),
+      scheduling: {
+        mode: 'auto' as const,
+        finishConstraint: { type: 'finishNoLaterThan' as const, date: '2026-03-04' },
+      },
+    }
+    for (const task of [a, b, c]) {
+      project.tasks[task.id] = task
+      project.rootIds.push(task.id)
+    }
+    for (const to of [b.id, c.id]) {
+      const dep = createDependency(a.id, to, 'FS', 0)
+      project.dependencies[dep.id] = dep
+    }
+
+    const { schedules, conflicts } = solve(project)
+
+    expect(schedules[a.id].totalSlack).toBeLessThan(0)
+    const conflictA = conflicts.find((cf) => cf.taskId === a.id)
+    expect(conflictA?.kind).toBe('infeasibleSchedule')
+    expect(conflicts.some((cf) => cf.kind === 'dependencyViolation')).toBe(false)
+  })
+
+  it('⑧ finishNoLaterThan 约束与 manual 出边打平 → 不归因（严格 `>` 守卫）', () => {
+    // A(auto 3d, finishNoLaterThan 03-03) →FS→ B(manual 钉 03-04)：
+    // 约束上界 03-03 与 B 那条边回推的上界 03-03（B.lateStart−1）**打平** →
+    // `nonEdgeBound > finish` 为假 → 不归因。
+    const { project, a } = abProject(
+      { scheduling: { mode: 'manual', start: '2026-03-04', finish: '2026-03-04' } },
+      {
+        scheduling: {
+          mode: 'auto',
+          finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-03' },
+        },
+      },
+    )
+
+    const { schedules, conflicts } = solve(project)
+
+    expect(schedules[a.id].totalSlack).toBeLessThan(0)
+    const conflictA = conflicts.find((cf) => cf.taskId === a.id)
+    expect(conflictA?.kind).toBe('infeasibleSchedule')
+    expect(conflicts.some((cf) => cf.kind === 'dependencyViolation')).toBe(false)
   })
 })
 

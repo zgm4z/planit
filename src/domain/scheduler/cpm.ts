@@ -184,6 +184,14 @@ export function runCpmWithGraph(
       //     （任何一条非 manual 出边打平，就说明 manual 后继并非唯一成因 → 不归因）；
       //   · 命中时取确定的一条（按 dep.id 升序）记下 binding。
       // 归因只是「显示用」的结构化提示；负浮时本身照旧如实上报，不改排期。
+      //
+      // ⚠️ 下面的 `bound === finish` 是按**字符串相等**比对，隐含一条不变量：
+      // `finish` 已在上面过 `snapToWorkday`，而每条 `bound` 都来自
+      // `backwardBound` / `schedulingUpperBound` / `resourceBounds.latestFinish`
+      // —— 三者产出的日期**都已对齐到工作日**，故吸附是幂等的、等值比对成立。
+      // 若将来引入未对齐工作日的上界来源，吸附会把 `finish` 挪一格，`tightest`
+      // 就可能匹配不到真正贡献它的那条边 —— 后果是**静默关闭归因**（退化成
+      // infeasibleSchedule，不误报但丢失归因）。届时需先把边界对齐再比对。
       if (nonEdgeBound > finish) {
         const tightest = edgeBounds.filter((edge) => edge.bound === finish)
         if (tightest.length > 0 && tightest.every((edge) => edge.manual)) {
