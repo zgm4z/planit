@@ -113,7 +113,7 @@ describe('dependency.create', () => {
     expect(deps[0].fromTaskId).toBe(a)
     expect(deps[0].toTaskId).toBe(b)
     expect(deps[0].type).toBe('FS')
-    expect(deps[0].lag).toBe(0)
+    expect(deps[0].lag).toEqual({ kind: 'workdays', days: 0 })
   })
 
   it('成环时抛出 CycleError 且不写入任何依赖', () => {
@@ -209,7 +209,7 @@ describe('dependency.delete / setType / setLag', () => {
   it('修改 lag，支持负数', () => {
     const { p, depId } = withDep()
     const r = run(p, 'dependency.setLag', { dependencyId: depId, lag: -2 })
-    expect(r.dependencies[depId].lag).toBe(-2)
+    expect(r.dependencies[depId].lag).toEqual({ kind: 'workdays', days: -2 })
   })
 })
 

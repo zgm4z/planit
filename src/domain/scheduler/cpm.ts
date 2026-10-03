@@ -74,11 +74,13 @@ export function runCpmWithGraph(
       if (earliest && earliest > start) start = earliest
 
       for (const dep of graph.incoming.get(id) ?? []) {
+        const fromTask = byId.get(dep.fromTaskId)!
         const bound = forwardBound({
           dep,
           fromStart: earlyStart.get(dep.fromTaskId)!,
           fromFinish: earlyFinish.get(dep.fromTaskId)!,
           toDuration: task.duration,
+          fromDuration: fromTask.duration,
           cal: calendar,
         })
         if (bound > start) start = bound
@@ -204,6 +206,7 @@ export function runCpmWithGraph(
             fromStart: earlyStart.get(id)!,
             fromFinish: earlyFinish.get(id)!,
             toDuration: byId.get(dep.toTaskId)!.duration,
+            fromDuration: byId.get(id)!.duration,
             cal: calendar,
           }),
           earlyStart.get(dep.toTaskId)!,

@@ -912,7 +912,7 @@ describe('相关性组（必要条件 / 从属两段）', () => {
 
     const deps = Object.values(useProjectStore.getState().project!.dependencies)
     expect(deps).toHaveLength(1)
-    expect(deps[0]).toMatchObject({ fromTaskId: siblingId, toTaskId: taskId, type: 'FS', lag: 0 })
+    expect(deps[0]).toMatchObject({ fromTaskId: siblingId, toTaskId: taskId, type: 'FS', lag: { kind: 'workdays', days: 0 } })
 
     // 方向不搞反：这条前驱渲染在「必要条件」段，而**不在**「从属」段。
     // 只断言「出现在列表里」是恒真的 —— 两段都会把依赖名渲染出来；必须限定到具体那一段。
@@ -930,7 +930,7 @@ describe('相关性组（必要条件 / 从属两段）', () => {
 
     const deps = Object.values(useProjectStore.getState().project!.dependencies)
     expect(deps).toHaveLength(1)
-    expect(deps[0]).toMatchObject({ fromTaskId: taskId, toTaskId: siblingId, type: 'FS', lag: 0 })
+    expect(deps[0]).toMatchObject({ fromTaskId: taskId, toTaskId: siblingId, type: 'FS', lag: { kind: 'workdays', days: 0 } })
 
     // 与上一条镜像：同一条数据、相反方向，渲染段必须跟着反过来（方向搞反就红）
     const predSection = screen.getByTestId('relation-predecessors')
@@ -979,7 +979,7 @@ describe('相关性组（必要条件 / 从属两段）', () => {
 
     const dep = Object.values(useProjectStore.getState().project!.dependencies)[0]
     expect(dep.type).toBe('SS')
-    expect(dep.lag).toBe(2)
+    expect(dep.lag).toEqual({ kind: 'workdays', days: 2 })
 
     await user.click(screen.getByLabelText('删除依赖 写代码'))
     expect(Object.values(useProjectStore.getState().project!.dependencies)).toHaveLength(0)

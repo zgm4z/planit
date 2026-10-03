@@ -1022,13 +1022,13 @@ function RelationSection({
               w={64}
               digits={0}
               ariaLabel={`${t('inspector.lag')} ${otherName}`}
-              value={dep.lag}
+              value={dep.lag.kind === 'workdays' ? dep.lag.days : 0}
               onBlur={breakCoalescing}
               onChange={(value) =>
                 dispatch({
                   type: 'dependency.setLag',
                   label: 'commands.dependency.setLag',
-                  payload: { dependencyId: dep.id, lag: value ?? 0 },
+                  payload: { dependencyId: dep.id, lag: { kind: 'workdays', days: value ?? 0 } },
                   coalesceKey: `dependency.setLag:${dep.id}`,
                 })
               }

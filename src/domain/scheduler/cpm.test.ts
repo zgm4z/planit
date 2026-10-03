@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createTask, createDependency } from '../model/factories'
-import type { ConstraintType, Dependency, SchedulingDirection, Task } from '../model/types'
+import type { ConstraintType, Dependency, Lag, SchedulingDirection, Task } from '../model/types'
 import { workdaysBetween } from '../calendar/workdays'
 import { runCpm, runCpmWithGraph } from './cpm'
 import { buildGraph, CycleError } from './graph'
+import { backwardBound, forwardBound, asLag, effectiveLagWorkdays } from './constraints'
 
 const mk = (name: string, duration: number): Task => ({
   ...createTask({ name, duration }),
@@ -674,5 +675,211 @@ describe('runCpm — 复用预构建图', () => {
     }
 
     expect(runCpmWithGraph(input, buildGraph(tasks, dependencies))).toEqual(runCpm(input))
+  })
+})
+
+// ── Lag 三单位换算 ──────────────────────────────────────
+// 默认日历周一至周五；跨周末用例锚定 2026-03-06（周五）。
+describe('forwardBound / backwardBound — Lag 单位换算', () => {
+  const cal = createCalendar()
+
+  function dep(type: Dependency['type'], lag: Lag | number): Dependency {
+    return { id: 'd', fromTaskId: 'A', toTaskId: 'B', type, lag: lag as Lag }
+  }
+
+  describe('workdays', () => {
+    it('FS lag=1：A 3 天 03-02→03-04，B 最早开始 = 03-06 周五', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', { kind: 'workdays', days: 1 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-06')
+    })
+
+    it('SS lag=2：从 A 开始再推 2 个工作日', () => {
+      expect(
+        forwardBound({
+          dep: dep('SS', { kind: 'workdays', days: 2 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-04')
+    })
+
+    it('FF lag=0：B 结束不早于 A 结束，toDuration=2 → B 从 03-03 开始', () => {
+      expect(
+        forwardBound({
+          dep: dep('FF', { kind: 'workdays', days: 0 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-03')
+    })
+
+    it('SF lag=1：从 A 开始推 1 工作日，toDuration=2 → B 从 03-02 开始（03-02 开工、03-03 完工）', () => {
+      expect(
+        forwardBound({
+          dep: dep('SF', { kind: 'workdays', days: 1 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-02')
+    })
+
+    it('逆推 FS lag=1：B 03-06 开始 → A 最晚 03-04 结束', () => {
+      expect(
+        backwardBound({
+          dep: dep('FS', { kind: 'workdays', days: 1 }),
+          toStart: '2026-03-06',
+          toFinish: '2026-03-10',
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-04')
+    })
+  })
+
+  describe('elapsedDays', () => {
+    it('FS + 0 自然日：周五完成 → 次工作日周一', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', { kind: 'elapsedDays', days: 0 }),
+          fromStart: '2026-03-04',
+          fromFinish: '2026-03-06',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-09')
+    })
+
+    it('FS + 2 自然日：周五+2=周日 → 次工作日周一', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', { kind: 'elapsedDays', days: 2 }),
+          fromStart: '2026-03-04',
+          fromFinish: '2026-03-06',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-09')
+    })
+
+    it('FF + 0 自然日：同日相接允许', () => {
+      expect(
+        forwardBound({
+          dep: dep('FF', { kind: 'elapsedDays', days: 0 }),
+          fromStart: '2026-03-04',
+          fromFinish: '2026-03-06',
+          toDuration: 1,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-06')
+    })
+
+    it('SS + 1 自然日：周六开始 → 下周一', () => {
+      expect(
+        forwardBound({
+          dep: dep('SS', { kind: 'elapsedDays', days: 1 }),
+          fromStart: '2026-03-07',
+          fromFinish: '2026-03-06',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-09')
+    })
+
+    it('逆推 FS + 0 自然日：B 03-09 开始 → A 最晚 03-06 结束', () => {
+      expect(
+        backwardBound({
+          dep: dep('FS', { kind: 'elapsedDays', days: 0 }),
+          toStart: '2026-03-09',
+          toFinish: '2026-03-10',
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-06')
+    })
+  })
+
+  describe('percent', () => {
+    it('前置工期 5、+50% → ceil(2.5)=3 工作日', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', { kind: 'percent', value: 50 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 5,
+          cal,
+        }),
+      ).toBe('2026-03-10')
+    })
+
+    it('−50% → ceil(−2.5)=−2（宁晚勿早）', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', { kind: 'percent', value: -50 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 5,
+          cal,
+        }),
+      ).toBe('2026-03-03')
+    })
+
+    it('前置工期 0（里程碑）→ 0', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', { kind: 'percent', value: 50 }),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 0,
+          cal,
+        }),
+      ).toBe('2026-03-05')
+    })
+
+    it('effectiveLagWorkdays 对 elapsedDays 返回 NaN（防御）', () => {
+      expect(Number.isNaN(effectiveLagWorkdays({ kind: 'elapsedDays', days: 1 }, 5))).toBe(true)
+    })
+  })
+
+  describe('裸数字兼容', () => {
+    it('asLag(1) 等价 { kind: "workdays", days: 1 }', () => {
+      expect(asLag(1)).toEqual({ kind: 'workdays', days: 1 })
+    })
+
+    it('forwardBound 容忍 lag 传裸数字', () => {
+      expect(
+        forwardBound({
+          dep: dep('FS', 1 as unknown as Lag),
+          fromStart: '2026-03-02',
+          fromFinish: '2026-03-04',
+          toDuration: 2,
+          fromDuration: 3,
+          cal,
+        }),
+      ).toBe('2026-03-06')
+    })
   })
 })

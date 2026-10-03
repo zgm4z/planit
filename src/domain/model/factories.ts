@@ -5,6 +5,7 @@ import type {
   Dependency,
   DependencyType,
   EffortMode,
+  Lag,
   Project,
   Resource,
   ResourceId,
@@ -162,9 +163,9 @@ export function createDependency(
   fromTaskId: TaskId,
   toTaskId: TaskId,
   type: DependencyType = 'FS',
-  lag = 0,
+  lag: Lag | number = { kind: 'workdays', days: 0 },
 ): Dependency {
-  return { id: nextId('dep'), fromTaskId, toTaskId, type, lag }
+  return { id: nextId('dep'), fromTaskId, toTaskId, type, lag: typeof lag === 'number' ? { kind: 'workdays', days: lag } : lag }
 }
 
 export interface CreateResourceInput {

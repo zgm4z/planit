@@ -117,6 +117,7 @@ function leveledForwardPass(
         fromStart: from.start,
         fromFinish: from.finish,
         toDuration: durations.get(id) ?? 0,
+        fromDuration: durations.get(dep.fromTaskId) ?? 0,
         cal: calendar,
       })
       if (bound > start) start = bound

@@ -102,13 +102,19 @@ export interface Task {
 
 export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF'
 
+/** 依赖延迟（lag）的三单位表示 */
+export type Lag =
+  | { kind: 'workdays'; days: number }
+  | { kind: 'elapsedDays'; days: number }
+  | { kind: 'percent'; value: number }
+
 export interface Dependency {
   id: DependencyId
   fromTaskId: TaskId
   toTaskId: TaskId
   type: DependencyType
-  /** 工作日，可为负 = 提前量 */
-  lag: number
+  /** 延迟量，支持工作日 / 自然日 / 百分比 */
+  lag: Lag
 }
 
 // ── 资源 ────────────────────────────────────────────────

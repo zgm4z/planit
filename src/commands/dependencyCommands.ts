@@ -1,4 +1,4 @@
-import type { DependencyType, TaskId } from '../domain/model/types'
+import type { Dependency, DependencyType, Lag, TaskId } from '../domain/model/types'
 import { createDependency } from '../domain/model/factories'
 import { buildGraph } from '../domain/scheduler/graph'
 import type { CommandHandler } from './types'
@@ -7,11 +7,11 @@ export interface DependencyCreatePayload {
   fromTaskId: TaskId
   toTaskId: TaskId
   type?: DependencyType
-  lag?: number
+  lag?: Lag | number
 }
 export interface DependencyDeletePayload { dependencyId: string }
 export interface DependencySetTypePayload { dependencyId: string; type: DependencyType }
-export interface DependencySetLagPayload { dependencyId: string; lag: number }
+export interface DependencySetLagPayload { dependencyId: string; lag: Lag | number }
 
 export const dependencyHandlers: Record<string, CommandHandler<any>> = {
   'dependency.create': (draft, payload: DependencyCreatePayload) => {
@@ -43,12 +43,12 @@ export const dependencyHandlers: Record<string, CommandHandler<any>> = {
     // 「命令无变更，不入撤销栈」，与摘要任务保护走的是同一套机制。
     if (duplicate) return
 
-    const probe = {
+    const probe: Dependency = {
       id: '__probe__',
       fromTaskId: payload.fromTaskId,
       toTaskId: payload.toTaskId,
       type,
-      lag,
+      lag: typeof lag === 'number' ? { kind: 'workdays', days: lag } : lag,
     }
 
     // 注意：这里对「现有依赖 + 探测边」整体试排。如果 project.dependencies
@@ -74,6 +74,9 @@ export const dependencyHandlers: Record<string, CommandHandler<any>> = {
 
   'dependency.setLag': (draft, payload: DependencySetLagPayload) => {
     const dep = draft.dependencies[payload.dependencyId]
-    if (dep) dep.lag = payload.lag
+    if (dep) {
+      const lag = payload.lag ?? { kind: 'workdays', days: 0 }
+      dep.lag = typeof lag === 'number' ? { kind: 'workdays', days: lag } : lag
+    }
   },
 }

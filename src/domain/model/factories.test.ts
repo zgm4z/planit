@@ -81,7 +81,7 @@ describe('createDependency', () => {
     expect(d.fromTaskId).toBe('a')
     expect(d.toTaskId).toBe('b')
     expect(d.type).toBe('FS')
-    expect(d.lag).toBe(0)
+    expect(d.lag).toEqual({ kind: 'workdays', days: 0 })
   })
 })
 
