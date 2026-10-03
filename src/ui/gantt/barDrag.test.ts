@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createCalendar, createDependency, createProject, createTask } from '../../domain/model/factories'
+import {
+  createAssignment,
+  createCalendar,
+  createDependency,
+  createProject,
+  createResource,
+  createTask,
+} from '../../domain/model/factories'
 import type { Project, Scheduling, TaskId } from '../../domain/model/types'
 import { addDays, taskFinish } from '../../domain/calendar/workdays'
 import { solve } from '../../domain/scheduler'
@@ -13,6 +20,7 @@ import {
   daysBetweenPixels,
   dragAnchorDate,
   dragCommitCommands,
+  dragOrigin,
   type DragMode,
 } from './barDrag'
 
@@ -302,5 +310,103 @@ describe('不变式：影子预览与提交结果一致', () => {
     expect(shadow[taskId]).toEqual(final[taskId])
     expect(shadow[taskId].scheduledStart).toBe('2026-03-12')
     expect(shadow[taskId].scheduledFinish).toBe('2026-03-12')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// Critical 回归：fixedEffort 任务的**有效工期** ≠ `task.duration`。
+// 引擎按 `ceil(effort / Σunits)` 覆盖 duration（`solve` 入口），甘特条按有效工期渲染。
+// 拖拽若把宽度钉到 `task.duration` 这个旧值，用户「看到 2 天、拖完变 4 天」，
+// 整条下游链跟着被带走 —— 且无任何报错。v5 里同样的拖拽只写 startOn、不动宽度，
+// 所以这是 Task 2 引入的回归。
+// ─────────────────────────────────────────────────────────────
+describe('拖拽保留有效工期（fixedEffort：duration ≠ 视觉宽度）', () => {
+  beforeEach(() => {
+    __resetRegistryForTests()
+    for (const [type, handler] of Object.entries(taskHandlers)) {
+      registerHandler(type as CommandType, handler)
+    }
+  })
+
+  /** fixedEffort：effort 4、Σunits 2 → 有效工期 2；`task.duration` 停在 4 */
+  function fixedEffortProject() {
+    const base = createProject('有效工期', '2026-03-02')
+    const a = createTask({ name: 'A', duration: 4 })
+    const b = createTask({ name: 'B', duration: 1 })
+    const resource = createResource({ name: 'R' }) // availability 默认 1
+    const assignment = createAssignment({ taskId: a.id, resourceId: resource.id, units: 2 })
+    const dep = createDependency(a.id, b.id)
+    const project: Project = {
+      ...base,
+      tasks: { [a.id]: { ...a, effortMode: 'fixedEffort', effort: 4 }, [b.id]: b },
+      rootIds: [a.id, b.id],
+      dependencies: { [dep.id]: dep },
+      resources: { [resource.id]: resource },
+      assignments: { [assignment.id]: assignment },
+    }
+    return { project, aId: a.id, bId: b.id }
+  }
+
+  it('前提：引擎有效工期为 2，而 task.duration 仍是 4', () => {
+    const { project, aId } = fixedEffortProject()
+    expect(project.tasks[aId].duration).toBe(4)
+    const s = solve(project).schedules[aId]
+    expect(s.scheduledStart).toBe('2026-03-02')
+    expect(s.scheduledFinish).toBe('2026-03-03') // 2 个工作日 = 视觉宽度
+  })
+
+  it('dragOrigin 取排期跨度（有效工期 2），而非 task.duration（4）', () => {
+    const { project, aId } = fixedEffortProject()
+    const o = dragOrigin(project.tasks[aId], solve(project).schedules[aId], cal)
+    expect(o).toEqual({ startDate: '2026-03-02', duration: 2 })
+  })
+
+  it('move：影子 == 落盘（假设项目与提交都用视觉宽度）', () => {
+    const { project, aId } = fixedEffortProject()
+    const o = dragOrigin(project.tasks[aId], solve(project).schedules[aId], cal)
+    const preview = computeDragPreview('move', o, '2026-03-05', cal)
+
+    const hypothetical = buildHypothetical(project, aId, 'move', preview)
+    const committed = applyCommands(project, dragCommitCommands('move', aId, preview))
+
+    expect(hypothetical.tasks[aId].duration).toBe(committed.tasks[aId].duration)
+    expect(solve(hypothetical).schedules[aId]).toEqual(solve(committed).schedules[aId])
+  })
+
+  it('resizeEnd：宽度以**视觉宽度**为基准（2 → 3），不是 stale 的 4', () => {
+    const { project, aId } = fixedEffortProject()
+    const o = dragOrigin(project.tasks[aId], solve(project).schedules[aId], cal)
+
+    // 从视觉右缘（03-03）再往右一天
+    const drop = addDays(dragAnchorDate('resizeEnd', o, cal), 1)
+    const preview = computeDragPreview('resizeEnd', o, drop, cal)
+    expect(preview).toEqual({ startDate: '2026-03-02', duration: 3 })
+
+    const after = applyCommands(project, dragCommitCommands('resizeEnd', aId, preview))
+    expect(after.tasks[aId].duration).toBe(3)
+    expect(after.tasks[aId].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-02',
+      finish: '2026-03-04',
+    })
+  })
+
+  it('move：落盘宽度 = 视觉宽度 2（不是 stale 的 4），下游随之', () => {
+    const { project, aId, bId } = fixedEffortProject()
+    // 视觉宽度 = 排期跨度 = 2（引擎的有效工期）
+    const o = { startDate: '2026-03-02', duration: 2 }
+    const preview = computeDragPreview('move', o, '2026-03-05', cal)
+    expect(preview).toEqual({ startDate: '2026-03-05', duration: 2 })
+
+    const after = applyCommands(project, dragCommitCommands('move', aId, preview))
+
+    expect(after.tasks[aId].duration).toBe(2)
+    expect(after.tasks[aId].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-05',
+      finish: '2026-03-06',
+    })
+    // B 紧随 A 之后（FS）—— 曾因宽度被掰成 4 而被推迟两天
+    expect(solve(after).schedules[bId].scheduledStart).toBe('2026-03-09')
   })
 })

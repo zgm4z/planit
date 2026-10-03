@@ -119,7 +119,7 @@ describe('黄金判据 3：工期取整（ceil）', () => {
 //   availableFrom   = 任务开始的下界（最早能开始）→ 只进**正推**
 //   availableUntil  = 任务结束的上界（最晚能结束）→ 只进**逆推**
 //
-// 这与既有的约束机制同构：constraintLowerBound 只进正推、constraintUpperBound
+// 这与既有的约束机制同构：schedulingLowerBound 只进正推、schedulingUpperBound
 // 只进逆推。下界刻画最早起点、上界刻画最晚终点，各归其位。
 //
 // 刻意**不**把两条边界都塞进两趟 —— 那样会：

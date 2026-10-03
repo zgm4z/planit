@@ -24,7 +24,13 @@ export interface TaskSetSchedulingPayload { taskId: TaskId; scheduling: Scheduli
 export interface TaskMoveToPayload {
   taskId: TaskId
   startDate: DateStr
-  /** 缺省时按 `taskFinish(startDate, task.duration)` 用项目日历折算出结束日 */
+  /**
+   * 平移后的区间宽度（工作日）。拖拽会传**视觉宽度**（引擎的有效工期）——
+   * fixedEffort 任务的 `task.duration` 是 stale 的旧值，不能用它当宽度。
+   * 缺省时回退到「manual 量当前区间 / auto 用 `task.duration`」。
+   */
+  duration?: number
+  /** 显式结束日（优先于 `duration`）。给出时按结果区间重算宽度。 */
   finishDate?: DateStr
 }
 export interface TaskResizePayload { taskId: TaskId; startDate: DateStr; duration: number }
@@ -148,7 +154,25 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const task = draft.tasks[payload.taskId]
     if (!task) return
     if (task.kind === 'group') return // 摘要任务日期只读
-    task.scheduling = payload.scheduling
+    const next = payload.scheduling
+    task.scheduling = next
+
+    // manual 的 duration 必须等于区间宽度 —— 与 moveTo / resize 同一条契约。
+    // 命令层是所有 manual 写入的唯一入口（Inspector 的模式切换与 start/end 编辑都经
+    // 这条命令），在此同步，任何未来的 manual 写入者都免费获得该不变量；放在 UI 的
+    // dispatch 处则会漏掉别的调用方，让「同一事实两个写入者」再次分叉。
+    // auto 分支**不动** duration（有效工期由引擎按 effort/Σunits 算，见 effort.ts）。
+    //
+    // 日期留空（'' 是 UI 的「未设」草稿哨兵）时跳过：此时间隔不可量，且保持原值是安全的。
+    if (next.mode === 'manual' && next.start !== '' && next.finish !== '') {
+      const calendar = draft.calendars[draft.calendarId]
+      task.duration =
+        task.kind === 'milestone'
+          ? 0
+          : calendar
+            ? workdaysInclusive(toDateStr(next.start), toDateStr(next.finish), calendar)
+            : task.duration
+    }
   },
 
   // 平移任务 = 落成 manual（spec §1.2：钉死区间就是手动排期，旧的 startOn 已移除）。
@@ -163,10 +187,10 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const start = payload.startDate
     const isMilestone = task.kind === 'milestone'
 
-    // 平移**保留**当前区间宽度：manual 任务从它的 manual 区间量宽（移动不改宽度），
-    // auto 任务仍用 task.duration。**milestone 恒 0** —— 它的零宽区间（起止同日）在
-    // workdaysInclusive 下会算成 1，若走量宽分支，第二次拖动就会把里程碑的 duration
-    // 从 0 抬成 1（渲染成 1 天、切回 auto 后按 1 个工作日排）。
+    // 平移保留的宽度，优先级：① 调用方显式给的 `payload.duration`（拖拽传的是**视觉宽度**
+    // = 引擎的有效工期 —— fixedEffort 下它 ≠ stale 的 `task.duration`）；② 当前区间宽度
+    // （manual 量 manual 区间、auto 用 `task.duration`）。**milestone 恒 0**：零宽区间
+    // （起止同日）在 workdaysInclusive 下会算成 1，会让里程碑渲染成 1 天。
     const currentWidth = isMilestone
       ? 0
       : task.scheduling.mode === 'manual'
@@ -176,16 +200,17 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
             calendar,
           )
         : task.duration
+    const width = isMilestone ? 0 : Math.max(1, payload.duration ?? currentWidth)
 
-    const finish = payload.finishDate ?? taskFinish(start, currentWidth, calendar)
+    const finish = payload.finishDate ?? taskFinish(start, width, calendar)
 
-    // duration 恒等于**结果区间**的宽度：未给 finishDate 时结束日由 currentWidth 折算，
-    // 宽度即 currentWidth（milestone 0）；给了 finishDate 时按新区间重新量宽，避免
-    // duration 与新区间漂移（本函数的契约就是「manual 的 duration 等于区间宽度」）。
-    const duration =
-      isMilestone || payload.finishDate === undefined
-        ? currentWidth
-        : workdaysInclusive(start, payload.finishDate, calendar)
+    // duration 恒等于**结果区间**的宽度（本函数的契约）：给了 finishDate 时按新区间
+    // 重新量宽，否则就是保留的 width。
+    const duration = isMilestone
+      ? 0
+      : payload.finishDate !== undefined
+        ? workdaysInclusive(start, payload.finishDate, calendar)
+        : width
 
     task.duration = duration
     task.scheduling = { mode: 'manual', start, finish }

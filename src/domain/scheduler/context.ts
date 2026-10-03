@@ -12,7 +12,7 @@ import { assignmentUnits } from '../model/units'
 import type { ResourceBounds } from './effort'
 import { resourceBoundsFromAssignments } from './effort'
 import { buildGraph, type TaskGraph } from './graph'
-import { expandDependencies, type UnsupportedSummaryDependency } from './expandDependencies'
+import { expandDependencies } from './expandDependencies'
 
 export interface ScheduleContext {
   readonly project: Project
@@ -23,8 +23,6 @@ export interface ScheduleContext {
    * CPM 与构图消费的是这一份，不是 `project.dependencies`。
    */
   readonly dependencies: readonly Dependency[]
-  /** 无法在叶子级精确表达的摘要依赖（既不入图也不参与 CPM） */
-  readonly unsupportedDependencies: readonly UnsupportedSummaryDependency[]
   readonly graph: TaskGraph
   readonly assignmentsByTask: ReadonlyMap<TaskId, readonly Assignment[]>
   readonly assignmentsByResource: ReadonlyMap<ResourceId, readonly Assignment[]>
@@ -72,6 +70,10 @@ export function buildScheduleContext(project: Project): ScheduleContext {
   }
 
   // 摘要端点在进图前展开到叶子级（否则会被当作悬空边静默丢弃）。
+  // `expanded.unsupported`（无法在叶子级精确表达的摘要依赖）**刻意不带上** ——
+  // ScheduleContext 里曾有一份 `unsupportedDependencies` 拷贝，但全仓无消费者，
+  // 属死管道。审计路径仍在 `expandDependencies` 的返回值 + 其单测 / guard 测试里，
+  // 需要时再从这里接线（别重新往 context 里塞一份没人读的拷贝）。
   const expanded = expandDependencies(project.tasks, Object.values(project.dependencies))
 
   return {
@@ -79,7 +81,6 @@ export function buildScheduleContext(project: Project): ScheduleContext {
     leaves,
     calendar,
     dependencies: expanded.dependencies,
-    unsupportedDependencies: expanded.unsupported,
     graph: buildGraph(leaves, expanded.dependencies),
     assignmentsByTask,
     assignmentsByResource,

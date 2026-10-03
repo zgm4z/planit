@@ -6,6 +6,7 @@ import {
   snapToWorkday,
   taskFinish,
   workdaysBetween,
+  workdaysInclusive,
 } from '../../domain/calendar/workdays'
 import type { Command } from '../../commands/types'
 
@@ -19,6 +20,31 @@ export interface DragOrigin {
 export interface DragPreview {
   startDate: DateStr
   duration: number
+}
+
+/**
+ * 拖拽起点：用户抓住的那根条 = `scheduledStart` + **视觉宽度**。
+ *
+ * 视觉宽度取排期跨度（`scheduledStart`→`scheduledFinish` 的工作日数）= 引擎的
+ * **有效工期**，**不是** `task.duration`：fixedEffort 任务的 duration 会被引擎按
+ * `ceil(effort / Σunits)` 覆盖（见 `effort.effectiveDuration`），二者可不同。
+ * 条按有效工期渲染，拖拽起点必须与之一致，否则松手会把宽度掰回 stale 的旧值、
+ * 把整条下游链带走。
+ *
+ * 里程碑恒 0 —— 它的零宽区间会被 `workdaysInclusive` 算成 1（渲染成 1 天）。
+ */
+export function dragOrigin(
+  task: Task,
+  schedule: { scheduledStart: DateStr; scheduledFinish: DateStr },
+  cal: Calendar,
+): DragOrigin {
+  if (task.kind === 'milestone') {
+    return { startDate: schedule.scheduledStart, duration: 0 }
+  }
+  return {
+    startDate: schedule.scheduledStart,
+    duration: workdaysInclusive(schedule.scheduledStart, schedule.scheduledFinish, cal),
+  }
 }
 
 /**
@@ -113,7 +139,10 @@ export function dragCommitCommands(
         {
           type: 'task.moveTo',
           label: 'commands.task.moveTo',
-          payload: { taskId, startDate: preview.startDate },
+          // 带上**视觉宽度**（preview.duration = 排期跨度）：moveTo 据此写 manual 区间，
+          // 而不是回退到 `task.duration` —— fixedEffort 下后者是 stale 的旧值，
+          // 会让「用户看到 2 天、松手变 4 天」。
+          payload: { taskId, startDate: preview.startDate, duration: preview.duration },
         },
       ]
 
@@ -147,10 +176,10 @@ export function dragCommitCommands(
  * **核心不变式：被拖任务的那几个字段，必须与 `dragCommitCommands` 落盘的结果
  * 完全一致。** 否则影子会骗人 —— 用户看到的是另一个项目算出来的排期。
  *
- * v6 起三种拖拽模式**都落 manual**（钉死区间 = 手动排期），因此假设项目统一写成
- * 「manual{start: preview.startDate, finish: taskFinish(preview.startDate, preview.duration)}」：
- * - `move` 提交 `task.moveTo {startDate}` → manual{start, taskFinish(start, task.duration)}；
- *   而 move 的 preview.duration === task.duration，故两者一致。
+ * v6 起三种拖拽模式**都落 manual**（钉死区间 = 手动排期），且提交时都带上
+ * `preview.duration`（= 视觉宽度），因此假设项目与落盘统一写成
+ * 「manualInterval(preview.startDate, preview.duration)」：
+ * - `move` 提交 `task.moveTo {startDate, duration}` → manual 同上。
  * - `resizeStart` / `resizeEnd` 提交 `task.resize {startDate, duration}` → manual 同上。
  *
  * manual 语义天然使「影子」与「落盘」同形 —— 不再有 finishOn 那类「假设项目钉错边」

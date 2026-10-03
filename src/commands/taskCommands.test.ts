@@ -224,6 +224,41 @@ describe('task.setScheduling / task.moveTo', () => {
     expect(p2.tasks[id].scheduling).toEqual(scheduling)
   })
 
+  it('setScheduling 写 manual 时同步 duration = 区间宽度（与 moveTo/resize 同一契约）', () => {
+    const p1 = run(project, 'task.create', { name: 'A' }) // duration 1
+    const id = firstRoot(p1)
+
+    const p2 = run(p1, 'task.setScheduling', {
+      taskId: id,
+      scheduling: { mode: 'manual', start: '2026-03-02', finish: '2026-03-06' },
+    })
+
+    // 区间 [03-02, 03-06] = 5 个工作日 —— duration 必须跟着走，
+    // 否则派生投入 / 成本（collectEfforts / collectCosts 读 duration）会停在旧值。
+    expect(p2.tasks[id].duration).toBe(5)
+  })
+
+  it('setScheduling 写 auto 时**不动** duration（引擎有自己的有效工期口径）', () => {
+    const p1 = run(project, 'task.create', { name: 'A' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.setDuration', { taskId: id, duration: 4 })
+
+    const p3 = run(p2, 'task.setScheduling', { taskId: id, scheduling: { mode: 'auto' } })
+    expect(p3.tasks[id].duration).toBe(4)
+  })
+
+  it('setScheduling 写 manual 但区间日期留空（UI 草稿）时不重算、不抛错', () => {
+    const p1 = run(project, 'task.create', { name: 'A' }) // duration 1
+    const id = firstRoot(p1)
+
+    const p2 = run(p1, 'task.setScheduling', {
+      taskId: id,
+      scheduling: { mode: 'manual', start: '', finish: '' },
+    })
+
+    expect(p2.tasks[id].duration).toBe(1) // 保持原值
+  })
+
   it('moveTo 落成 manual 区间，finish 由工期按项目日历折算', () => {
     const p1 = run(project, 'task.create', { name: 'A' }) // 工期 1
     const id = firstRoot(p1)
