@@ -343,12 +343,13 @@ type AutoScheduling = Extract<Task['scheduling'], { mode: 'auto' }>
 
 /**
  * auto 任务给出的「最早开始」下界（spec §2.3「各归其位」）：
+ * - **项目起点恒为下界**（Ruling 6）：`startNoEarlierThan` 早于 `projectStart`
+ *   时被吸收 —— 该约束在此情形是空约束，被项目起点满足。
  * - auto + `startConstraint.startNoEarlierThan` → 该日期
  * - auto + `finishConstraint.finishNoEarlierThan` → `taskStart(date, duration)` 折算
- * - 无 start 侧下界约束 → 项目起点
  *
  * 约束日期是承载时刻的字段：进入 `taskStart` / 直接作为边界返回前先 `toDateStr` 归一。
- * 两条下界同时存在时取较晚者（任务须同时满足）。
+ * 所有下界（含项目起点）取**较晚者**（任务须同时满足）。
  *
  * ⚠️ 形参是 **auto 形态**、不含 manual：manual 任务在 forwardPass 里已 `continue`
  * （区间为定值，不取任何下界的 max —— spec §2.2 + Ruling 2），永不走到这里。
@@ -361,14 +362,15 @@ function schedulingLowerBound(
   cal: Calendar,
   projectStart: DateStr,
 ): DateStr {
-  const bounds: DateStr[] = []
+  // projectStart 先入集合，故恒为下界的一部分（Ruling 6）。
+  const bounds: DateStr[] = [projectStart]
   if (scheduling.startConstraint?.type === 'startNoEarlierThan') {
     bounds.push(toDateStr(scheduling.startConstraint.date))
   }
   if (scheduling.finishConstraint?.type === 'finishNoEarlierThan') {
     bounds.push(taskStart(toDateStr(scheduling.finishConstraint.date), duration, cal))
   }
-  return bounds.length === 0 ? projectStart : bounds.reduce((a, b) => (a > b ? a : b))
+  return bounds.reduce((a, b) => (a > b ? a : b))
 }
 
 /**

@@ -154,6 +154,46 @@ describe('runCpm — 调度约束（manual 与 auto 下界）', () => {
     // 下界 03-03 弱于依赖要求的 03-09，取较晚者
     expect(r.B.earlyStart).toBe('2026-03-09')
   })
+
+  it('startNoEarlierThan 早于项目起点 → 被项目起点吸收（Ruling 6：起点是硬下界）', () => {
+    // 约束 2026-02-16 早于 projectStart 2026-03-02 → 空约束，任务落在项目起点。
+    const a: Task = {
+      ...mk('A', 2),
+      scheduling: {
+        mode: 'auto',
+        startConstraint: { type: 'startNoEarlierThan', date: '2026-02-16' },
+      },
+    }
+    const r = runCpm({
+      tasks: [a],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.A.earlyStart).toBe('2026-03-02')
+    expect(r.A.earlyFinish).toBe('2026-03-03')
+  })
+
+  it('finishNoEarlierThan 折算出的开始早于项目起点 → 同样被吸收', () => {
+    // duration 1、finish 下界 2026-02-16 → taskStart = 02-16 < 03-02 → 起点胜。
+    const a: Task = {
+      ...mk('A', 1),
+      scheduling: {
+        mode: 'auto',
+        finishConstraint: { type: 'finishNoEarlierThan', date: '2026-02-16' },
+      },
+    }
+    const r = runCpm({
+      tasks: [a],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.A.earlyStart).toBe('2026-03-02')
+    expect(r.A.earlyFinish).toBe('2026-03-02')
+  })
 })
 
 // ── 边界 ────────────────────────────────────────────────
