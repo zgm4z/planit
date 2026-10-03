@@ -320,8 +320,12 @@ export function ProjectView() {
                     // `task.duration`（条宽 = [scheduledStart, scheduledFinish] 的工作日数）。
                     // 若仍取 `task.duration`，一旦二者不一致（例如 Inspector 改了 manual
                     // 结束日而没同步 duration），拖拽会把区间宽度掰回旧值。
+                    //
+                    // ⚠️ 里程碑例外：它的零宽区间在 workdaysInclusive 下会算成 1，会把起点
+                    // 工期报成 1（影子条画成 1 天宽、且与落盘结果不一致）。里程碑恒用
+                    // task.duration（= 0）。
                     const duration =
-                      task.scheduling.mode === 'manual'
+                      task.scheduling.mode === 'manual' && task.kind !== 'milestone'
                         ? workdaysInclusive(schedule.scheduledStart, schedule.scheduledFinish, calendar)
                         : task.duration
                     drag.begin(event, taskId, mode, schedule.scheduledStart, duration)

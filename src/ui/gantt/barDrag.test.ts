@@ -278,4 +278,29 @@ describe('不变式：影子预览与提交结果一致', () => {
       expect(hypothetical.tasks[taskId].duration).toBe(preview.duration)
     }
   })
+
+  it('manual 里程碑 × move：影子与落盘的 duration 都保持 0（零宽区间不算 1 天）', () => {
+    const base = createProject('里程碑影子', '2026-03-02')
+    const milestone = { ...createTask({ name: 'M', duration: 0 }), kind: 'milestone' as const }
+    const project: Project = { ...base, tasks: { [milestone.id]: milestone }, rootIds: [milestone.id] }
+    const taskId = milestone.id
+
+    // 起点工期 = task.duration（= 0）—— 与 ProjectView 对里程碑的取法一致
+    // （若这里误用 workdaysInclusive 会把零宽区间量成 1）。
+    const originTask = { startDate: '2026-03-10', duration: 0 }
+    const preview = computeDragPreview('move', originTask, '2026-03-12', cal)
+    expect(preview).toEqual({ startDate: '2026-03-12', duration: 0 })
+
+    const hypothetical = buildHypothetical(project, taskId, 'move', preview)
+    const finalProject = applyCommands(project, dragCommitCommands('move', taskId, preview))
+
+    expect(hypothetical.tasks[taskId].duration).toBe(0)
+    expect(finalProject.tasks[taskId].duration).toBe(0)
+
+    const shadow = solve(hypothetical).schedules
+    const final = solve(finalProject).schedules
+    expect(shadow[taskId]).toEqual(final[taskId])
+    expect(shadow[taskId].scheduledStart).toBe('2026-03-12')
+    expect(shadow[taskId].scheduledFinish).toBe('2026-03-12')
+  })
 })

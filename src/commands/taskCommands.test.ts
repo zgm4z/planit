@@ -279,6 +279,49 @@ describe('task.setScheduling / task.moveTo', () => {
     })
   })
 
+  it('moveTo 显式 finishDate 时 duration 跟着**结果区间**走，不沿用旧宽度', () => {
+    const p1 = run(project, 'task.create', { name: 'A' }) // duration 1
+    const id = firstRoot(p1)
+
+    const p2 = run(p1, 'task.moveTo', {
+      taskId: id,
+      startDate: '2026-03-02',
+      finishDate: '2026-03-06',
+    })
+
+    // 结果区间 [03-02, 03-06] = 5 个工作日 → duration 必须是 5，而不是旧的 1
+    expect(p2.tasks[id].duration).toBe(5)
+    expect(p2.tasks[id].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-02',
+      finish: '2026-03-06',
+    })
+  })
+
+  it('拖动 manual 里程碑两次：duration 恒 0（零宽区间不算 1 天）', () => {
+    const p1 = run(project, 'task.create', { name: 'M' })
+    const id = firstRoot(p1)
+    const p2 = run(p1, 'task.toggleMilestone', { taskId: id }) // kind=milestone, duration=0
+
+    // 第一次拖动：auto → manual，duration 必须仍是 0
+    const p3 = run(p2, 'task.moveTo', { taskId: id, startDate: '2026-03-10' })
+    expect(p3.tasks[id].duration).toBe(0)
+    expect(p3.tasks[id].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-10',
+      finish: '2026-03-10',
+    })
+
+    // 第二次拖动（已是 manual 里程碑）—— 曾在此把 duration 从 0 抬成 1
+    const p4 = run(p3, 'task.moveTo', { taskId: id, startDate: '2026-03-12' })
+    expect(p4.tasks[id].duration).toBe(0)
+    expect(p4.tasks[id].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-12',
+      finish: '2026-03-12',
+    })
+  })
+
   it('把排期改回 auto 让引擎重新自由排期', () => {
     const p1 = run(project, 'task.create', { name: 'A' })
     const id = firstRoot(p1)

@@ -160,12 +160,16 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const calendar = draft.calendars[draft.calendarId]
     if (!calendar) return
 
+    const start = payload.startDate
+    const isMilestone = task.kind === 'milestone'
+
     // 平移**保留**当前区间宽度：manual 任务从它的 manual 区间量宽（移动不改宽度），
-    // auto 任务仍用 task.duration。量出的宽度同时写回 task.duration —— 让 duration 与
-    // 视觉宽度始终同步（渲染 / 后续拖拽 / 影子预览都以它为准）。否则一旦二者漂移
-    // （例如 Inspector 改了 manual 结束日而未同步 duration），拖拽会把宽度掰回旧值。
-    const duration =
-      task.scheduling.mode === 'manual'
+    // auto 任务仍用 task.duration。**milestone 恒 0** —— 它的零宽区间（起止同日）在
+    // workdaysInclusive 下会算成 1，若走量宽分支，第二次拖动就会把里程碑的 duration
+    // 从 0 抬成 1（渲染成 1 天、切回 auto 后按 1 个工作日排）。
+    const currentWidth = isMilestone
+      ? 0
+      : task.scheduling.mode === 'manual'
         ? workdaysInclusive(
             toDateStr(task.scheduling.start),
             toDateStr(task.scheduling.finish),
@@ -173,12 +177,18 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
           )
         : task.duration
 
+    const finish = payload.finishDate ?? taskFinish(start, currentWidth, calendar)
+
+    // duration 恒等于**结果区间**的宽度：未给 finishDate 时结束日由 currentWidth 折算，
+    // 宽度即 currentWidth（milestone 0）；给了 finishDate 时按新区间重新量宽，避免
+    // duration 与新区间漂移（本函数的契约就是「manual 的 duration 等于区间宽度」）。
+    const duration =
+      isMilestone || payload.finishDate === undefined
+        ? currentWidth
+        : workdaysInclusive(start, payload.finishDate, calendar)
+
     task.duration = duration
-    task.scheduling = {
-      mode: 'manual',
-      start: payload.startDate,
-      finish: payload.finishDate ?? taskFinish(payload.startDate, duration, calendar),
-    }
+    task.scheduling = { mode: 'manual', start, finish }
   },
 
   // 拖拽左/右把手会同时改变「开始日期」与「工期」两个维度。
