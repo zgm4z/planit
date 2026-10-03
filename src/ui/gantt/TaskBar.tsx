@@ -55,6 +55,10 @@ export function TaskBar({
     : schedule.scheduledFinish
 
   if (task.kind === 'milestone') {
+    // ⚠️ 里程碑**刻意**不画下面那个 manual 锁定标识（spec §4.2 的措辞是「manual **任务条**」）：
+    // 里程碑渲染成旋转 45° 的菱形，没有可依附的条，锁也无处摆（父级 rotate 会把锁一起转歪）。
+    // 但请注意这是**真会发生的**：拖动任何里程碑都走 task.moveTo → scheduling.mode 落成
+    // 'manual'。于是「手动里程碑」没有视觉信号，是已知且被接受的例外，不是漏做的分支。
     // 几何全部来自 milestoneRect()（外接盒），DependencyLayer 用的是同一个函数
     const rect = milestoneRect(scale, displayStart)
 

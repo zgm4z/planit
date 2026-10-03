@@ -1178,7 +1178,10 @@ function RelationSection({
             <NumberField
               size="xs"
               w={48}
-              digits={0}
+              // 精度随单位：percent 是**唯一**允许小数的单位（+2.5 → ceil 3），
+              // workdays / elapsedDays 恒为整数。若一律取 0 位，2.5 会被显示成 3，
+              // 用户「确认」一次就把 2.5 静默改成 3（显示与存储不符）。
+              digits={lag.kind === 'percent' ? 1 : 0}
               ariaLabel={`${t('inspector.lag')} ${otherName}`}
               value={lagNumber(lag)}
               onBlur={breakCoalescing}

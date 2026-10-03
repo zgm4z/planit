@@ -1088,6 +1088,27 @@ describe('依赖 lag 单位选择', () => {
     expect(onlyLag()).toEqual({ kind: 'percent', value: 3 })
   })
 
+  it('小数百分比 lag 如实渲染（2.5 显示为 2.5，不被四舍五入成 3）', () => {
+    // percent 是**唯一**允许小数的单位（spec 钉死 +2.5 → ceil 3 / −2.5 → −2）。
+    // 若按 0 位归一，2.5 会被显示成 3 —— 用户看到 3 再「确认」一次就把 2.5 静默改成 3。
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(siblingId, taskId, 'FS', 0)
+    useProjectStore.setState({
+      project: {
+        ...project,
+        dependencies: {
+          ...project.dependencies,
+          [dep.id]: { ...dep, lag: { kind: 'percent', value: 2.5 } },
+        },
+      },
+    })
+
+    renderInspector()
+
+    expect(screen.getByLabelText('延迟 写代码')).toHaveValue('2.5')
+    expect(screen.getByRole('combobox', { name: '延迟单位 写代码' })).toHaveValue('百分比')
+  })
+
   it('允许负 lag（工作日）', async () => {
     const user = userEvent.setup()
     renderInspector()
