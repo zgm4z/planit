@@ -1,6 +1,7 @@
 import type {
   Calendar,
   ComputedSchedule,
+  ConflictBinding,
   DateStr,
   DateTimeStr,
   Dependency,
@@ -18,7 +19,7 @@ import {
 } from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
 import { buildGraph, type TaskGraph } from './graph'
-import { backwardBound, forwardBound } from './constraints'
+import { asLag, backwardBound, effectiveLagWorkdays, forwardBound } from './constraints'
 import { usesLateSchedule } from './direction'
 
 export interface CpmInput {
@@ -124,6 +125,8 @@ export function runCpmWithGraph(
   const backwardPass = (anchor: DateStr) => {
     const lateStart = new Map<TaskId, DateStr>()
     const lateFinish = new Map<TaskId, DateStr>()
+    // 负浮时归因：本任务最紧上界由哪条出边给出（仅当该边指向 manual 后继时才有意义）
+    const bindings = new Map<TaskId, ConflictBinding>()
 
     for (const id of [...graph.order].reverse()) {
       const task = byId.get(id)!
@@ -133,6 +136,7 @@ export function runCpmWithGraph(
       // **跳过**出边上界、约束上界与资源可用期上界（availableUntil）的 min
       // （spec §2.2：manual 不被任何机制移动）。其**入边照常**给前置提供上界 ——
       // 前置被 manual 顶住 → 负浮时 → 冲突（由 detectConflicts 如实上报）。
+      // manual 自身 late = early（浮时恒 0）→ 永不产生冲突，也就无需记录 binding。
       if (scheduling.mode === 'manual') {
         const span = manualSpan(scheduling, calendar)
         lateStart.set(id, span.start)
@@ -149,6 +153,12 @@ export function runCpmWithGraph(
         if (latestWorkday < finish) finish = latestWorkday
       }
 
+      // 约束 + 资源 给出的上界（不含出边）。归因时用它做「非依赖来源」的对照：
+      // 只有出边**严格更紧**时，负浮时才可能归因到某个 manual 后继。
+      const nonEdgeBound = finish
+
+      // 逐出边取上界，并记下每条边给出的 bound 与其后继是否为 manual。
+      const edgeBounds: { dep: Dependency; bound: DateStr; manual: boolean }[] = []
       for (const dep of graph.outgoing.get(id) ?? []) {
         const bound = backwardBound({
           dep,
@@ -157,11 +167,42 @@ export function runCpmWithGraph(
           fromDuration: task.duration,
           cal: calendar,
         })
+        edgeBounds.push({
+          dep,
+          bound,
+          manual: byId.get(dep.toTaskId)!.scheduling.mode === 'manual',
+        })
         if (bound < finish) finish = bound
       }
 
       finish = snapToWorkday(finish, calendar)
       lateFinish.set(id, finish)
+
+      // 归因规则（本任务的负浮时由谁顶出来）：
+      //   · 出边上界必须**严格紧于**约束 / 资源上界（`nonEdgeBound > finish`）；
+      //   · 且所有「恰好取到最紧上界」的出边**都是**指向 manual 后继的
+      //     （任何一条非 manual 出边打平，就说明 manual 后继并非唯一成因 → 不归因）；
+      //   · 命中时取确定的一条（按 dep.id 升序）记下 binding。
+      // 归因只是「显示用」的结构化提示；负浮时本身照旧如实上报，不改排期。
+      if (nonEdgeBound > finish) {
+        const tightest = edgeBounds.filter((edge) => edge.bound === finish)
+        if (tightest.length > 0 && tightest.every((edge) => edge.manual)) {
+          const chosen = [...tightest].sort((a, b) => (a.dep.id < b.dep.id ? -1 : 1))[0]
+          const dep = chosen.dep
+          // boundary 是「该边消费的后继端日期」：FS/SS 看后继开始（manual 即其 start），
+          // FF/SF 看后继结束（manual 即其 finish）—— 正是 UI 要展示的「边界 {date}」。
+          const boundary =
+            dep.type === 'FF' || dep.type === 'SF'
+              ? lateFinish.get(dep.toTaskId)!
+              : lateStart.get(dep.toTaskId)!
+          const lag = asLag(dep.lag)
+          // elapsedDays 折不成工作日数（effectiveLagWorkdays 返回 NaN）——
+          // 记 0，且文案不嵌数值（Ruling 2）。
+          const lagDays =
+            lag.kind === 'elapsedDays' ? 0 : effectiveLagWorkdays(lag, task.duration)
+          bindings.set(id, { depType: dep.type, lagDays, boundary })
+        }
+      }
 
       // 刻意**不**在逆推里夹下界 availableFrom（它与上界一样只各进一趟，见
       // forwardPass 顶部的说明）：lateStart 由 lateFinish 忠实倒推，晚窗口
@@ -172,7 +213,7 @@ export function runCpmWithGraph(
       lateStart.set(id, taskStart(finish, task.duration, calendar))
     }
 
-    return { lateStart, lateFinish }
+    return { lateStart, lateFinish, bindings }
   }
 
   // ── 定锚 ───────────────────────────────────────────────
@@ -193,7 +234,7 @@ export function runCpmWithGraph(
         : forwardFinish
   }
 
-  const { lateStart, lateFinish } = backwardPass(reverseAnchor)
+  const { lateStart, lateFinish, bindings: conflictBindings } = backwardPass(reverseAnchor)
 
   if (direction === 'backward') {
     // 项目从终点往回推。正推锚点改用逆推结果里最早的开始日 ——
@@ -253,6 +294,8 @@ export function runCpmWithGraph(
     const task = byId.get(id)!
     const slack = workdaysBetween(earlyStart.get(id)!, lateStart.get(id)!, calendar)
     const useLate = usesLateSchedule(task)
+    // 负浮时归因（派生量，不落盘）：仅当本任务确为负浮时且逆推记下了 binding 时带上。
+    const binding = slack < 0 ? conflictBindings.get(id) : undefined
 
     result[id] = {
       earlyStart: earlyStart.get(id)!,
@@ -264,6 +307,7 @@ export function runCpmWithGraph(
       totalSlack: slack,
       freeSlack: freeSlackOf(id),
       isCritical: slack === 0,
+      ...(binding ? { conflictBinding: binding } : {}),
     }
   }
   return result

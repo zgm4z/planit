@@ -340,7 +340,8 @@
     "calendar.removeExceptionRange": "例外期間を削除"
   },
   "conflicts": {
-    "infeasibleSchedule": "スケジュール不可：このタスクの余裕が負です（{{slack}} 稼働日）"
+    "infeasibleSchedule": "スケジュール不可：このタスクの余裕が負です（{{slack}} 稼働日）",
+    "dependencyViolation": "依存関係の競合：手動スケジュールの後続タスクがこのタスクを実行可能な期間から押し出しました（境界 {{boundary}}）"
   },
   "errors": {
     "cycle": "循環依存を検出しました：{{path}}",

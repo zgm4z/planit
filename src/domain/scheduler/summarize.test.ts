@@ -150,6 +150,42 @@ describe('detectConflicts', () => {
     })
   })
 
+  it('负浮时且带 conflictBinding → 归因成 dependencyViolation（含依赖参数与 slack）', () => {
+    const t = task('A') // 默认 auto：由 manual 后继顶住
+    const tasks = { A: t }
+    const schedules = {
+      A: sch({
+        totalSlack: -3,
+        earlyStart: '2026-03-09',
+        conflictBinding: { depType: 'FS', lagDays: 2, boundary: '2026-03-02' },
+      }),
+    }
+
+    const conflicts = detectConflicts(tasks, schedules, ['A'])
+
+    expect(conflicts).toEqual([
+      {
+        taskId: 'A',
+        kind: 'dependencyViolation',
+        slack: -3,
+        depType: 'FS',
+        lagDays: 2,
+        boundary: '2026-03-02',
+      },
+    ])
+  })
+
+  it('带 conflictBinding 但浮时非负 → 仍不冲突（时机不变，负浮时驱动）', () => {
+    const tasks = { A: task('A') }
+    const schedules = {
+      A: sch({
+        totalSlack: 0,
+        conflictBinding: { depType: 'FS', lagDays: 0, boundary: '2026-03-02' },
+      }),
+    }
+    expect(detectConflicts(tasks, schedules, ['A'])).toEqual([])
+  })
+
   it('浮时非负的任务不产生冲突', () => {
     const tasks = { A: task('A') }
     const schedules = { A: sch({ totalSlack: 0 }) }

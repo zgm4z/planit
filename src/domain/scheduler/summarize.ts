@@ -66,7 +66,12 @@ export function summarizeParents(
 
 /**
  * 如实记录排期矛盾，不做调和。摘要任务本身不判冲突。
- * 判定依据是浮时为负 —— 最早与最晚排期窗口不可行；这里不推断矛盾由哪个边界造成。
+ * 判定**时机**不变：叶子任务浮时为负即驱动（最早与最晚排期窗口不可行）。
+ *
+ * 归因（Task 4）：负浮时所在任务若在逆推时记下了 `conflictBinding`（其最紧上界
+ * 唯一由一条指向 manual 后继的出边给出），则报 `dependencyViolation` 并带上依赖
+ * 参数；否则维持中性的 `infeasibleSchedule`（成因是约束 / 资源 / auto 后继，
+ * 不误报到某个 manual 依赖上）。manual 任务浮时恒 0，从不触发这里。
  *
  * 前提：childIds 构成一棵树（无环）。树形不变量由命令层保证，
  * 与依赖环不同，这里不做环检测。
@@ -90,11 +95,23 @@ export function detectConflicts(
     const schedule = schedules[id]
     if (!schedule || schedule.totalSlack >= 0) return
 
-    conflicts.push({
-      taskId: id,
-      kind: 'infeasibleSchedule',
-      slack: schedule.totalSlack,
-    })
+    const binding = schedule.conflictBinding
+    conflicts.push(
+      binding
+        ? {
+            taskId: id,
+            kind: 'dependencyViolation',
+            slack: schedule.totalSlack,
+            depType: binding.depType,
+            lagDays: binding.lagDays,
+            boundary: binding.boundary,
+          }
+        : {
+            taskId: id,
+            kind: 'infeasibleSchedule',
+            slack: schedule.totalSlack,
+          },
+    )
   }
 
   for (const rootId of rootIds) visit(rootId)

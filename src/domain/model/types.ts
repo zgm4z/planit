@@ -237,11 +237,31 @@ export interface ComputedSchedule {
    */
   freeSlack: number
   isCritical: boolean
+  /**
+   * 负浮时的**归因**（派生量，不落盘）：当本任务的最紧上界**唯一**由一条指向
+   * manual 后继的出边给出时，记下该依赖的类型 / 有效 lag 工作日数 / 顶住它的边界日期。
+   * 缺省 = 负浮时（若有）并非由某个 manual 后继单独造成（约束 / 资源 / auto 后继所致）。
+   *
+   * `lagDays` 口径：`workdays` / `percent` 折成工作日数；`elapsedDays` 折不成工作日，
+   * 记 `0` —— 三语文案**不嵌 lag 数值**，只依赖 `boundary` 日期。
+   */
+  conflictBinding?: ConflictBinding
+}
+
+/** 负浮时归因到 manual 后继时的结构化参数（见 `ComputedSchedule.conflictBinding`）。 */
+export interface ConflictBinding {
+  depType: DependencyType
+  lagDays: number
+  /** 顶住前置的边界日期：FS/SS 取后继 `lateStart`、FF/SF 取后继 `lateFinish`（manual 即其钉住端） */
+  boundary: DateStr
 }
 
 /** 冲突的说明参数。文案本身由 UI 层按当前语言渲染 —— 领域层不产出自然语言。 */
 export type ConflictParams =
   | { kind: 'infeasibleSchedule'; slack: number }
+  // 负浮时被 manual 后继顶住时归因到**被顶住的前置**（负浮时所在）。`slack` 与
+  // infeasibleSchedule 同口径（负浮时量），便于 UI 统一显示；其余字段见 ConflictBinding。
+  | { kind: 'dependencyViolation'; slack: number; depType: DependencyType; lagDays: number; boundary: DateStr }
 
 export type ConflictInfo = ConflictParams & { taskId: TaskId }
 

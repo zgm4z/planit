@@ -343,7 +343,8 @@
     "calendar.removeExceptionRange": "移除例外日期"
   },
   "conflicts": {
-    "infeasibleSchedule": "排期不可行：该任务浮时为负（{{slack}} 个工作日）"
+    "infeasibleSchedule": "排期不可行：该任务浮时为负（{{slack}} 个工作日）",
+    "dependencyViolation": "依赖冲突：手动排期的后继任务把本任务顶出可行窗口（边界 {{boundary}}）"
   },
   "errors": {
     "cycle": "检测到循环依赖：{{path}}",

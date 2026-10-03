@@ -340,7 +340,8 @@
     "calendar.removeExceptionRange": "Remove exception range"
   },
   "conflicts": {
-    "infeasibleSchedule": "Infeasible schedule: this task has negative slack ({{slack}} workdays)"
+    "infeasibleSchedule": "Infeasible schedule: this task has negative slack ({{slack}} workdays)",
+    "dependencyViolation": "Dependency conflict: a manually scheduled successor pushed this task out of its feasible window (boundary {{boundary}})"
   },
   "errors": {
     "cycle": "Circular dependency detected: {{path}}",

@@ -460,6 +460,37 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
     expect(alert).not.toHaveTextContent('finishNoLaterThan')
   })
 
+  it('manual 后继顶住前置 → 显示依赖冲突文案（含边界日期，且不泄露内部字段）', () => {
+    const project = useProjectStore.getState().project!
+    // 选中任务「写文档」(child, 3d) 是前置；「写代码」(sibling) 改为 manual 钉在 03-03
+    // （早于 child 的自然完成日 03-04）→ child 被顶出可行窗口，冲突归因到它的 manual 后继。
+    const dep = createDependency(taskId, siblingId, 'FS', 0)
+    useProjectStore.setState({
+      project: {
+        ...project,
+        dependencies: { ...project.dependencies, [dep.id]: dep },
+        tasks: {
+          ...project.tasks,
+          [siblingId]: {
+            ...project.tasks[siblingId],
+            scheduling: { mode: 'manual', start: '2026-03-03', finish: '2026-03-03' },
+          },
+        },
+      },
+    })
+
+    renderInspector()
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(
+      '依赖冲突：手动排期的后继任务把本任务顶出可行窗口（边界 2026-03-03）',
+    )
+    // 不泄露领域层的结构化键
+    expect(alert).not.toHaveTextContent('dependencyViolation')
+    expect(alert).not.toHaveTextContent('lagDays')
+    expect(alert).not.toHaveTextContent('boundary')
+  })
+
   it('切换到 English 后标签变英文', async () => {
     await i18n.changeLanguage('en-US')
     renderInspector()

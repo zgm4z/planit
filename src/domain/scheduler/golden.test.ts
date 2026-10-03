@@ -243,6 +243,181 @@ describe('黄金判据 5：分配变更后下游重排正确', () => {
   })
 })
 
+// ── Task 4：负浮时归因到 manual 后继（dependencyViolation）──────────────
+//
+// 归因规则（见 cpm.ts backwardPass）：负浮时所在任务的**最紧上界**若**唯一**由
+// 一条指向 manual 后继的出边给出（比约束 / 资源上界严格更紧，且没有任何非 manual
+// 出边打平），则该负浮时归因到该 manual 后继 —— conflictBinding。
+// 反之（约束 / 资源 / auto 后继顶住）保持中性的 infeasibleSchedule，绝不误报。
+describe('Task 4：负浮时归因到 manual 后继', () => {
+  /** A(auto) →FS→ B：B 由 over 决定形态（manual 钉死 / auto + 约束） */
+  function abProject(bOver: Partial<Task>): {
+    project: Project
+    a: Task
+    b: Task
+  } {
+    const project = createProject('归因', START)
+    const a = createTask({ name: 'A', duration: 3 }) // 03-02..03-04
+    const b = { ...createTask({ name: 'B', duration: 2 }), ...bOver }
+    project.tasks[a.id] = a
+    project.tasks[b.id] = b
+    project.rootIds = [a.id, b.id]
+    const dep = createDependency(a.id, b.id, 'FS', 0)
+    project.dependencies[dep.id] = dep
+    return { project, a, b }
+  }
+
+  it('① manual 后继把前置顶出可行窗口 → 冲突挂**前置**、kind = dependencyViolation、含 FS + 边界', () => {
+    // B 钉在 03-03（A 自然完成日 03-04 之前）→ 逆推把 A 的最晚结束拉到 03-02 → A 负浮时
+    const { project, a, b } = abProject({
+      scheduling: { mode: 'manual', start: '2026-03-03', finish: '2026-03-03' },
+    })
+
+    const { schedules, conflicts } = solve(project)
+
+    expect(schedules[a.id].totalSlack).toBeLessThan(0)
+    const conflict = conflicts.find((c) => c.taskId === a.id)
+    expect(conflict).toMatchObject({
+      kind: 'dependencyViolation',
+      depType: 'FS',
+      lagDays: 0,
+      // boundary = manual 后继的钉住日期（B.manualStart），供 UI 显示「边界 {date}」
+      boundary: '2026-03-03',
+      slack: schedules[a.id].totalSlack,
+    })
+    // 冲突挂在被顶住的前置 A 上，不在 manual 后继 B 上
+    expect(conflicts.map((c) => c.taskId)).toEqual([a.id])
+    expect(b.id).not.toBe(a.id)
+  })
+
+  it('② 同一项目把 B 改 auto + finishNoLaterThan 越界 → infeasibleSchedule（归因不误报）', () => {
+    const { project, a } = abProject({
+      scheduling: {
+        mode: 'auto',
+        finishConstraint: { type: 'finishNoLaterThan', date: '2026-03-03' },
+      },
+    })
+
+    const { schedules, conflicts } = solve(project)
+
+    // 前置 A 仍负浮时（被 auto 后继的早开始顶住），但成因是约束而非 manual 依赖
+    expect(schedules[a.id].totalSlack).toBeLessThan(0)
+    expect(conflicts.length).toBeGreaterThan(0)
+    expect(conflicts.every((c) => c.kind === 'infeasibleSchedule')).toBe(true)
+    expect(conflicts.some((c) => c.kind === 'dependencyViolation')).toBe(false)
+  })
+
+  it('③ manual 后继自身浮时恒 0、不产生冲突（被顶住的是它的前置）', () => {
+    const { project, b } = abProject({
+      scheduling: { mode: 'manual', start: '2026-03-03', finish: '2026-03-03' },
+    })
+
+    const { schedules, conflicts } = solve(project)
+
+    expect(schedules[b.id].totalSlack).toBe(0)
+    expect(conflicts.some((c) => c.taskId === b.id)).toBe(false)
+  })
+
+  it('④ manual 与同资源任务重叠 → leveling.delays 里 manual 恒 0（用户 delay 被夹 0）', () => {
+    const project = createProject('平衡', START)
+    const resource = createResource({ name: 'R', kind: 'staff' })
+    project.resources[resource.id] = resource
+
+    // M 钉死 03-02..03-03 且用户 delay=5；浮时恒 0 → delay 被夹成 0，平衡不得推它
+    const m = {
+      ...createTask({ name: 'M', duration: 2 }),
+      delay: 5,
+      scheduling: { mode: 'manual' as const, start: '2026-03-02', finish: '2026-03-03' },
+    }
+    const a = createTask({ name: 'A', duration: 2 }) // 可动、与 M 争用同一资源、同区间
+    const s = createTask({ name: 'S', duration: 10 }) // 无分配，仅撑长项目完成日给 A 浮时
+    for (const task of [m, a, s]) {
+      project.tasks[task.id] = task
+      project.rootIds.push(task.id)
+    }
+    for (const task of [m, a]) {
+      const assignment = createAssignment({ taskId: task.id, resourceId: resource.id, units: 1 })
+      project.assignments[assignment.id] = assignment
+    }
+
+    const { leveling } = solve(project)
+
+    expect(leveling.delays[m.id]).toBe(0) // 用户 delay 被夹 0
+    expect(leveling.delays[a.id]).toBeGreaterThan(0) // 真正可动的是 auto 那条
+  })
+
+  it('⑤ backward + ALAP × manual：manual 钉死不动，被顶住的前置仍归因到该 manual 后继', () => {
+    // M(manual 03-09) →FS→ A(auto 2d, alap) →FS→ B(manual 03-11)
+    // 逆推把 A 的晚窗口夹到 [03-09, 03-10]（受 B 的钉住日期上界）；再由 M 的正推
+    // 把 A 的最早开始顶到 03-10 → A 负浮时，且最紧上界来自 B 那条边 → dependencyViolation。
+    const project = createProject('backward', START)
+    project.schedulingDirection = 'backward'
+    project.endDate = '2026-03-20T18:00'
+
+    const m = {
+      ...createTask({ name: 'M', duration: 1 }),
+      scheduling: { mode: 'manual' as const, start: '2026-03-09', finish: '2026-03-09' },
+    }
+    const a = { ...createTask({ name: 'A', duration: 2 }), schedulingOrder: 'alap' as const }
+    const b = {
+      ...createTask({ name: 'B', duration: 1 }),
+      scheduling: { mode: 'manual' as const, start: '2026-03-11', finish: '2026-03-11' },
+    }
+    for (const task of [m, a, b]) {
+      project.tasks[task.id] = task
+      project.rootIds.push(task.id)
+    }
+    for (const [from, to] of [
+      [m.id, a.id],
+      [a.id, b.id],
+    ] as const) {
+      const dep = createDependency(from, to, 'FS', 0)
+      project.dependencies[dep.id] = dep
+    }
+
+    const { schedules, conflicts } = solve(project)
+
+    // manual 两端都钉死不动
+    expect(schedules[m.id].scheduledStart).toBe('2026-03-09')
+    expect(schedules[m.id].scheduledFinish).toBe('2026-03-09')
+    expect(schedules[b.id].scheduledStart).toBe('2026-03-11')
+    expect(schedules[b.id].scheduledFinish).toBe('2026-03-11')
+
+    // A 被 B 顶住 → 归因到 B 那条 manual 出边
+    expect(schedules[a.id].totalSlack).toBeLessThan(0)
+    expect(conflicts.find((c) => c.taskId === a.id)).toMatchObject({
+      kind: 'dependencyViolation',
+      depType: 'FS',
+      boundary: '2026-03-11',
+    })
+    // 注：A 是 ALAP，但不在此断言 scheduled* === late*。leveling 会以「满足依赖的下界」
+    // 重推 scheduled*，对不可行窗口（lateStart < 依赖下界）会把它落到依赖隐含日 ——
+    // 这是 solve 现有行为，与本次归因无关。此处只钉住 manual 定锚 + 归因。
+    expect(schedules[m.id].totalSlack).toBe(0)
+    expect(schedules[b.id].totalSlack).toBe(0)
+  })
+
+  it('⑥ startNoEarlierThan 把窗口顶负 → infeasibleSchedule（约束边界不是依赖）', () => {
+    const project = createProject('约束', START)
+    project.endDate = '2026-03-05T18:00'
+    const a = {
+      ...createTask({ name: 'A', duration: 2 }),
+      scheduling: {
+        mode: 'auto' as const,
+        startConstraint: { type: 'startNoEarlierThan' as const, date: '2026-03-09' },
+      },
+    }
+    project.tasks[a.id] = a
+    project.rootIds = [a.id]
+
+    const { schedules, conflicts } = solve(project)
+
+    expect(schedules[a.id].totalSlack).toBeLessThan(0)
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0].kind).toBe('infeasibleSchedule')
+  })
+})
+
 describe('黄金判据：共享 assignment 索引不改变成本与资源总计', () => {
   it('按每个资源的 units、usage 与 hourly 费率计算任务成本和总计', () => {
     const { project, tasks } = projectWithChain([2])
