@@ -253,6 +253,32 @@ describe('task.setScheduling / task.moveTo', () => {
     })
   })
 
+  it('moveTo 保留 manual 任务当前的区间宽度，并把它同步回 duration', () => {
+    const p1 = run(project, 'task.create', { name: 'A' }) // duration 1
+    const id = firstRoot(p1)
+    // 造一个「宽度 3、duration 仍是 1」的 manual 任务（模拟 Inspector 只改结束日未同步 duration）
+    const p2: Project = {
+      ...p1,
+      tasks: {
+        ...p1.tasks,
+        [id]: {
+          ...p1.tasks[id],
+          scheduling: { mode: 'manual', start: '2026-03-02', finish: '2026-03-04' },
+        },
+      },
+    }
+
+    const p3 = run(p2, 'task.moveTo', { taskId: id, startDate: '2026-03-09' })
+
+    // 宽度 3（03-02..03-04）被保留并写回 duration；新区间从 03-09 起 3 个工作日
+    expect(p3.tasks[id].duration).toBe(3)
+    expect(p3.tasks[id].scheduling).toEqual({
+      mode: 'manual',
+      start: '2026-03-09',
+      finish: '2026-03-11',
+    })
+  })
+
   it('把排期改回 auto 让引擎重新自由排期', () => {
     const p1 = run(project, 'task.create', { name: 'A' })
     const id = firstRoot(p1)

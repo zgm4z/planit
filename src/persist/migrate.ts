@@ -313,6 +313,13 @@ export function migrateSchedulingV5ToV6(
       return { mode: 'auto', finishConstraint: { type: 'finishNoEarlierThan', date } }
     case 'finishNoLaterThan':
       return { mode: 'auto', finishConstraint: { type: 'finishNoLaterThan', date } }
+    default:
+      // 损坏 / 手工改过的存档会带非法的 constraint type。若静默返回 `undefined`，
+      // 会存下 `scheduling: undefined` 并在随后的 solve() 里炸 —— 与 migrateTaskV1ToV2
+      // 同一立场：形状不符就**抛错**，绝不静默丢字段。
+      throw new Error(
+        `v5 存档的任务 scheduling.type 非法（${String(type)}），已拒绝迁移以免损坏数据`,
+      )
   }
 }
 

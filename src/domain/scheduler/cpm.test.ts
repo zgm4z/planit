@@ -346,6 +346,46 @@ describe('runCpm — manual 任务定锚', () => {
     expect(r.M.earlyStart).toBe('2026-03-05')
     expect(r.M.earlyFinish).toBe('2026-03-05')
   })
+
+  it('manual 不被资源可用期边界移动（Ruling 2：跳过 earliestStart / latestFinish）', () => {
+    const m = manual(mk('M', 2), '2026-03-16', '2026-03-17')
+    const r = runCpm({
+      tasks: [m],
+      dependencies: [],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+      // earliestStart 远晚于 manual.start（会把它推后）；latestFinish 远早于 manual.finish
+      // （会把晚链拉早）。manual 两者都忽略 —— 区间保持定值。
+      resourceBounds: { M: { earliestStart: '2026-03-30', latestFinish: '2026-03-10' } },
+    })
+    expect(r.M.earlyStart).toBe('2026-03-16')
+    expect(r.M.earlyFinish).toBe('2026-03-17')
+    expect(r.M.lateStart).toBe('2026-03-16')
+    expect(r.M.lateFinish).toBe('2026-03-17')
+    expect(r.M.totalSlack).toBe(0)
+  })
+
+  it('manual 的 freeSlack 恒 0（不会被算出正的「可推迟量」）', () => {
+    // M 在关键路径上（totalSlack 0），但它的出边 M→C 的松弛很大 —— C 被另一条长链
+    // 顶到 03-17，而 M 03-02 就完成了。若按出边松弛算，M.freeSlack 会是 10 > totalSlack。
+    const m = manual(mk('M', 1), '2026-03-02', '2026-03-02')
+    const x = mk('X', 11) // 03-02 → 03-16，把共同后继 C 顶到 03-17
+    const c = mk('C', 1)
+    const r = runCpm({
+      tasks: [m, x, c],
+      dependencies: [createDependency('M', 'C'), createDependency('X', 'C')],
+      calendar: cal,
+      direction: 'forward',
+      projectStart: '2026-03-02',
+    })
+    expect(r.M.totalSlack).toBe(0)
+    expect(r.M.freeSlack).toBe(0)
+    // freeSlack ≤ totalSlack 的不变量对全部任务成立
+    for (const id of ['M', 'X', 'C']) {
+      expect(r[id].freeSlack).toBeLessThanOrEqual(r[id].totalSlack)
+    }
+  })
 })
 
 // ── 排期方向（spec §4.3 / §4.4）──────────────────────────

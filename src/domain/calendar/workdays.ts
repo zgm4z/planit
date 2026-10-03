@@ -100,6 +100,20 @@ export function taskStart(finish: DateStr, duration: number, cal: Calendar): Dat
 }
 
 /**
+ * `[start, finish]` 区间内的**含首尾**工作日数。两端先 `snapToWorkday` 归一
+ * （与 manual 区间 / 拖拽落点同口径）；`start > finish` 时返回 0。
+ *
+ * 与 `workdaysBetween`（左闭右开、只计数）配对：本函数把「排期跨度」折成「工期」，
+ * 是 `taskFinish` / `taskStart` 的逆运算（对工作日对齐的区间）。
+ */
+export function workdaysInclusive(start: DateStr, finish: DateStr, cal: Calendar): number {
+  const from = snapToWorkday(start, cal)
+  const to = snapToWorkday(finish, cal)
+  if (from > to) return 0
+  return workdaysBetween(from, to, cal) + 1
+}
+
+/**
  * `[start, finish]` 区间内的全部工作日（**含首尾**），升序。
  * `start` 落在非工作日时先吸附到下一个工作日（与 `snapToWorkday` 同口径）。
  * `start > finish` 时返回空数组。

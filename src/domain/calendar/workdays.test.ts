@@ -9,6 +9,7 @@ import {
   snapToWorkday,
   addWorkdays,
   workdaysBetween,
+  workdaysInclusive,
   taskFinish,
   taskStart,
 } from './workdays'
@@ -102,6 +103,28 @@ describe('workdaysBetween', () => {
   })
   it('反向区间返回负数', () => {
     expect(workdaysBetween('2026-03-09', '2026-03-06', cal)).toBe(-1)
+  })
+})
+
+describe('workdaysInclusive', () => {
+  it('同一天算 1 个工作日（含首尾）', () => {
+    expect(workdaysInclusive('2026-03-06', '2026-03-06', cal)).toBe(1)
+  })
+  it('周五到周一为 2 个工作日（03-06 与 03-09）', () => {
+    expect(workdaysInclusive('2026-03-06', '2026-03-09', cal)).toBe(2)
+  })
+  it('与 workdaysBetween 的关系：inclusive = between + 1', () => {
+    expect(workdaysInclusive('2026-03-09', '2026-03-16', cal)).toBe(
+      workdaysBetween('2026-03-09', '2026-03-16', cal) + 1,
+    )
+  })
+  it('是 taskFinish 的逆运算：inclusive(start, taskFinish(start, d)) === d', () => {
+    for (const d of [1, 3, 5]) {
+      expect(workdaysInclusive('2026-03-06', taskFinish('2026-03-06', d, cal), cal)).toBe(d)
+    }
+  })
+  it('start > finish 返回 0', () => {
+    expect(workdaysInclusive('2026-03-09', '2026-03-06', cal)).toBe(0)
   })
 })
 

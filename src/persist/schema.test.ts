@@ -609,6 +609,18 @@ describe('parsePersistedProject — v5 → v6 迁移矩阵（spec §1.3 逐行�
     expect(migrateV5ToV6(v5Save().project as never).schemaVersion).toBe(6)
   })
 
+  it('非法的 constraint type 抛错，不静默产出 scheduling: undefined', () => {
+    const raw = v5Save()
+    // 模拟损坏 / 手工改过的存档：type 不在六型之内
+    ;(raw.project.tasks.t_auto as { scheduling: unknown }).scheduling = {
+      mode: 'constraint',
+      type: 'bogus',
+      date: '2026-03-05T09:00',
+    }
+
+    expect(() => parsePersistedProject(raw)).toThrow(/非法/)
+  })
+
   it('迁移是纯函数：同一份输入跑两次结果逐字段相同且不改动入参', () => {
     const raw = v5Save()
     const snapshot = JSON.stringify(raw)

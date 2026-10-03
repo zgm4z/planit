@@ -8,7 +8,8 @@ import type {
   TaskId,
 } from '../domain/model/types'
 import { createTask } from '../domain/model/factories'
-import { taskFinish } from '../domain/calendar/workdays'
+import { taskFinish, workdaysInclusive } from '../domain/calendar/workdays'
+import { toDateStr } from '../domain/calendar/dateTime'
 import { sumUnits } from '../domain/model/units'
 import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
@@ -159,10 +160,24 @@ export const taskHandlers: Record<string, CommandHandler<any>> = {
     const calendar = draft.calendars[draft.calendarId]
     if (!calendar) return
 
+    // 平移**保留**当前区间宽度：manual 任务从它的 manual 区间量宽（移动不改宽度），
+    // auto 任务仍用 task.duration。量出的宽度同时写回 task.duration —— 让 duration 与
+    // 视觉宽度始终同步（渲染 / 后续拖拽 / 影子预览都以它为准）。否则一旦二者漂移
+    // （例如 Inspector 改了 manual 结束日而未同步 duration），拖拽会把宽度掰回旧值。
+    const duration =
+      task.scheduling.mode === 'manual'
+        ? workdaysInclusive(
+            toDateStr(task.scheduling.start),
+            toDateStr(task.scheduling.finish),
+            calendar,
+          )
+        : task.duration
+
+    task.duration = duration
     task.scheduling = {
       mode: 'manual',
       start: payload.startDate,
-      finish: payload.finishDate ?? taskFinish(payload.startDate, task.duration, calendar),
+      finish: payload.finishDate ?? taskFinish(payload.startDate, duration, calendar),
     }
   },
 

@@ -39,7 +39,7 @@ import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
 import { useTranslation } from 'react-i18next'
-import { formatDate } from '../../domain/calendar/workdays'
+import { formatDate, workdaysInclusive } from '../../domain/calendar/workdays'
 import { toDateStr } from '../../domain/calendar/dateTime'
 import styles from '../styles/ProjectView.module.scss'
 import ganttStyles from '../styles/GanttPane.module.scss'
@@ -314,8 +314,17 @@ export function ProjectView() {
                     // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
                     selectTask(taskId)
                     const schedule = schedulesResult.schedules[taskId]
-                    if (!schedule) return
-                    drag.begin(event, taskId, mode, schedule.scheduledStart, project.tasks[taskId].duration)
+                    const task = project.tasks[taskId]
+                    if (!schedule || !task) return
+                    // 拖拽起点的「工期」必须等于**视觉宽度**：manual 任务的引擎排期不消费
+                    // `task.duration`（条宽 = [scheduledStart, scheduledFinish] 的工作日数）。
+                    // 若仍取 `task.duration`，一旦二者不一致（例如 Inspector 改了 manual
+                    // 结束日而没同步 duration），拖拽会把区间宽度掰回旧值。
+                    const duration =
+                      task.scheduling.mode === 'manual'
+                        ? workdaysInclusive(schedule.scheduledStart, schedule.scheduledFinish, calendar)
+                        : task.duration
+                    drag.begin(event, taskId, mode, schedule.scheduledStart, duration)
                   }}
                   onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
                 />
