@@ -31,6 +31,7 @@ import type {
   TaskId,
 } from '../../domain/model/types'
 import { findActiveBaseline } from '../../domain/model/baseline'
+import { asLag } from '../../domain/scheduler/constraints'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore, type InspectorTab } from '../../store/viewStore'
@@ -997,6 +998,8 @@ function RelationSection({
       {deps.map((dep) => {
         const otherId = dep.toTaskId === taskId ? dep.fromTaskId : dep.toTaskId
         const otherName = project.tasks[otherId]?.name ?? t('inspector.deletedTask')
+        // 归一化旧存档里的裸数字 lag（number → workdays），否则非 workdays 的 `.days` 会渲染成 0
+        const lag = asLag(dep.lag)
         return (
           <Group key={dep.id} gap={4} wrap="nowrap">
             <Text fz="xs" truncate style={{ flex: 1 }}>
@@ -1022,7 +1025,10 @@ function RelationSection({
               w={64}
               digits={0}
               ariaLabel={`${t('inspector.lag')} ${otherName}`}
-              value={dep.lag.kind === 'workdays' ? dep.lag.days : 0}
+              value={lag.kind === 'workdays' ? lag.days : 0}
+              // 单位选择器在后续任务中实现；在它落地前，非 workdays 的 lag 只读，
+              // 避免编辑时被静默降级为 workdays（当前无任何路径可创建非 workdays lag）
+              disabled={lag.kind !== 'workdays'}
               onBlur={breakCoalescing}
               onChange={(value) =>
                 dispatch({

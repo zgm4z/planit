@@ -13,6 +13,7 @@ import {
   createTask,
   __resetIdCounterForTests,
 } from '../../domain/model/factories'
+import type { Lag } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
@@ -986,6 +987,22 @@ describe('相关性组（必要条件 / 从属两段）', () => {
     // 删除后两段都回到空态（既有用例原本也断言了「列表里那条消失」，这里以空态文案承接）
     expect(within(screen.getByTestId('relation-predecessors')).getByText('无')).toBeInTheDocument()
     expect(within(screen.getByTestId('relation-successors')).getByText('无')).toBeInTheDocument()
+  })
+
+  it('旧存档的裸数字 lag 渲染真实数字（经 asLag 归一化，而非恒为 0）', () => {
+    // schema 5 的旧项目把 lag 存成裸 number，但类型标注为 Lag —— 绕过工厂直接注入，
+    // 复现「(3).kind === undefined 导致字段恒渲染 0」的回归。
+    const project = useProjectStore.getState().project!
+    const dep = createDependency(siblingId, taskId, 'FS', 0)
+    useProjectStore.setState({
+      project: {
+        ...project,
+        dependencies: { ...project.dependencies, [dep.id]: { ...dep, lag: 7 as unknown as Lag } },
+      },
+    })
+    renderInspector()
+
+    expect(screen.getByLabelText('延迟 写代码')).toHaveValue('7')
   })
 
   it('摘要任务不渲染添加下拉（日期由子任务汇总）', () => {
