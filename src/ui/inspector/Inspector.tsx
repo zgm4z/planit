@@ -1197,7 +1197,14 @@ function RelationSection({
             />
             <Select
               size="xs"
-              w={68}
+              // 宽度按**三语最长标签**定（en-US "Calendar days" ≫ zh "工作日"），
+              // 不能按中文定死：窄面板里少几个像素就会把末字裁掉（曾把「工作日」
+              // 渲染成「工作E」）。这种截断 jsdom 测不出（无布局），由
+              // e2e/regression.spec.ts 的「三语不裁字」判据守着。
+              w={116}
+              // 稳定钩子：aria-label 随语言翻译，e2e 的三语「不裁字」判据需要一个
+              // 不随语言变化的定位方式
+              data-testid="lag-unit-select"
               aria-label={`${t('inspector.lagUnit')} ${otherName}`}
               value={lag.kind}
               data={LAG_KINDS.map((kind) => ({
