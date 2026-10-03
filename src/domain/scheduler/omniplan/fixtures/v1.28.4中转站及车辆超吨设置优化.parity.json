@@ -1,0 +1,946 @@
+{
+ "_meta": {
+  "source": "v1.28.4中转站及车辆超吨设置优化.oplx",
+  "generatedBy": "scripts/importOmniPlan.py --expect",
+  "command": "python3 scripts/importOmniPlan.py \"/Users/boomgg/Library/Mobile Documents/iCloud~com~omnigroup~OmniPlan/Documents/v1.28.4中转站及车辆超吨设置优化.oplx\" --expect -o src/domain/scheduler/omniplan/fixtures/v1.28.4中转站及车辆超吨设置优化.parity.json",
+  "predicate": "P3 (engine-independent). A leaf task is asserted iff: effort is a positive multiple of 28800s; it has a leveled-start; no dependency touching it has an unsupported summary endpoint; its UNLEVELED forward-CPM window (re-derived from the .oplx alone: project start floored, startNoEarlierThan/finishNoEarlierThan, dependencies with summary endpoints expanded per expandDependencies.ts, duration = ceil(effort / assignments)) does not overlap any other task's window on a shared resource; no direct predecessor is itself contested or transitively leveling-affected; and its CPM start equals OmniPlan's leveled-start.",
+  "dataConsistencyScreen": "A task whose CPM start cannot equal its leveled-start is untrustworthy ground truth. Proven cases: a task with no assignment, no dependency and no constraint past the project start must start AT the project start — across all 37 corpus files, every such \"free\" task contradicts its own file's <start-date> (e.g. this corpus's stale `leveled-start` caches). Such tasks are skipped as `stale-leveled-start`.",
+  "counts": {
+   "leafTasks": 12,
+   "dependencies": 2,
+   "resources": 27,
+   "p1Qualifying": 4,
+   "p3Qualifying": 2
+  },
+  "qualifyingTaskIds": [
+   "t450",
+   "t453"
+  ],
+  "skipped": [
+   {
+    "id": "t435",
+    "reason": "contested"
+   },
+   {
+    "id": "t436",
+    "reason": "contested"
+   },
+   {
+    "id": "t437",
+    "reason": "contested"
+   },
+   {
+    "id": "t439",
+    "reason": "contested"
+   },
+   {
+    "id": "t440",
+    "reason": "contested"
+   },
+   {
+    "id": "t442",
+    "reason": "contested"
+   },
+   {
+    "id": "t445",
+    "reason": "transitive-leveling"
+   },
+   {
+    "id": "t447",
+    "reason": "contested"
+   },
+   {
+    "id": "t451",
+    "reason": "contested"
+   },
+   {
+    "id": "t457",
+    "reason": "transitive-leveling"
+   }
+  ],
+  "deferredNote": "Full `leveled-start` parity is DEFERRED to subproject 3 (resource leveling). This corpus's cached `leveled-start` is frequently inconsistent with the document's own <start-date> and depends on OmniPlan's leveling behavior, which subproject 1 does not model."
+ },
+ "project": {
+  "id": "proj_imported",
+  "name": "v1.28.4中转站及车辆超吨设置优化",
+  "schemaVersion": 6,
+  "startDate": "2026-03-03",
+  "schedulingDirection": "forward",
+  "calendarId": "default",
+  "calendars": {
+   "default": {
+    "id": "default",
+    "name": "标准日历",
+    "workingDays": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false
+    ],
+    "hoursPerDay": 9.0,
+    "exceptions": {}
+   }
+  },
+  "tasks": {
+   "t-1": {
+    "id": "t-1",
+    "name": "v1.28.4中转站及车辆超吨设置优化",
+    "parentId": null,
+    "childIds": [
+     "t287",
+     "t430"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t287": {
+    "id": "t287",
+    "name": "v1.34.4分步式服务站工作台新增“两刀法”标识",
+    "parentId": "t-1",
+    "childIds": [
+     "t386",
+     "t387",
+     "t388"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t386": {
+    "id": "t386",
+    "name": "前端",
+    "parentId": "t287",
+    "childIds": [
+     "t435",
+     "t437",
+     "t439"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t387": {
+    "id": "t387",
+    "name": "后端",
+    "parentId": "t287",
+    "childIds": [
+     "t436",
+     "t442",
+     "t440"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t388": {
+    "id": "t388",
+    "name": "测试",
+    "parentId": "t287",
+    "childIds": [
+     "t445"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t430": {
+    "id": "t430",
+    "name": "v1.28.4中转站及车辆超吨设置优化",
+    "parentId": "t-1",
+    "childIds": [
+     "t431",
+     "t432",
+     "t433"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t431": {
+    "id": "t431",
+    "name": "前端",
+    "parentId": "t430",
+    "childIds": [
+     "t447",
+     "t451"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t432": {
+    "id": "t432",
+    "name": "后端",
+    "parentId": "t430",
+    "childIds": [
+     "t450",
+     "t453"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t433": {
+    "id": "t433",
+    "name": "测试",
+    "parentId": "t430",
+    "childIds": [
+     "t457"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t435": {
+    "id": "t435",
+    "name": "分步式机收中转站新增“砍蔗类型”字段",
+    "parentId": "t386",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t436": {
+    "id": "t436",
+    "name": "分步式机收中转站新增“砍蔗类型”字段",
+    "parentId": "t387",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t437": {
+    "id": "t437",
+    "name": "\n数据查询】-【过磅数据查询】-“中转站小票”列表中新增“砍蔗类型”字段\n【结算管理】-【中转站小票审核】列表中在“审核状态”之前添加“砍蔗类型”列\n【结算管理】-【未结算数据】列表在“中转站名称”之后新增“砍蔗类型”列\n【结算管理】-【结算报表】列表在“中转站名称”之后新增“砍蔗类型”列\n",
+    "parentId": "t386",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t439": {
+    "id": "t439",
+    "name": "导出列表数据功能",
+    "parentId": "t386",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t440": {
+    "id": "t440",
+    "name": "导出列表数据功能",
+    "parentId": "t387",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t442": {
+    "id": "t442",
+    "name": "数据查询】-【过磅数据查询】-“中转站小票”列表中新增“砍蔗类型”字段\n【结算管理】-【中转站小票审核】列表中在“审核状态”之前添加“砍蔗类型”列\n【结算管理】-【未结算数据】列表在“中转站名称”之后新增“砍蔗类型”列\n【结算管理】-【结算报表】列表在“中转站名称”之后新增“砍蔗类型”列\n",
+    "parentId": "t387",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t445": {
+    "id": "t445",
+    "name": "执行测试",
+    "parentId": "t388",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t447": {
+    "id": "t447",
+    "name": "a)  中转站工作台查询项蔗农要支持编码搜索\nb)  自动停磅的功能\nc)  报进车数，报进功能添加防重功能",
+    "parentId": "t431",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t450": {
+    "id": "t450",
+    "name": "a)  中转站工作台查询项蔗农要支持编码搜索\nb)  自动停磅的功能",
+    "parentId": "t432",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 3
+   },
+   "t451": {
+    "id": "t451",
+    "name": "e)  中转站打印小票时间优化\n2 排队管理-预约功能优化\nb)  新增车辆吨位白名单\nd)  新增车辆白名单去掉删除按钮",
+    "parentId": "t431",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 3
+   },
+   "t453": {
+    "id": "t453",
+    "name": "b)  新增车辆吨位白名单\n中转站打印小票时间优化",
+    "parentId": "t432",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 3
+   },
+   "t457": {
+    "id": "t457",
+    "name": "执行测试",
+    "parentId": "t433",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2026-03-03"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 3
+   }
+  },
+  "rootIds": [
+   "t-1"
+  ],
+  "dependencies": {
+   "dep_1": {
+    "id": "dep_1",
+    "fromTaskId": "t387",
+    "toTaskId": "t445",
+    "type": "FS",
+    "lag": {
+     "kind": "workdays",
+     "days": 0
+    }
+   },
+   "dep_2": {
+    "id": "dep_2",
+    "fromTaskId": "t447",
+    "toTaskId": "t457",
+    "type": "FS",
+    "lag": {
+     "kind": "workdays",
+     "days": 0
+    }
+   }
+  },
+  "resources": {
+   "r-1": {
+    "id": "r-1",
+    "name": "项目",
+    "kind": "group",
+    "parentId": null,
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r20": {
+    "id": "r20",
+    "name": "前端",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r21": {
+    "id": "r21",
+    "name": "后端",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r50": {
+    "id": "r50",
+    "name": "测试",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r67": {
+    "id": "r67",
+    "name": "莫小磊",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r68": {
+    "id": "r68",
+    "name": "黄大海",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r69": {
+    "id": "r69",
+    "name": "陈辉",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r70": {
+    "id": "r70",
+    "name": "苏金",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r71": {
+    "id": "r71",
+    "name": "邓定伟",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r72": {
+    "id": "r72",
+    "name": "陈金明(10.11)",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r73": {
+    "id": "r73",
+    "name": "韦智鑫",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r74": {
+    "id": "r74",
+    "name": "卢妍",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r75": {
+    "id": "r75",
+    "name": "郑兴隆",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r76": {
+    "id": "r76",
+    "name": "黄日旋",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r77": {
+    "id": "r77",
+    "name": "苏珀伟",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r78": {
+    "id": "r78",
+    "name": "徐亚明(10.11)",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r79": {
+    "id": "r79",
+    "name": "李程(10.15)",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r80": {
+    "id": "r80",
+    "name": "梁秋梅(10.11)",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r82": {
+    "id": "r82",
+    "name": "陈天仲",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r83": {
+    "id": "r83",
+    "name": "苏海艺",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r84": {
+    "id": "r84",
+    "name": "林生",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r85": {
+    "id": "r85",
+    "name": "卓广明",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r87": {
+    "id": "r87",
+    "name": "黄伟斌",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r88": {
+    "id": "r88",
+    "name": "李覃懿",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r89": {
+    "id": "r89",
+    "name": "李程",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r90": {
+    "id": "r90",
+    "name": "卢雨欣",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r91": {
+    "id": "r91",
+    "name": "韦碧峰",
+    "kind": "staff",
+    "parentId": "r50",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   }
+  },
+  "assignments": {
+   "asg_1": {
+    "id": "asg_1",
+    "taskId": "t435",
+    "resourceId": "r87",
+    "units": 1
+   },
+   "asg_2": {
+    "id": "asg_2",
+    "taskId": "t436",
+    "resourceId": "r82",
+    "units": 1
+   },
+   "asg_3": {
+    "id": "asg_3",
+    "taskId": "t437",
+    "resourceId": "r77",
+    "units": 1
+   },
+   "asg_4": {
+    "id": "asg_4",
+    "taskId": "t439",
+    "resourceId": "r87",
+    "units": 1
+   },
+   "asg_5": {
+    "id": "asg_5",
+    "taskId": "t440",
+    "resourceId": "r82",
+    "units": 1
+   },
+   "asg_6": {
+    "id": "asg_6",
+    "taskId": "t442",
+    "resourceId": "r82",
+    "units": 1
+   },
+   "asg_7": {
+    "id": "asg_7",
+    "taskId": "t445",
+    "resourceId": "r90",
+    "units": 1
+   },
+   "asg_8": {
+    "id": "asg_8",
+    "taskId": "t447",
+    "resourceId": "r87",
+    "units": 1
+   },
+   "asg_9": {
+    "id": "asg_9",
+    "taskId": "t450",
+    "resourceId": "r68",
+    "units": 1
+   },
+   "asg_10": {
+    "id": "asg_10",
+    "taskId": "t451",
+    "resourceId": "r77",
+    "units": 1
+   },
+   "asg_11": {
+    "id": "asg_11",
+    "taskId": "t453",
+    "resourceId": "r67",
+    "units": 1
+   },
+   "asg_12": {
+    "id": "asg_12",
+    "taskId": "t457",
+    "resourceId": "r73",
+    "units": 1
+   }
+  },
+  "baselines": [],
+  "activeBaselineId": null,
+  "createdAt": "2026-10-03T21:09:54.172Z",
+  "updatedAt": "2026-10-03T21:09:54.172Z"
+ },
+ "expected": {
+  "t435": "2026-03-03",
+  "t436": "2026-03-03",
+  "t437": "2026-03-03",
+  "t439": "2026-03-05",
+  "t440": "2026-03-06",
+  "t442": "2026-03-05",
+  "t445": "2026-03-09",
+  "t447": "2026-03-06",
+  "t450": "2026-03-03",
+  "t451": "2026-03-04",
+  "t453": "2026-03-03",
+  "t457": "2026-03-10"
+ }
+}

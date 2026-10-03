@@ -1,0 +1,1070 @@
+{
+ "_meta": {
+  "source": "农务标准版-抽签-排期.oplx",
+  "generatedBy": "scripts/importOmniPlan.py --expect",
+  "command": "python3 scripts/importOmniPlan.py \"/Users/boomgg/Library/Mobile Documents/iCloud~com~omnigroup~OmniPlan/Documents/农务标准版-抽签-排期.oplx\" --expect -o src/domain/scheduler/omniplan/fixtures/农务标准版-抽签-排期.parity.json",
+  "predicate": "P3 (engine-independent). A leaf task is asserted iff: effort is a positive multiple of 28800s; it has a leveled-start; no dependency touching it has an unsupported summary endpoint; its UNLEVELED forward-CPM window (re-derived from the .oplx alone: project start floored, startNoEarlierThan/finishNoEarlierThan, dependencies with summary endpoints expanded per expandDependencies.ts, duration = ceil(effort / assignments)) does not overlap any other task's window on a shared resource; no direct predecessor is itself contested or transitively leveling-affected; and its CPM start equals OmniPlan's leveled-start.",
+  "dataConsistencyScreen": "A task whose CPM start cannot equal its leveled-start is untrustworthy ground truth. Proven cases: a task with no assignment, no dependency and no constraint past the project start must start AT the project start — across all 37 corpus files, every such \"free\" task contradicts its own file's <start-date> (e.g. this corpus's stale `leveled-start` caches). Such tasks are skipped as `stale-leveled-start`.",
+  "counts": {
+   "leafTasks": 18,
+   "dependencies": 1,
+   "resources": 26,
+   "p1Qualifying": 5,
+   "p3Qualifying": 1
+  },
+  "qualifyingTaskIds": [
+   "t61"
+  ],
+  "skipped": [
+   {
+    "id": "t62",
+    "reason": "contested"
+   },
+   {
+    "id": "t65",
+    "reason": "contested"
+   },
+   {
+    "id": "t66",
+    "reason": "no-leveled-start"
+   },
+   {
+    "id": "t70",
+    "reason": "contested"
+   },
+   {
+    "id": "t71",
+    "reason": "stale-leveled-start"
+   },
+   {
+    "id": "t72",
+    "reason": "contested"
+   },
+   {
+    "id": "t73",
+    "reason": "stale-leveled-start"
+   },
+   {
+    "id": "t74",
+    "reason": "stale-leveled-start"
+   },
+   {
+    "id": "t75",
+    "reason": "contested"
+   },
+   {
+    "id": "t76",
+    "reason": "stale-leveled-start"
+   },
+   {
+    "id": "t77",
+    "reason": "contested"
+   },
+   {
+    "id": "t79",
+    "reason": "no-leveled-start"
+   },
+   {
+    "id": "t80",
+    "reason": "non-integer"
+   },
+   {
+    "id": "t82",
+    "reason": "no-leveled-start"
+   },
+   {
+    "id": "t85",
+    "reason": "no-effort"
+   },
+   {
+    "id": "t87",
+    "reason": "no-effort"
+   },
+   {
+    "id": "t88",
+    "reason": "stale-leveled-start"
+   }
+  ],
+  "deferredNote": "Full `leveled-start` parity is DEFERRED to subproject 3 (resource leveling). This corpus's cached `leveled-start` is frequently inconsistent with the document's own <start-date> and depends on OmniPlan's leveling behavior, which subproject 1 does not model."
+ },
+ "project": {
+  "id": "proj_imported",
+  "name": "农务标准版-抽签-排期",
+  "schemaVersion": 6,
+  "startDate": "2024-07-10",
+  "schedulingDirection": "forward",
+  "calendarId": "default",
+  "calendars": {
+   "default": {
+    "id": "default",
+    "name": "标准日历",
+    "workingDays": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     false
+    ],
+    "hoursPerDay": 9.0,
+    "exceptions": {}
+   }
+  },
+  "tasks": {
+   "t-1": {
+    "id": "t-1",
+    "name": "农务标准版-抽签-排期",
+    "parentId": null,
+    "childIds": [
+     "t58",
+     "t83"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t58": {
+    "id": "t58",
+    "name": "v2.3.0抽签管理",
+    "parentId": "t-1",
+    "childIds": [
+     "t64",
+     "t67",
+     "t69",
+     "t81"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t61": {
+    "id": "t61",
+    "name": "设置签吨数页面",
+    "parentId": "t67",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-11"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t62": {
+    "id": "t62",
+    "name": "录入签号页面",
+    "parentId": "t67",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t64": {
+    "id": "t64",
+    "name": "基础组件",
+    "parentId": "t58",
+    "childIds": [
+     "t65",
+     "t80"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t65": {
+    "id": "t65",
+    "name": "通用表格(可配置表头/字段顺序)开发",
+    "parentId": "t64",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-11"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t66": {
+    "id": "t66",
+    "name": "电脑抽签页面",
+    "parentId": "t67",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "manual",
+     "start": "2024-07-12",
+     "finish": "2024-07-12"
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 3
+   },
+   "t67": {
+    "id": "t67",
+    "name": "前端",
+    "parentId": "t58",
+    "childIds": [
+     "t61",
+     "t66",
+     "t62",
+     "t75"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t69": {
+    "id": "t69",
+    "name": "后端",
+    "parentId": "t58",
+    "childIds": [
+     "t70",
+     "t72",
+     "t77",
+     "t71",
+     "t73",
+     "t74",
+     "t76",
+     "t79"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t70": {
+    "id": "t70",
+    "name": "设置签吨数API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-11"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t71": {
+    "id": "t71",
+    "name": "录入签号API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t72": {
+    "id": "t72",
+    "name": "签号显示窗数据表格API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-11"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t73": {
+    "id": "t73",
+    "name": "签号详情/编辑API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t74": {
+    "id": "t74",
+    "name": "漏签查询/蔗农补签API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t75": {
+    "id": "t75",
+    "name": "签号查询页面",
+    "parentId": "t67",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t76": {
+    "id": "t76",
+    "name": "签号查询数据表格API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   },
+   "t77": {
+    "id": "t77",
+    "name": "签号处理API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 1
+   },
+   "t79": {
+    "id": "t79",
+    "name": "执行电脑抽签API接口",
+    "parentId": "t69",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-10"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 5
+   },
+   "t80": {
+    "id": "t80",
+    "name": "通用组织树",
+    "parentId": "t64",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-11"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2.25
+   },
+   "t81": {
+    "id": "t81",
+    "name": "测试",
+    "parentId": "t58",
+    "childIds": [
+     "t82"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto"
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t82": {
+    "id": "t82",
+    "name": "执行测试",
+    "parentId": "t81",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "manual",
+     "start": "2024-07-23",
+     "finish": "2024-07-23"
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 9
+   },
+   "t83": {
+    "id": "t83",
+    "name": "派车管理",
+    "parentId": "t-1",
+    "childIds": [
+     "t85",
+     "t88",
+     "t87"
+    ],
+    "kind": "group",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-18"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t85": {
+    "id": "t85",
+    "name": "前端",
+    "parentId": "t83",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-18"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t87": {
+    "id": "t87",
+    "name": "后端",
+    "parentId": "t83",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-18"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedDuration",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0
+   },
+   "t88": {
+    "id": "t88",
+    "name": "工作台首页-待派蔗证页面框架",
+    "parentId": "t83",
+    "childIds": [],
+    "kind": "task",
+    "duration": 1,
+    "scheduling": {
+     "mode": "auto",
+     "startConstraint": {
+      "type": "startNoEarlierThan",
+      "date": "2024-07-18"
+     }
+    },
+    "progress": 0,
+    "effortMode": "fixedEffort",
+    "schedulingOrder": "asap",
+    "note": "",
+    "allowSplitting": false,
+    "priority": 0,
+    "delay": 0,
+    "effort": 2
+   }
+  },
+  "rootIds": [
+   "t-1"
+  ],
+  "dependencies": {
+   "dep_1": {
+    "id": "dep_1",
+    "fromTaskId": "t79",
+    "toTaskId": "t82",
+    "type": "FS",
+    "lag": {
+     "kind": "workdays",
+     "days": 0
+    }
+   }
+  },
+  "resources": {
+   "r-1": {
+    "id": "r-1",
+    "name": "项目",
+    "kind": "group",
+    "parentId": null,
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r6": {
+    "id": "r6",
+    "name": "前端",
+    "kind": "group",
+    "parentId": "r19",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r7": {
+    "id": "r7",
+    "name": "后端",
+    "kind": "group",
+    "parentId": "r19",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r9": {
+    "id": "r9",
+    "name": "黄伟斌",
+    "kind": "staff",
+    "parentId": "r6",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r10": {
+    "id": "r10",
+    "name": "杨捷",
+    "kind": "staff",
+    "parentId": "r6",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r11": {
+    "id": "r11",
+    "name": "黄大海",
+    "kind": "staff",
+    "parentId": "r7",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r12": {
+    "id": "r12",
+    "name": "莫小磊",
+    "kind": "staff",
+    "parentId": "r7",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r17": {
+    "id": "r17",
+    "name": "一组",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r18": {
+    "id": "r18",
+    "name": "二组",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r19": {
+    "id": "r19",
+    "name": "三组",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r20": {
+    "id": "r20",
+    "name": "前端",
+    "kind": "group",
+    "parentId": "r17",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r21": {
+    "id": "r21",
+    "name": "后端",
+    "kind": "group",
+    "parentId": "r17",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r23": {
+    "id": "r23",
+    "name": "苏珀炜",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r24": {
+    "id": "r24",
+    "name": "杨捷",
+    "kind": "staff",
+    "parentId": "r20",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r25": {
+    "id": "r25",
+    "name": "黄大海",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r26": {
+    "id": "r26",
+    "name": "许基诚",
+    "kind": "staff",
+    "parentId": "r21",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r30": {
+    "id": "r30",
+    "name": "前端】",
+    "kind": "group",
+    "parentId": "r18",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r31": {
+    "id": "r31",
+    "name": "后端",
+    "kind": "group",
+    "parentId": "r18",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r32": {
+    "id": "r32",
+    "name": "测试",
+    "kind": "group",
+    "parentId": "r-1",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r33": {
+    "id": "r33",
+    "name": "王荻",
+    "kind": "staff",
+    "parentId": "r30",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r35": {
+    "id": "r35",
+    "name": "玉明生",
+    "kind": "staff",
+    "parentId": "r31",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r36": {
+    "id": "r36",
+    "name": "莫小磊",
+    "kind": "staff",
+    "parentId": "r31",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r37": {
+    "id": "r37",
+    "name": "卢妍",
+    "kind": "staff",
+    "parentId": "r32",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r38": {
+    "id": "r38",
+    "name": "马永康",
+    "kind": "staff",
+    "parentId": "r32",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r39": {
+    "id": "r39",
+    "name": "韦芳群",
+    "kind": "staff",
+    "parentId": "r32",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   },
+   "r42": {
+    "id": "r42",
+    "name": "郑燕纯        ",
+    "kind": "staff",
+    "parentId": "r30",
+    "availability": 1,
+    "cost": {
+     "currency": "CNY"
+    }
+   }
+  },
+  "assignments": {
+   "asg_1": {
+    "id": "asg_1",
+    "taskId": "t61",
+    "resourceId": "r24",
+    "units": 1
+   },
+   "asg_2": {
+    "id": "asg_2",
+    "taskId": "t62",
+    "resourceId": "r23",
+    "units": 1
+   },
+   "asg_3": {
+    "id": "asg_3",
+    "taskId": "t65",
+    "resourceId": "r23",
+    "units": 1
+   },
+   "asg_4": {
+    "id": "asg_4",
+    "taskId": "t66",
+    "resourceId": "r24",
+    "units": 1
+   },
+   "asg_5": {
+    "id": "asg_5",
+    "taskId": "t70",
+    "resourceId": "r25",
+    "units": 1
+   },
+   "asg_6": {
+    "id": "asg_6",
+    "taskId": "t72",
+    "resourceId": "r25",
+    "units": 1
+   },
+   "asg_7": {
+    "id": "asg_7",
+    "taskId": "t75",
+    "resourceId": "r23",
+    "units": 1
+   },
+   "asg_8": {
+    "id": "asg_8",
+    "taskId": "t77",
+    "resourceId": "r25",
+    "units": 1
+   },
+   "asg_9": {
+    "id": "asg_9",
+    "taskId": "t79",
+    "resourceId": "r25",
+    "units": 1
+   },
+   "asg_10": {
+    "id": "asg_10",
+    "taskId": "t80",
+    "resourceId": "r9",
+    "units": 1
+   },
+   "asg_11": {
+    "id": "asg_11",
+    "taskId": "t82",
+    "resourceId": "r38",
+    "units": 1
+   },
+   "asg_12": {
+    "id": "asg_12",
+    "taskId": "t82",
+    "resourceId": "r39",
+    "units": 1
+   },
+   "asg_13": {
+    "id": "asg_13",
+    "taskId": "t88",
+    "resourceId": "r9",
+    "units": 1
+   }
+  },
+  "baselines": [],
+  "activeBaselineId": null,
+  "createdAt": "2026-10-03T21:09:54.175Z",
+  "updatedAt": "2026-10-03T21:09:54.175Z"
+ },
+ "expected": {
+  "t61": "2024-07-11",
+  "t62": "2024-07-12",
+  "t65": "2024-07-11",
+  "t70": "2024-07-11",
+  "t71": "2024-07-19",
+  "t72": "2024-07-11",
+  "t73": "2024-07-19",
+  "t74": "2024-07-19",
+  "t75": "2024-07-19",
+  "t76": "2024-07-19",
+  "t77": "2024-07-19",
+  "t80": "2024-07-11",
+  "t88": "2024-07-19"
+ }
+}
