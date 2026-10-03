@@ -120,7 +120,13 @@ describe('expandDependencies — 展开产物', () => {
     const dep = link(project, a.group, b.group, 'FS')
     const { dependencies, unsupported } = expandDependencies(project.tasks, [dep])
     expect(unsupported).toEqual([])
-    expect(dependencies).toHaveLength(4) // 2 前置叶子 × 2 后继叶子
+    // 断言**确切的 from→to 配对集合**：只断言条数的话，「4 条错配 / 重复的边」也能蒙混过关
+    const pairs = dependencies.map((d) => `${d.fromTaskId}>${d.toTaskId}`).sort()
+    const expected = a.leaves
+      .flatMap((from) => b.leaves.map((to) => `${from.id}>${to.id}`))
+      .sort()
+    expect(pairs).toEqual(expected)
+    expect(dependencies.every((d) => d.type === 'FS')).toBe(true)
   })
 
   it.each([

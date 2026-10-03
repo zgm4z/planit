@@ -5,7 +5,7 @@ import { join } from 'node:path'
 // 「The URL must be of scheme file」。
 import { URL as NodeURL, fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { solve } from '..'
+import { expandDependencies, solve } from '..'
 import type { Project } from '../../model/types'
 
 /**
@@ -72,6 +72,18 @@ describe('OmniPlan parity（真实文件对照）', () => {
         for (const id of qualifyingTaskIds) {
           expect(fixture.project.tasks[id]?.kind).toBe('task')
         }
+      })
+
+      it('语料不含「不受支持的摘要依赖端点」—— unsupported 必须为空', () => {
+        // `solve()` 目前**不消费** unsupported（只是被过滤掉、不入图），所以非精确的
+        // 摘要依赖会**静默**让后继落回项目起点。这是 corpus 当前不可达的角落；在此显式
+        // 钉住「本 corpus 产生 0 条」 —— 将来换语料一旦命中，本测试**当场变红**，
+        // 而不是悄悄少断言几个任务。
+        const { unsupported } = expandDependencies(
+          fixture.project.tasks,
+          Object.values(fixture.project.dependencies),
+        )
+        expect(unsupported).toEqual([])
       })
 
       for (const id of qualifyingTaskIds) {
