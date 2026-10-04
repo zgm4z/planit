@@ -8,6 +8,9 @@ re-solves automatically — the critical path stays highlighted, resource overlo
 leveled away, and every action is undoable. Everything runs and is stored in your
 browser: no server, no account.
 
+> **Status: early preview.** Planit is under active, rapid development — APIs, data
+> formats, and behaviour may change without notice, and stability is not guaranteed yet.
+
 ## Highlights
 
 - **Automatic re-scheduling** — edit any task, dependency, calendar, or resource and
