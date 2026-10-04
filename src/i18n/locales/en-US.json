@@ -110,6 +110,14 @@
     "dragHint": "{{start}} → {{finish}} · {{days}} workdays",
     "startLink": "Start link"
   },
+  "assignmentMenu": {
+    "title": "Assign resources",
+    "searchPlaceholder": "Search resources or groups",
+    "empty": "No resources yet",
+    "noResults": "No matching resources",
+    "clear": "Clear assignments",
+    "groupSummary": "{{total}} people · {{assigned}} assigned"
+  },
   "inspector": {
     "title": "Task details",
     "projectTitle": "Project details",

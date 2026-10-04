@@ -110,6 +110,14 @@
     "dragHint": "{{start}} → {{finish}} · {{days}} 稼働日",
     "startLink": "リンク開始"
   },
+  "assignmentMenu": {
+    "title": "リソースを割り当て",
+    "searchPlaceholder": "リソースまたはグループを検索",
+    "empty": "リソースがありません",
+    "noResults": "一致するリソースがありません",
+    "clear": "割り当てをクリア",
+    "groupSummary": "{{total}} 人 · 割り当て済み {{assigned}}"
+  },
   "inspector": {
     "title": "タスクの詳細",
     "projectTitle": "プロジェクトの詳細",

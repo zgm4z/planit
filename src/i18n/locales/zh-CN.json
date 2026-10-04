@@ -113,6 +113,14 @@
     "dragHint": "{{start}} → {{finish}} · {{days}} 个工作日",
     "startLink": "开始连线"
   },
+  "assignmentMenu": {
+    "title": "分配资源",
+    "searchPlaceholder": "搜索资源或组",
+    "empty": "还没有资源",
+    "noResults": "没有匹配的资源",
+    "clear": "清除分配",
+    "groupSummary": "{{total}} 人 · 已分配 {{assigned}}"
+  },
   "inspector": {
     "title": "任务详情",
     "projectTitle": "项目详情",
