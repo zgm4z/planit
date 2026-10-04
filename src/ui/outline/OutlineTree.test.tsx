@@ -535,3 +535,34 @@ describe('OutlineTree', () => {
     expect(task.duration).toBe(2)
   })
 })
+
+describe('OutlineTree 的多选修饰键', () => {
+  it('行点击把 ctrl/meta/shift 透传给 onSelect', () => {
+    const calls: { id: string; mods: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean } }[] = []
+    const rows = flattenVisibleRows(project, new Set())
+    render(
+      <MantineProvider>
+        <OutlineTree
+          project={project}
+          rows={rows}
+          virtualItems={virtualItems(rows.length)}
+          schedules={{}}
+          efforts={{}}
+          costs={{}}
+          earnedValues={{}}
+          baselineDiffs={{}}
+          columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskId={null}
+          onSelect={(id, mods) => calls.push({ id, mods })}
+          onToggleCollapse={() => {}}
+        />
+      </MantineProvider>,
+    )
+
+    fireEvent.click(screen.getByTestId(`outline-row-${parentId}`), { ctrlKey: true })
+    fireEvent.click(screen.getByTestId(`outline-row-${childId}`), { shiftKey: true })
+
+    expect(calls[0]).toEqual({ id: parentId, mods: { ctrlKey: true, metaKey: false, shiftKey: false } })
+    expect(calls[1]).toEqual({ id: childId, mods: { ctrlKey: false, metaKey: false, shiftKey: true } })
+  })
+})

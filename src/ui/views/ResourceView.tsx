@@ -9,6 +9,7 @@ import type {
   TaskId,
 } from '../../domain/model/types'
 import type { ResourceFlatRow } from '../shared/flattenResources'
+import type { SelectionMods } from '../shared/selectionRange'
 import type { TimelineScale } from '../gantt/timeline'
 import { createResourceAndGetId } from '../shared/resourceActions'
 import { useViewStore } from '../../store/viewStore'
@@ -24,6 +25,7 @@ interface ResourceViewProps {
   leveling: LevelingResult
   scale: TimelineScale
   totalDays: number
+  onSelectResource: (resourceId: ResourceId, mods: SelectionMods) => void
 }
 
 /**
@@ -41,10 +43,10 @@ export function ResourceView({
   leveling,
   scale,
   totalDays,
+  onSelectResource,
 }: ResourceViewProps) {
   const { t } = useTranslation()
   const selectedResourceId = useViewStore((state) => state.selectedResourceId)
-  const selectResource = useViewStore((state) => state.selectResource)
   const setActiveInspectorTab = useViewStore((state) => state.setActiveInspectorTab)
   // 折叠态由 ProjectView 消费（它据此算出 `rows` 传进来）—— 本组件只负责「切换」
   const toggleResourceCollapsed = useViewStore((state) => state.toggleResourceCollapsed)
@@ -77,8 +79,8 @@ export function ResourceView({
         rows={rows}
         virtualItems={virtualItems}
         selectedResourceId={selected.id}
-        onSelect={(resourceId: ResourceId) => {
-          selectResource(resourceId)
+        onSelect={(resourceId, mods) => {
+          onSelectResource(resourceId, mods)
           setActiveInspectorTab('resource')
         }}
         onToggleCollapse={toggleResourceCollapsed}

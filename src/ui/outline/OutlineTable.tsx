@@ -11,6 +11,7 @@ import type {
   TaskId,
 } from '../../domain/model/types'
 import type { FlatRow } from '../shared/flattenRows'
+import type { SelectionMods } from '../shared/selectionRange'
 import { cellFlex, OUTLINE_COLUMNS, type OutlineColumn } from './outlineColumns'
 import { useViewStore } from '../../store/viewStore'
 import { OutlineTree } from './OutlineTree'
@@ -31,7 +32,7 @@ interface OutlineTableProps {
   /** 已按注册表顺序排好的可见列 */
   columns: OutlineColumn[]
   selectedTaskId: TaskId | null
-  onSelect: (taskId: TaskId) => void
+  onSelect: (taskId: TaskId, mods: SelectionMods) => void
   onToggleCollapse: (taskId: TaskId) => void
 }
 

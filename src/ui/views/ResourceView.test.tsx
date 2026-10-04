@@ -23,6 +23,7 @@ import { useViewStore, __resetViewStoreForTests } from '../../store/viewStore'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { flattenResourceRows } from '../shared/flattenResources'
 import { createScale } from '../gantt/timeline'
+import { resolveClickSelection } from '../shared/selectionRange'
 import { ResourceView } from './ResourceView'
 import i18n from '../../i18n'
 
@@ -82,6 +83,17 @@ function ViewHarness({ project }: { project: Project }) {
         leveling={useScheduleStore.getState().result.leveling}
         scale={createScale(project.startDate, 32)}
         totalDays={60}
+        onSelectResource={(resourceId, mods) => {
+          const s = useViewStore.getState()
+          const next = resolveClickSelection(
+            rows.map((row) => row.resourceId),
+            s.selectedResourceIds,
+            s.selectedResourceId,
+            resourceId,
+            mods,
+          )
+          s.setResourceSelection(next.ids, next.anchor)
+        }}
       />
     </MantineProvider>
   )
@@ -196,6 +208,21 @@ describe('资源视图（视图 B）', () => {
     useScheduleStore.setState({ result: solve(project), error: null })
     renderView(project)
     expect(screen.getByText('还没有资源。')).toBeInTheDocument()
+  })
+
+  it('资源视图同样可多选：Ctrl 点击累加集合，锚点跟随', () => {
+    const project = fixture()
+    useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+    useScheduleStore.setState({ result: solve(project), error: null })
+    const alice = Object.values(project.resources).find((r) => r.name === '张三')!
+    const bob = Object.values(project.resources).find((r) => r.name === '李四')!
+    renderView(project)
+
+    fireEvent.click(screen.getByTestId(`resource-row-${alice.id}`))
+    fireEvent.click(screen.getByTestId(`resource-row-${bob.id}`), { ctrlKey: true })
+
+    expect(useViewStore.getState().selectedResourceIds).toEqual([alice.id, bob.id])
+    expect(useViewStore.getState().selectedResourceId).toBe(bob.id)
   })
 })
 

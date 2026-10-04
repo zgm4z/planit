@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Project, ResourceId } from '../../domain/model/types'
 import type { ResourceFlatRow } from '../shared/flattenResources'
+import type { SelectionMods } from '../shared/selectionRange'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import {
   RESOURCE_COLUMNS,
@@ -17,7 +18,7 @@ interface ResourceTreeProps {
   rows: ResourceFlatRow[]
   virtualItems: VirtualItem[]
   selectedResourceId: ResourceId | null
-  onSelect: (resourceId: ResourceId) => void
+  onSelect: (resourceId: ResourceId, mods: SelectionMods) => void
   onToggleCollapse: (resourceId: ResourceId) => void
 }
 
@@ -138,7 +139,13 @@ export function ResourceTree({
               key={item.key}
               className={`${styles.outlineRow} ${selected ? styles.outlineRowSelected : ''}`}
               style={{ transform: `translateY(${item.start}px)`, height: item.size }}
-              onClick={() => onSelect(row.resourceId)}
+              onClick={(event) =>
+                onSelect(row.resourceId, {
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                  shiftKey: event.shiftKey,
+                })
+              }
               data-testid={`resource-row-${row.resourceId}`}
             >
               <div

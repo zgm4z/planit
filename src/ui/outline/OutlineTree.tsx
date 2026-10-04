@@ -12,6 +12,7 @@ import type {
   TaskId,
 } from '../../domain/model/types'
 import type { FlatRow } from '../shared/flattenRows'
+import type { SelectionMods } from '../shared/selectionRange'
 import {
   cellFlex,
   getOutlineCellValue,
@@ -40,7 +41,7 @@ interface OutlineTreeProps {
   /** 要渲染的列，**调用方保证已按注册表顺序排好** */
   columns: OutlineColumn[]
   selectedTaskId: TaskId | null
-  onSelect: (taskId: TaskId) => void
+  onSelect: (taskId: TaskId, mods: SelectionMods) => void
   onToggleCollapse: (taskId: TaskId) => void
 }
 
@@ -83,7 +84,13 @@ export function OutlineTree({
               selected ? styles.outlineRowSelected : ''
             }`}
             style={{ transform: `translateY(${item.start}px)`, height: item.size }}
-            onClick={() => onSelect(row.taskId)}
+            onClick={(event) =>
+              onSelect(row.taskId, {
+                ctrlKey: event.ctrlKey,
+                metaKey: event.metaKey,
+                shiftKey: event.shiftKey,
+              })
+            }
             data-testid={`outline-row-${row.taskId}`}
           >
             {columns.map((column) => {
