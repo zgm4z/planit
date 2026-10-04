@@ -233,3 +233,13 @@ OmniPlan parity、Worker 化与大规模性能优化）。
 - [`docs/superpowers/ROADMAP.md`](docs/superpowers/ROADMAP.md) —— 版本路线图与实测性能数据
 - [`docs/superpowers/HANDOFF.md`](docs/superpowers/HANDOFF.md) —— 跨会话交接（状态 / 队列 / 纪律）
 - `docs/superpowers/specs/` —— 每个版本的详细设计文档
+
+## 许可证
+
+[PolyForm Noncommercial 1.0.0](LICENSE)。
+
+- **非商业用途可自由使用、修改与分发**：个人学习 / 研究 / 爱好项目，以及教育、
+  公益、公共科研、政府机构等用途均属非商业用途
+- **fork 与二次开发必须保留**原始版权与许可声明（`Required Notice`），并随分发
+  一并提供本许可条款
+- **商业用途不在许可范围内**，需另行获得作者授权

@@ -323,3 +323,17 @@ performance work).
 - [`docs/superpowers/HANDOFF.md`](docs/superpowers/HANDOFF.md) — cross-session
   handoff (state / queue / discipline)
 - `docs/superpowers/specs/` — detailed design documents for every version
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE).
+
+- **Non-commercial use is free**: use, modify, and distribute the software
+  freely for noncommercial purposes — personal study / research / hobby
+  projects, as well as educational, charitable, public-research, and
+  governmental use
+- **Forks and derivative works must retain** the original copyright and
+  license notices (`Required Notice`) and pass these terms along with any
+  distribution
+- **Commercial use is not covered** by the license and requires the author's
+  separate permission
