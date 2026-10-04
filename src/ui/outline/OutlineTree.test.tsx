@@ -362,4 +362,176 @@ describe('OutlineTree', () => {
     expect(screen.queryByTestId(`outline-note-input-${nextParent.id}`)).not.toBeInTheDocument()
     expect(screen.getByTestId(`outline-note-${nextParent.id}`)).toBeInTheDocument()
   })
+
+  it('数字列：双击 progress 输 150 回车 → clamp 到 100', async () => {
+    const user = userEvent.setup()
+    renderTree(
+      OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'progress'),
+      { [childId]: schedule('2026-03-04', '2026-03-06') },
+    )
+
+    await user.dblClick(screen.getByTestId(`outline-edit-progress-${childId}`))
+    const input = screen.getByTestId(`outline-edit-input-progress-${childId}`)
+    await user.clear(input)
+    await user.type(input, '150{Enter}')
+
+    expect(useProjectStore.getState().project!.tasks[childId].progress).toBe(100)
+  })
+
+  it('数字列：非法输入不提交、保留编辑态、撤销栈不增', async () => {
+    const user = userEvent.setup()
+    renderTree(
+      OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'duration'),
+      { [childId]: schedule('2026-03-04', '2026-03-06') },
+    )
+
+    await user.dblClick(screen.getByTestId(`outline-edit-duration-${childId}`))
+    const input = screen.getByTestId(`outline-edit-input-duration-${childId}`)
+    await user.clear(input)
+    await user.type(input, 'abc')
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(screen.getByTestId(`outline-edit-input-duration-${childId}`)).toBeInTheDocument()
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(useProjectStore.getState().undoStack).toHaveLength(0)
+  })
+
+  it('日期列：双击 start 选日期回车 → task.moveTo，任务落 manual 且起点 = 所选日', async () => {
+    const user = userEvent.setup()
+    renderTree(
+      OUTLINE_COLUMNS.filter((c) => ['title', 'start', 'finish'].includes(c.key)),
+      { [childId]: schedule('2026-03-04', '2026-03-06') },
+    )
+
+    await user.dblClick(screen.getByTestId(`outline-edit-start-${childId}`))
+    const input = screen.getByTestId(`outline-edit-input-start-${childId}`)
+    await user.clear(input)
+    await user.type(input, '2026-03-05')
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    const task = useProjectStore.getState().project!.tasks[childId]
+    expect(task.scheduling.mode).toBe('manual')
+    expect(task.scheduling.mode === 'manual' && task.scheduling.start).toBe('2026-03-05')
+  })
+
+  it('只读列：双击 id / kind 不进编辑态（无输入框）', async () => {
+    const user = userEvent.setup()
+    renderTree(OUTLINE_COLUMNS.filter((c) => ['title', 'id', 'kind'].includes(c.key)))
+
+    await user.dblClick(screen.getByTestId(`outline-cell-id-${childId}`))
+    await user.dblClick(screen.getByTestId(`outline-cell-kind-${childId}`))
+    expect(screen.queryByTestId(`outline-edit-input-id-${childId}`)).not.toBeInTheDocument()
+    expect(screen.queryByTestId(`outline-edit-input-kind-${childId}`)).not.toBeInTheDocument()
+  })
+
+  it('守卫：manual 任务的 duration、group 的 start 双击不进编辑态，且显示态有原因 title', async () => {
+    const user = userEvent.setup()
+    // renderTree 读的是**文件级的 project 变量**（不是 store）—— 就地把它换成含 manual 子任务的项目
+    project = {
+      ...project,
+      tasks: {
+        ...project.tasks,
+        [childId]: {
+          ...project.tasks[childId],
+          scheduling: { mode: 'manual', start: '2026-03-04T09:00', finish: '2026-03-06T18:00' },
+        },
+      },
+    }
+    renderTree(
+      OUTLINE_COLUMNS.filter((c) => ['title', 'start', 'duration'].includes(c.key)),
+      { [childId]: schedule('2026-03-04', '2026-03-06'), [parentId]: schedule('2026-03-04', '2026-03-06') },
+    )
+
+    // manual 任务的工期列：无编辑器，显示态有原因
+    await user.dblClick(screen.getByTestId(`outline-cell-duration-${childId}`))
+    expect(screen.queryByTestId(`outline-edit-input-duration-${childId}`)).not.toBeInTheDocument()
+    expect(
+      within(screen.getByTestId(`outline-cell-duration-${childId}`)).getByTitle('手动排期的工期由区间决定，请改开始/结束日'),
+    ).toBeInTheDocument()
+
+    // group 的 start 列：理由「摘要任务的该字段由子任务汇总」
+    expect(
+      within(screen.getByTestId(`outline-cell-start-${parentId}`)).getByTitle('摘要任务的该字段由子任务汇总'),
+    ).toBeInTheDocument()
+  })
+
+  it('撤销：改 A 的优先级再改 B 的优先级 → 两条记录，Ctrl 语义各一条', async () => {
+    const user = userEvent.setup()
+    renderTree(OUTLINE_COLUMNS.filter((c) => c.key === 'title' || c.key === 'priority'))
+
+    await user.dblClick(screen.getByTestId(`outline-edit-priority-${parentId}`))
+    const p1 = screen.getByTestId(`outline-edit-input-priority-${parentId}`)
+    await user.clear(p1)
+    await user.type(p1, '3{Enter}')
+
+    await user.dblClick(screen.getByTestId(`outline-edit-priority-${childId}`))
+    const p2 = screen.getByTestId(`outline-edit-input-priority-${childId}`)
+    await user.clear(p2)
+    await user.type(p2, '5{Enter}')
+
+    expect(useProjectStore.getState().undoStack).toHaveLength(2)
+    expect(useProjectStore.getState().project!.tasks[parentId].priority).toBe(3)
+    expect(useProjectStore.getState().project!.tasks[childId].priority).toBe(5)
+
+    useProjectStore.getState().undo()
+    expect(useProjectStore.getState().project!.tasks[childId].priority).toBe(0)
+    expect(useProjectStore.getState().project!.tasks[parentId].priority).toBe(3)
+  })
+
+  it('title：双击名称进改名、回车提交 task.rename；折叠三角仍可点（回归）', async () => {
+    const user = userEvent.setup()
+    const onToggleCollapse = vi.fn()
+    const rows = flattenVisibleRows(project, new Set())
+    render(
+      <MantineProvider>
+        <OutlineTree
+          project={project}
+          rows={rows}
+          virtualItems={virtualItems(rows.length)}
+          schedules={{}}
+          efforts={{}}
+          costs={{}}
+          earnedValues={{}}
+          baselineDiffs={{}}
+          columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskId={null}
+          onSelect={() => {}}
+          onToggleCollapse={onToggleCollapse}
+        />
+      </MantineProvider>,
+    )
+
+    // 双击名称 → 改名
+    await user.dblClick(screen.getByTestId(`outline-title-${childId}`))
+    const input = screen.getByTestId(`outline-title-input-${childId}`)
+    await user.clear(input)
+    await user.type(input, '新名字{Enter}')
+    expect(useProjectStore.getState().project!.tasks[childId].name).toBe('新名字')
+
+    // 折叠三角仍然是可点的折叠按钮（双击名称不会吞掉三角的 click）
+    fireEvent.click(screen.getByTestId(`outline-row-${parentId}`).querySelector('button')!)
+    expect(onToggleCollapse).toHaveBeenCalledWith(parentId)
+  })
+
+  it('日期列：双击 finish 改结束端 → 起点不变、duration 按新区间重算', async () => {
+    const user = userEvent.setup()
+    renderTree(
+      OUTLINE_COLUMNS.filter((c) => ['title', 'start', 'finish'].includes(c.key)),
+      { [childId]: schedule('2026-03-04', '2026-03-06') },
+    )
+
+    await user.dblClick(screen.getByTestId(`outline-edit-finish-${childId}`))
+    const input = screen.getByTestId(`outline-edit-input-finish-${childId}`)
+    await user.clear(input)
+    await user.type(input, '2026-03-05')
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    const task = useProjectStore.getState().project!.tasks[childId]
+    expect(task.scheduling.mode).toBe('manual')
+    // 起点不动，只有结束端变了
+    expect(task.scheduling.mode === 'manual' && task.scheduling.start).toBe('2026-03-04')
+    expect(task.scheduling.mode === 'manual' && task.scheduling.finish).toBe('2026-03-05')
+    // duration 恒等于结果区间宽度：03-04..03-05 = 2 个工作日
+    expect(task.duration).toBe(2)
+  })
 })

@@ -65,6 +65,17 @@
     "disabledReason": {
       "actualCost": "実コストの入力が必要です（未定）"
     },
+    "edit": {
+      "aria": "{{column}}を編集",
+      "invalidNumber": "数値を入力してください",
+      "disabled": {
+        "group": "サマリーのこの項目はサブタスクから集計されます",
+        "manualDuration": "手動排期の期間は区間で決まります。開始/終了を編集してください",
+        "milestone": "マイルストーンに期間はありません",
+        "fixedDuration": "固定工数に切り替えると工数を編集できます",
+        "noSchedule": "未スケジュール"
+      }
+    },
     "columns": {
       "kind": "種類",
       "title": "タイトル",

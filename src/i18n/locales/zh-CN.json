@@ -68,6 +68,17 @@
     "disabledReason": {
       "actualCost": "需要实际成本录入（尚未排期）"
     },
+    "edit": {
+      "aria": "编辑{{column}}",
+      "invalidNumber": "请输入数字",
+      "disabled": {
+        "group": "摘要任务的该字段由子任务汇总",
+        "manualDuration": "手动排期的工期由区间决定，请改开始/结束日",
+        "milestone": "里程碑无工期",
+        "fixedDuration": "切到固定工作量后可编辑投入",
+        "noSchedule": "尚未排期"
+      }
+    },
     "columns": {
       "kind": "类型",
       "title": "标题",

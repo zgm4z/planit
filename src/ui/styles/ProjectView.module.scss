@@ -241,7 +241,7 @@
   color: var(--planit-text-muted);
 }
 
-.outlineNoteText {
+.outlineEditText {
   display: block;
   width: 100%;
   overflow: hidden;
@@ -249,13 +249,17 @@
   white-space: nowrap;
 }
 
-.outlineNoteInput {
+.outlineEditInput {
   width: 100%;
   border: none;
   background: transparent;
   font: inherit;
   color: inherit;
   outline: none;
+}
+
+.outlineEditNumber {
+  width: 100%;
 }
 
 // ── 大纲视图的全宽表格 ────────────────────────────────────

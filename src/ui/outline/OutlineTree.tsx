@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type {
@@ -17,6 +18,8 @@ import {
   type CellValue,
   type OutlineColumn,
 } from './outlineColumns'
+import { EditableCell } from './EditableCell'
+import { OUTLINE_CELL_EDITORS, getOutlineCellEditor, getCellDisabledReason } from './outlineCellEditors'
 import { useProjectStore } from '../../store/projectStore'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { formatCost, formatDate, formatDays, formatEffort, formatPercent } from '../shared/format'
@@ -83,43 +86,66 @@ export function OutlineTree({
             onClick={() => onSelect(row.taskId)}
             data-testid={`outline-row-${row.taskId}`}
           >
-            {columns.map((column) => (
-              <div
-                key={column.key}
-                className={`${styles.outlineCell} ${
-                  column.key === 'title' ? styles.outlineCellTitle : ''
-                } ${column.key === 'id' ? styles.outlineCellMono : ''}`}
-                style={{ flex: cellFlex(column) }}
-                data-testid={`outline-cell-${column.key}-${row.taskId}`}
-              >
-                {column.key === 'title' ? (
-                  <TitleCell row={row} task={task} onToggleCollapse={onToggleCollapse} />
-                ) : column.key === 'kind' ? (
-                  <KindCell task={task} />
-                ) : column.key === 'note' ? (
-                  // key 是**为正确性**加的，不是为性能：外层行容器用 `key={item.key}`
-                  // （= 行**下标**），rows 位移（折叠/展开、增删/移动、撤销等不经 blur
-                  // 的变化）时 React 会复用该下标处的组件实例。若此时正处在编辑态，
-                  // 复用会让 `editing` 仍为 true、`draft` 仍是**旧任务**的文字，
-                  // 而 `task` prop 已是新任务 —— 失焦就会用新任务的 id 提交旧任务的文字
-                  // （真实的写错数据路径）。挂 `key={task.id}` 让底层任务切换时强制重挂载，
-                  // 从而重置 draft / editing。
-                  <NoteCell key={task.id} task={task} />
-                ) : (
-                  <CellText
-                    value={getOutlineCellValue(column.key, {
-                      task,
-                      schedule,
-                      project,
-                      efforts,
-                      costs,
-                      earnedValues,
-                      baselineDiffs,
-                    })}
-                  />
-                )}
-              </div>
-            ))}
+            {columns.map((column) => {
+              const value = getOutlineCellValue(column.key, {
+                task,
+                schedule,
+                project,
+                efforts,
+                costs,
+                earnedValues,
+                baselineDiffs,
+              })
+              const editorSpec = getOutlineCellEditor(column.key)
+              // 空备注渲染弱化 `—`（§6「空单元格不是空白」）；其余列由 CellText 决定呈现。
+              const display =
+                column.key === 'note' && task.note === '' ? <EmptyDash /> : <CellText value={value} />
+
+              return (
+                <div
+                  key={column.key}
+                  className={`${styles.outlineCell} ${
+                    column.key === 'title' ? styles.outlineCellTitle : ''
+                  } ${column.key === 'id' ? styles.outlineCellMono : ''}`}
+                  style={{ flex: cellFlex(column) }}
+                  data-testid={`outline-cell-${column.key}-${row.taskId}`}
+                >
+                  {column.key === 'title' ? (
+                    <TitleCell row={row} task={task} onToggleCollapse={onToggleCollapse} />
+                  ) : column.key === 'kind' ? (
+                    <KindCell task={task} />
+                  ) : editorSpec && editorSpec.canEdit(task, schedule) ? (
+                    // key={task.id} 是**为正确性**加的（行容器用行下标作 key，行位移会复用实例；
+                    // 不重挂载会「用新任务的 id 提交旧任务的文字」——见下方原 NoteCell 的注释）。
+                    <EditableCell
+                      key={task.id}
+                      columnKey={column.key}
+                      spec={editorSpec}
+                      task={task}
+                      schedule={schedule}
+                      displayTestId={
+                        column.key === 'note'
+                          ? `outline-note-${task.id}`
+                          : `outline-edit-${column.key}-${task.id}`
+                      }
+                      inputTestId={
+                        column.key === 'note'
+                          ? `outline-note-input-${task.id}`
+                          : `outline-edit-input-${column.key}-${task.id}`
+                      }
+                    >
+                      {display}
+                    </EditableCell>
+                  ) : (
+                    <ReadonlyCell
+                      reasonKey={editorSpec ? getCellDisabledReason(column.key, task, schedule) : undefined}
+                    >
+                      {display}
+                    </ReadonlyCell>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )
       })}
@@ -127,7 +153,19 @@ export function OutlineTree({
   )
 }
 
-/** 标题单元格：缩进 + 折叠箭头 + 名称。**摘要任务名加粗** */
+/**
+ * title 的编辑器规格。`task.rename` 的**唯一构造处**就是规格表的 `OUTLINE_CELL_EDITORS.title`
+ * （`seed` / `toCommand`）—— TitleCell 只消费它、绝不在渲染层另写一份命令。两份实现
+ * 漂移不会被任何测试发现，正是本仓最忌的「两份真相」。
+ */
+const TITLE_SPEC = OUTLINE_CELL_EDITORS.title!
+
+/** 标题单元格：缩进 + 折叠箭头 + 名称。**摘要任务名加粗**。
+ *
+ * title 是内联编辑的**唯一例外**：双击目标必须只是**名称 span**（折叠三角仍要可点），
+ * 故不复用 EditableCell 的渲染结构（它把整个单元格当双击目标），但**复用其规格表**的
+ * `seed` / `toCommand` —— 命令构造仍只有一处。
+ */
 function TitleCell({
   row,
   task,
@@ -138,6 +176,16 @@ function TitleCell({
   onToggleCollapse: (taskId: TaskId) => void
 }) {
   const { t } = useTranslation()
+  const dispatch = useProjectStore((state) => state.dispatch)
+  const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(() => TITLE_SPEC.seed(task, undefined))
+
+  const commit = () => {
+    setEditing(false)
+    const command = TITLE_SPEC.toCommand(task, undefined, draft)
+    if (command) dispatch(command)
+  }
 
   return (
     <span className={styles.outlineRowInner} style={{ paddingLeft: row.depth * 16 }}>
@@ -158,9 +206,37 @@ function TitleCell({
         <span className={styles.outlineToggle} aria-hidden />
       )}
 
-      <span className={`${styles.outlineName} ${row.hasChildren ? styles.outlineNameSummary : ''}`}>
-        {task.name}
-      </span>
+      {editing ? (
+        <input
+          className={styles.outlineEditInput}
+          value={draft}
+          autoFocus
+          data-testid={`outline-title-input-${task.id}`}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              commit()
+            }
+            if (event.key === 'Escape') setEditing(false)
+          }}
+        />
+      ) : (
+        <span
+          className={`${styles.outlineName} ${row.hasChildren ? styles.outlineNameSummary : ''}`}
+          data-testid={`outline-title-${task.id}`}
+          onDoubleClick={(event) => {
+            event.stopPropagation()
+            breakCoalescing()
+            setDraft(TITLE_SPEC.seed(task, undefined))
+            setEditing(true)
+          }}
+        >
+          {task.name}
+        </span>
+      )}
     </span>
   )
 }
@@ -184,68 +260,17 @@ function KindCell({ task }: { task: Task }) {
 }
 
 /**
- * 备注单元格：双击进编辑态，Enter / 失焦提交，Escape 放弃（spec §4.2 的「可编辑」）。
- * 提交带 `coalesceKey`（**含任务 id**）—— 否则「改 A 的备注 → 改 B 的备注」会并进
- * 同一条撤销记录，一次 Ctrl+Z 连 A 一起退回（见 taskCommands.ts 的约定注释）。
+ * 只读单元格外壳：天生只读列（无 reasonKey）直接渲染子节点；守卫不通过的可编列
+ * （有 reasonKey）套一层带原生 `title` 的 span —— 双击无反应时告诉用户原因（轻量
+ * tooltip，不用 Mantine Tooltip）。
  */
-function NoteCell({ task }: { task: Task }) {
-  const dispatch = useProjectStore((state) => state.dispatch)
-  const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(task.note)
-
-  const commit = () => {
-    setEditing(false)
-    if (draft === task.note) return
-    dispatch({
-      type: 'task.setNote',
-      label: 'commands.task.setNote',
-      payload: { taskId: task.id, note: draft },
-      coalesceKey: `task.setNote:${task.id}`,
-    })
-  }
-
-  if (!editing) {
-    return (
-      <span
-        className={styles.outlineNoteText}
-        onDoubleClick={(event) => {
-          event.stopPropagation()
-          // 打断合并：一次新编辑 = 一条新的撤销记录。否则「选 A → 改备注① → 失焦 →
-          // 再双击 A 改备注② → 失焦」两次 dispatch 的 coalesceKey 相同、中间又没有
-          // 其它命令，会被 mergeIntoStack 并成一条 —— 一次 Ctrl+Z 把①②一起退回。
-          // 打断必须**在进入编辑态时**做：等到 commit 之后，合并早已发生，
-          // 屏障只能管下一条命令（见 projectStore 的 coalesceBarrier 注释）。
-          breakCoalescing()
-          setDraft(task.note)
-          setEditing(true)
-        }}
-        data-testid={`outline-note-${task.id}`}
-      >
-        {/* 空备注也给弱化 `—`（§6「空单元格不是空白」）。这样「备注整列为空」一眼
-            可辨为「还没填」而不是「渲染坏了」—— 与数字列的 EMPTY 同一套字形。 */}
-        {task.note === '' ? <EmptyDash /> : task.note}
-      </span>
-    )
-  }
-
+function ReadonlyCell({ reasonKey, children }: { reasonKey?: string; children: ReactNode }) {
+  const { t } = useTranslation()
+  if (!reasonKey) return <>{children}</>
   return (
-    <input
-      className={styles.outlineNoteInput}
-      value={draft}
-      autoFocus
-      data-testid={`outline-note-input-${task.id}`}
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          commit()
-        }
-        if (event.key === 'Escape') setEditing(false)
-      }}
-    />
+    <span className={styles.outlineEditText} title={t(reasonKey)}>
+      {children}
+    </span>
   )
 }
 
