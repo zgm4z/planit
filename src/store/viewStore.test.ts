@@ -440,6 +440,18 @@ describe('pruneSelection：project 变更时自动剔除悬空选中 id', () => 
     expect(useViewStore.getState().selectedTaskId).toBe(t3.id)
   })
 
+  it('删非锚点成员、锚点存活 → 只剔除该成员，锚点不变', () => {
+    const { project, t1, t2, t3 } = threeTaskProject()
+    useProjectStore.setState({ project })
+    useViewStore.getState().setTaskSelection([t1.id, t2.id, t3.id], t1.id)
+
+    // 删掉的是**非锚点**成员 t2；锚点 t1 仍在 → 集合收缩、锚点原地不动
+    useProjectStore.setState({ project: { ...project, tasks: { [t1.id]: t1, [t3.id]: t3 } } })
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([t1.id, t3.id])
+    expect(useViewStore.getState().selectedTaskId).toBe(t1.id)
+  })
+
   it('选中的任务全被删 → 集合空、锚点置空', () => {
     const { project, t1 } = threeTaskProject()
     useProjectStore.setState({ project })
