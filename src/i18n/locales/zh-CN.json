@@ -125,6 +125,7 @@
   },
   "inspector": {
     "title": "任务详情",
+    "multiSelect": "已选 {{count}} 项（点此回到单选）",
     "projectTitle": "项目详情",
     "resourceTitle": "资源详情",
     "tabs": { "task": "任务", "project": "项目", "resource": "资源" },

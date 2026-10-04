@@ -122,6 +122,7 @@
   },
   "inspector": {
     "title": "タスクの詳細",
+    "multiSelect": "{{count}} 件選択中（クリックで1件に絞る）",
     "projectTitle": "プロジェクトの詳細",
     "resourceTitle": "リソースの詳細",
     "tabs": { "task": "タスク", "project": "プロジェクト", "resource": "リソース" },

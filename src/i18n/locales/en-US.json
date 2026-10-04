@@ -122,6 +122,7 @@
   },
   "inspector": {
     "title": "Task details",
+    "multiSelect": "{{count}} selected (click to focus one)",
     "projectTitle": "Project details",
     "resourceTitle": "Resource details",
     "tabs": { "task": "Task", "project": "Project", "resource": "Resource" },
