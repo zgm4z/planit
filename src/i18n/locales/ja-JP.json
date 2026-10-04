@@ -20,7 +20,8 @@
     "zoomLabel": "ズーム",
     "view": { "gantt": "ガント", "outline": "タスクリスト", "calendar": "カレンダー", "resources": "リソース" },
     "language": "言語",
-    "more": "その他"
+    "more": "その他",
+    "assignResources": "リソースを割り当て"
   },
   "menu": {
     "file": "ファイル",
@@ -44,7 +45,8 @@
       "noneCollapsed": "折りたたまれたタスクはありません",
       "noBaseline": "基準が未設定です",
       "noUndo": "元に戻す操作がありません",
-      "noRedo": "やり直す操作がありません"
+      "noRedo": "やり直す操作がありません",
+      "allSummary": "選択項目はすべてサマリタスクです"
     }
   },
   "outline": {
@@ -112,8 +114,17 @@
     "resourceSeparator": "、",
     "assignedResources": "割り当て: {{names}}"
   },
+  "assignmentMenu": {
+    "title": "リソースを割り当て",
+    "searchPlaceholder": "リソースまたはグループを検索",
+    "empty": "リソースがありません",
+    "noResults": "一致するリソースがありません",
+    "clear": "割り当てをクリア",
+    "groupSummary": "{{total}} 人 · 割り当て済み {{assigned}}"
+  },
   "inspector": {
     "title": "タスクの詳細",
+    "multiSelect": "{{count}} 件選択中（クリックで1件に絞る）",
     "projectTitle": "プロジェクトの詳細",
     "resourceTitle": "リソースの詳細",
     "tabs": { "task": "タスク", "project": "プロジェクト", "resource": "リソース" },

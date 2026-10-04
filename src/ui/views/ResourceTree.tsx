@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Project, ResourceId } from '../../domain/model/types'
 import type { ResourceFlatRow } from '../shared/flattenResources'
+import type { SelectionMods } from '../shared/selectionRange'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import {
   RESOURCE_COLUMNS,
@@ -16,8 +17,11 @@ interface ResourceTreeProps {
   project: Project
   rows: ResourceFlatRow[]
   virtualItems: VirtualItem[]
+  /** 多选全集（高亮判据）。传 Set 以便逐行 O(1) 判定 */
+  selectedResourceIds: ReadonlySet<ResourceId>
+  /** 锚点（焦点），另给一档样式 */
   selectedResourceId: ResourceId | null
-  onSelect: (resourceId: ResourceId) => void
+  onSelect: (resourceId: ResourceId, mods: SelectionMods) => void
   onToggleCollapse: (resourceId: ResourceId) => void
 }
 
@@ -49,6 +53,7 @@ export function ResourceTree({
   project,
   rows,
   virtualItems,
+  selectedResourceIds,
   selectedResourceId,
   onSelect,
   onToggleCollapse,
@@ -131,14 +136,26 @@ export function ResourceTree({
           if (!row) return null
           const resource = project.resources[row.resourceId]
           if (!resource) return null
-          const selected = row.resourceId === selectedResourceId
+          // 高亮判据是**全集**（多选），锚点在其上另加一档（焦点）。
+          const selected = selectedResourceIds.has(row.resourceId)
+          const anchor = row.resourceId === selectedResourceId
 
           return (
             <div
               key={item.key}
-              className={`${styles.outlineRow} ${selected ? styles.outlineRowSelected : ''}`}
+              className={`${styles.outlineRow} ${selected ? styles.outlineRowSelected : ''} ${
+                anchor ? styles.outlineRowAnchor : ''
+              }`}
               style={{ transform: `translateY(${item.start}px)`, height: item.size }}
-              onClick={() => onSelect(row.resourceId)}
+              data-selected={selected || undefined}
+              data-anchor={anchor || undefined}
+              onClick={(event) =>
+                onSelect(row.resourceId, {
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                  shiftKey: event.shiftKey,
+                })
+              }
               data-testid={`resource-row-${row.resourceId}`}
             >
               <div

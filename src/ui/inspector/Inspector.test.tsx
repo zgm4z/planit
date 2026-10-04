@@ -1176,3 +1176,47 @@ describe('工作量模式与投入', () => {
     expect(useProjectStore.getState().project!.tasks[taskId].effort).toBe(9)
   })
 })
+
+// 复选（spec §6）：右栏仍显示锚点任务，只多一行提示。这条钉住「锚点语义不变」。
+describe('Inspector 多选提示', () => {
+  it('单选时没有提示；多选时显示「已选 N 项」，点击回到单选', () => {
+    act(() => useViewStore.getState().setTaskSelection([taskId]))
+    renderInspector()
+    expect(screen.queryByTestId('inspector-multi-select')).not.toBeInTheDocument()
+  })
+
+  it('多选时显示「已选 2 项」，点击收敛到锚点', () => {
+    act(() => useViewStore.getState().setTaskSelection([taskId, siblingId], taskId))
+    renderInspector()
+
+    const banner = screen.getByTestId('inspector-multi-select')
+    expect(banner).toHaveTextContent('已选 2 项')
+
+    fireEvent.click(banner)
+    expect(useViewStore.getState().selectedTaskIds).toEqual([taskId])
+  })
+
+  it('多选下右栏仍编辑锚点任务（名称输入框显示锚点任务名）', () => {
+    act(() => useViewStore.getState().setTaskSelection([siblingId, taskId], taskId))
+    renderInspector()
+    // 锚点是 taskId（「写文档」），siblingId（「写代码」）也在集合里 —— 右栏仍显示锚点
+    expect(screen.getByDisplayValue('写文档')).toBeInTheDocument()
+  })
+})
+
+describe('Inspector：删任务后多选归一（悬空 id 被剔除）', () => {
+  it('删掉多选中的任务 → 提示消失（集合回落到单选）', () => {
+    act(() => useViewStore.getState().setTaskSelection([taskId, siblingId], taskId))
+    renderInspector()
+    expect(screen.getByTestId('inspector-multi-select')).toBeInTheDocument()
+
+    // 删掉锚点 taskId —— project 一变，store 的订阅即剔除悬空 id
+    const project = useProjectStore.getState().project!
+    const rest = { ...project.tasks }
+    delete rest[taskId]
+    act(() => useProjectStore.setState({ project: { ...project, tasks: rest } }))
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([siblingId])
+    expect(screen.queryByTestId('inspector-multi-select')).not.toBeInTheDocument()
+  })
+})

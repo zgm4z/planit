@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { Drawer } from '@mantine/core'
 
 import { flattenVisibleRows } from '../shared/flattenRows'
 import { flattenResourceRows } from '../shared/flattenResources'
+import { extendRange, resolveEntityClick, type SelectionMods } from '../shared/selectionRange'
+import { isEditableTarget } from '../shared/isEditableTarget'
 import { CalendarView } from './CalendarView'
 import { ResourceView } from './ResourceView'
 import { DependencyLayer } from '../gantt/DependencyLayer'
@@ -64,6 +66,13 @@ export function ProjectView() {
   const dispatch = useProjectStore((state) => state.dispatch)
   const collapsedIds = useViewStore((state) => state.collapsedIds)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
+  const selectedTaskIds = useViewStore((state) => state.selectedTaskIds)
+  const selectedResourceId = useViewStore((state) => state.selectedResourceId)
+  const selectedResourceIds = useViewStore((state) => state.selectedResourceIds)
+  const setTaskSelection = useViewStore((state) => state.setTaskSelection)
+  const setResourceSelection = useViewStore((state) => state.setResourceSelection)
+  const clearTaskMultiSelect = useViewStore((state) => state.clearTaskMultiSelect)
+  const clearResourceMultiSelect = useViewStore((state) => state.clearResourceMultiSelect)
   const selectTask = useViewStore((state) => state.selectTask)
   const toggleCollapsed = useViewStore((state) => state.toggleCollapsed)
   const dayWidth = useViewStore((state) => state.dayWidth)
@@ -89,6 +98,69 @@ export function ProjectView() {
     () => (project ? flattenResourceRows(project, collapsedResourceIds) : []),
     [project, collapsedResourceIds],
   )
+
+  // 可见行序 —— Shift 范围的唯一基准（折叠后重算，故折叠立刻改变范围基准）
+  const visibleTaskIds = useMemo(() => rows.map((row) => row.taskId), [rows])
+  const visibleResourceIds = useMemo(() => resourceRows.map((row) => row.resourceId), [resourceRows])
+
+  // 高亮判据 = 多选全集（Set 以便逐行 O(1)）。锚点另给一档样式（见 OutlineTree）。
+  const taskSelectionSet = useMemo(() => new Set(selectedTaskIds), [selectedTaskIds])
+
+  const handleSelectTask = useCallback(
+    (taskId: string, mods: SelectionMods) => {
+      const next = resolveEntityClick(visibleTaskIds, selectedTaskIds, selectedTaskId, taskId, mods)
+      setTaskSelection(next.ids, next.anchor)
+    },
+    [visibleTaskIds, selectedTaskIds, selectedTaskId, setTaskSelection],
+  )
+
+  const handleSelectResource = useCallback(
+    (resourceId: string, mods: SelectionMods) => {
+      // 与任务侧同一条路径：锚点 = 真实锚点（经 effectiveAnchor 归一，悬空时回落末元素）
+      const next = resolveEntityClick(
+        visibleResourceIds,
+        selectedResourceIds,
+        selectedResourceId,
+        resourceId,
+        mods,
+      )
+      setResourceSelection(next.ids, next.anchor)
+    },
+    [visibleResourceIds, selectedResourceIds, selectedResourceId, setResourceSelection],
+  )
+
+  // 键盘：Esc 收敛多选；Shift+↑/↓ 以锚点扩选。焦点在输入框内时一律不接管。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) return
+
+      if (event.key === 'Escape') {
+        clearTaskMultiSelect()
+        clearResourceMultiSelect()
+        return
+      }
+
+      if (!event.shiftKey || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
+      if (activeView !== 'gantt' && activeView !== 'outline') return
+      if (selectedTaskId === null) return
+
+      event.preventDefault()
+      const delta = event.key === 'ArrowDown' ? 1 : -1
+      const ids = extendRange(visibleTaskIds, selectedTaskId, selectedTaskIds, delta)
+      if (ids.length > 0) setTaskSelection(ids, selectedTaskId)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [
+    activeView,
+    visibleTaskIds,
+    selectedTaskIds,
+    selectedTaskId,
+    setTaskSelection,
+    clearTaskMultiSelect,
+    clearResourceMultiSelect,
+  ])
 
   const { isNarrow, isCompact } = useLayoutMode()
 
@@ -329,8 +401,9 @@ export function ProjectView() {
                   earnedValues={schedulesResult.earnedValues}
                   baselineDiffs={schedulesResult.baselineDiffs}
                   columns={GANTT_OUTLINE_COLUMNS}
+                  selectedTaskIds={taskSelectionSet}
                   selectedTaskId={selectedTaskId}
-                  onSelect={selectTask}
+                  onSelect={handleSelectTask}
                   onToggleCollapse={toggleCollapsed}
                 />
               </div>
@@ -368,9 +441,17 @@ export function ProjectView() {
                   resourceNamesByTask={resourceNamesByTask}
                   dragShadow={drag.shadow}
                   onBarPointerDown={(event, taskId, mode) => {
-                    // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，
+                    // 按下的同时按修饰键改写选区 —— 单击（未越过 3px 阈值）只应选中，
                     // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
-                    selectTask(taskId)
+                    const mods: SelectionMods = {
+                      ctrlKey: event.ctrlKey,
+                      metaKey: event.metaKey,
+                      shiftKey: event.shiftKey,
+                    }
+                    handleSelectTask(taskId, mods)
+                    // 按住选区修饰键时只改选区，不开始拖拽 —— 否则 Ctrl+点击会顺手挪动任务条
+                    if (mods.ctrlKey || mods.metaKey || mods.shiftKey) return
+
                     const schedule = schedulesResult.schedules[taskId]
                     const task = project.tasks[taskId]
                     if (!schedule || !task) return
@@ -417,8 +498,9 @@ export function ProjectView() {
               earnedValues={schedulesResult.earnedValues}
               baselineDiffs={schedulesResult.baselineDiffs}
               columns={outlineColumns}
+              selectedTaskIds={taskSelectionSet}
               selectedTaskId={selectedTaskId}
-              onSelect={selectTask}
+              onSelect={handleSelectTask}
               onToggleCollapse={toggleCollapsed}
             />
           ) : activeView === 'calendar' ? (
@@ -432,6 +514,7 @@ export function ProjectView() {
               leveling={schedulesResult.leveling}
               scale={scale}
               totalDays={totalDays}
+              onSelectResource={handleSelectResource}
             />
           )}
         </div>

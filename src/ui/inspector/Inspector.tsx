@@ -95,6 +95,8 @@ function InspectorComponent() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
+  const selectedTaskIds = useViewStore((state) => state.selectedTaskIds)
+  const selectTask = useViewStore((state) => state.selectTask)
   // Tab 状态**提升到 viewStore**：菜单栏的「资源 > 新建资源」需要把它切到 resource
   // （放在组件 useState 里菜单栏够不着）。默认值与复位时机与搬移前完全一致。
   const tab = useViewStore((state) => state.activeInspectorTab)
@@ -137,6 +139,29 @@ function InspectorComponent() {
             ? t('inspector.resourceTitle')
             : t('inspector.projectTitle')}
       </Text>
+
+      {/* 多选提示（spec §6）：右栏仍显示锚点任务，这里只是告诉用户「还选了别的」，
+          点它回到单选。用 <button> 而非 <p>：不能打乱「第一个 <p> 是面板标题」的既有约定。 */}
+      {selectedTaskIds.length > 1 && (
+        <button
+          type="button"
+          data-testid="inspector-multi-select"
+          onClick={() => selectedTaskId && selectTask(selectedTaskId)}
+          style={{
+            display: 'block',
+            margin: '0 0 var(--mantine-spacing-sm)',
+            padding: 0,
+            border: 'none',
+            background: 'none',
+            color: 'var(--planit-work)',
+            cursor: 'pointer',
+            fontSize: 'var(--planit-fs-xs)',
+            textAlign: 'left',
+          }}
+        >
+          {t('inspector.multiSelect', { count: selectedTaskIds.length })}
+        </button>
+      )}
 
       {/* keepMounted={false}：Mantine 9 的 Tabs 默认常驻挂载非活动面板（keepMounted: true），
           于是「任务」与「项目」两个面板会同时在 DOM 里 —— 两者都有一个 label 叫「名称」的

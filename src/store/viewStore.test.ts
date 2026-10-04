@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN, TITLE_COLUMN_WIDTH_MIN, DEFAULT_VISIBLE_COLUMNS } from './columnKeys'
+import { createProject, createResource, createTask } from '../domain/model/factories'
+import { useProjectStore } from './projectStore'
 import {
   COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS,
   DAY_WIDTH_MAX,
@@ -349,5 +351,129 @@ describe('dayWidth 单一事实源（连续缩放）', () => {
     useViewStore.getState().setDayWidth(100)
     __resetViewStoreForTests()
     expect(useViewStore.getState().dayWidth).toBe(32)
+  })
+})
+
+// v?.x：选中模型从单值扩成「锚点 + 集合」。锚点保留原语义（右栏/拖拽仍读它），
+// 集合是新增的全集。这三条不变式是后面所有交互的地基。
+describe('viewStore 的选中集合（多选）', () => {
+  it('selectTask 同时写锚点与集合（单选 = 长度 1）', () => {
+    useViewStore.getState().selectTask('t1')
+    expect(useViewStore.getState().selectedTaskId).toBe('t1')
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t1'])
+
+    useViewStore.getState().selectTask(null)
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+  })
+
+  it('setTaskSelection 去重；缺省 anchor 取集合末元素', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2', 't1'])
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t1', 't2'])
+    expect(useViewStore.getState().selectedTaskId).toBe('t2')
+  })
+
+  it('anchor 不在集合里时回落到末元素；空集合清空锚点', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2'], 'ghost')
+    expect(useViewStore.getState().selectedTaskId).toBe('t2')
+
+    useViewStore.getState().setTaskSelection([], 't1')
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+  })
+
+  it('anchor 在集合里时被保留（Shift 扩选不动锚点）', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2', 't3'], 't1')
+    expect(useViewStore.getState().selectedTaskId).toBe('t1')
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('clearTaskMultiSelect 收敛到只含锚点，且不换锚点', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2', 't3'], 't2')
+    useViewStore.getState().clearTaskMultiSelect()
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t2'])
+    expect(useViewStore.getState().selectedTaskId).toBe('t2')
+  })
+
+  it('资源侧同构：selectResource 同步集合；setResourceSelection 归一化', () => {
+    useViewStore.getState().selectResource('r1')
+    expect(useViewStore.getState().selectedResourceIds).toEqual(['r1'])
+
+    useViewStore.getState().setResourceSelection(['r1', 'r2', 'r2'])
+    expect(useViewStore.getState().selectedResourceIds).toEqual(['r1', 'r2'])
+    expect(useViewStore.getState().selectedResourceId).toBe('r2')
+
+    useViewStore.getState().clearResourceMultiSelect()
+    expect(useViewStore.getState().selectedResourceIds).toEqual(['r2'])
+  })
+
+  it('__resetViewStoreForTests 把两个集合清空（否则跨用例泄漏）', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2'])
+    useViewStore.getState().setResourceSelection(['r1', 'r2'])
+    __resetViewStoreForTests()
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+    expect(useViewStore.getState().selectedResourceIds).toEqual([])
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+    expect(useViewStore.getState().selectedResourceId).toBeNull()
+  })
+})
+
+describe('pruneSelection：project 变更时自动剔除悬空选中 id', () => {
+  function threeTaskProject() {
+    const project = createProject('测试', '2026-03-02')
+    const t1 = createTask({ name: '一' })
+    const t2 = createTask({ name: '二' })
+    const t3 = createTask({ name: '三' })
+    project.tasks = { [t1.id]: t1, [t2.id]: t2, [t3.id]: t3 }
+    project.rootIds = [t1.id, t2.id, t3.id]
+    return { project, t1, t2, t3 }
+  }
+
+  it('删除被选中的任务 → 从集合剔除；锚点若被删则回落剩余末元素', () => {
+    const { project, t1, t2, t3 } = threeTaskProject()
+    useProjectStore.setState({ project })
+    useViewStore.getState().setTaskSelection([t1.id, t2.id, t3.id], t2.id)
+
+    useProjectStore.setState({ project: { ...project, tasks: { [t1.id]: t1, [t3.id]: t3 } } })
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([t1.id, t3.id])
+    expect(useViewStore.getState().selectedTaskId).toBe(t3.id)
+  })
+
+  it('选中的任务全被删 → 集合空、锚点置空', () => {
+    const { project, t1 } = threeTaskProject()
+    useProjectStore.setState({ project })
+    useViewStore.getState().setTaskSelection([t1.id], t1.id)
+
+    useProjectStore.setState({ project: { ...project, tasks: {} } })
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+  })
+
+  it('无悬空（删的是未选中任务）→ 选中态原样不动', () => {
+    const { project, t1, t2 } = threeTaskProject()
+    useProjectStore.setState({ project })
+    useViewStore.getState().setTaskSelection([t1.id, t2.id], t1.id)
+
+    // t3 未选中，删它不影响选中态
+    useProjectStore.setState({ project: { ...project, tasks: { [t1.id]: t1, [t2.id]: t2 } } })
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([t1.id, t2.id])
+    expect(useViewStore.getState().selectedTaskId).toBe(t1.id)
+  })
+
+  it('资源侧同构：删资源把悬空 id 从 selectedResourceIds 剔除', () => {
+    const project = createProject('测试', '2026-03-02')
+    const r1 = createResource({ name: '甲' })
+    const r2 = createResource({ name: '乙' })
+    project.resources = { [r1.id]: r1, [r2.id]: r2 }
+    useProjectStore.setState({ project })
+    useViewStore.getState().setResourceSelection([r1.id, r2.id], r1.id)
+
+    useProjectStore.setState({ project: { ...project, resources: { [r2.id]: r2 } } })
+
+    expect(useViewStore.getState().selectedResourceIds).toEqual([r2.id])
+    expect(useViewStore.getState().selectedResourceId).toBe(r2.id)
   })
 })

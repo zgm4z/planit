@@ -20,7 +20,8 @@
     "zoomLabel": "Zoom",
     "view": { "gantt": "Gantt", "outline": "Task list", "calendar": "Calendar", "resources": "Resources" },
     "language": "Language",
-    "more": "More"
+    "more": "More",
+    "assignResources": "Assign resources"
   },
   "menu": {
     "file": "File",
@@ -44,7 +45,8 @@
       "noneCollapsed": "Nothing is collapsed",
       "noBaseline": "No baseline set",
       "noUndo": "Nothing to undo",
-      "noRedo": "Nothing to redo"
+      "noRedo": "Nothing to redo",
+      "allSummary": "All selected are summary tasks"
     }
   },
   "outline": {
@@ -112,8 +114,17 @@
     "resourceSeparator": ", ",
     "assignedResources": "Assigned: {{names}}"
   },
+  "assignmentMenu": {
+    "title": "Assign resources",
+    "searchPlaceholder": "Search resources or groups",
+    "empty": "No resources yet",
+    "noResults": "No matching resources",
+    "clear": "Clear assignments",
+    "groupSummary": "{{total}} people · {{assigned}} assigned"
+  },
   "inspector": {
     "title": "Task details",
+    "multiSelect": "{{count}} selected (click to focus one)",
     "projectTitle": "Project details",
     "resourceTitle": "Resource details",
     "tabs": { "task": "Task", "project": "Project", "resource": "Resource" },

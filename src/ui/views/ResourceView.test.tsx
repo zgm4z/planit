@@ -23,6 +23,7 @@ import { useViewStore, __resetViewStoreForTests } from '../../store/viewStore'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { flattenResourceRows } from '../shared/flattenResources'
 import { createScale } from '../gantt/timeline'
+import { resolveEntityClick } from '../shared/selectionRange'
 import { ResourceView } from './ResourceView'
 import i18n from '../../i18n'
 
@@ -82,6 +83,18 @@ function ViewHarness({ project }: { project: Project }) {
         leveling={useScheduleStore.getState().result.leveling}
         scale={createScale(project.startDate, 32)}
         totalDays={60}
+        onSelectResource={(resourceId, mods) => {
+          const s = useViewStore.getState()
+          // 与生产（ProjectView.handleSelectResource）走**同一个** helper —— 锚点取法只此一份
+          const next = resolveEntityClick(
+            rows.map((row) => row.resourceId),
+            s.selectedResourceIds,
+            s.selectedResourceId,
+            resourceId,
+            mods,
+          )
+          s.setResourceSelection(next.ids, next.anchor)
+        }}
       />
     </MantineProvider>
   )
@@ -196,6 +209,50 @@ describe('资源视图（视图 B）', () => {
     useScheduleStore.setState({ result: solve(project), error: null })
     renderView(project)
     expect(screen.getByText('还没有资源。')).toBeInTheDocument()
+  })
+
+  it('资源视图同样可多选：Ctrl 点击累加集合，锚点跟随', () => {
+    const project = fixture()
+    useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+    useScheduleStore.setState({ result: solve(project), error: null })
+    const alice = Object.values(project.resources).find((r) => r.name === '张三')!
+    const bob = Object.values(project.resources).find((r) => r.name === '李四')!
+    renderView(project)
+
+    fireEvent.click(screen.getByTestId(`resource-row-${alice.id}`))
+    fireEvent.click(screen.getByTestId(`resource-row-${bob.id}`), { ctrlKey: true })
+
+    expect(useViewStore.getState().selectedResourceIds).toEqual([alice.id, bob.id])
+    expect(useViewStore.getState().selectedResourceId).toBe(bob.id)
+
+    // 高亮是**全集**：两行都 data-selected；锚点（bob）另带 data-anchor
+    expect(screen.getByTestId(`resource-row-${alice.id}`)).toHaveAttribute('data-selected', 'true')
+    expect(screen.getByTestId(`resource-row-${bob.id}`)).toHaveAttribute('data-selected', 'true')
+    expect(screen.getByTestId(`resource-row-${bob.id}`)).toHaveAttribute('data-anchor', 'true')
+    expect(screen.getByTestId(`resource-row-${alice.id}`)).not.toHaveAttribute('data-anchor')
+  })
+
+  it('资源 Shift 范围以真实锚点为基准：第二次 Shift 是**扩展**而非滑窗', () => {
+    // 五个扁平资源（无组）—— 行序即 id 序
+    const project = createProject('资源', '2026-03-02')
+    const ids = ['A', 'B', 'C', 'D', 'E'].map((name) => {
+      const resource = createResource({ name })
+      project.resources[resource.id] = resource
+      return resource.id
+    })
+    useProjectStore.setState({ project, undoStack: [], redoStack: [], lastError: null })
+    useScheduleStore.setState({ result: solve(project), error: null })
+    renderView(project)
+
+    fireEvent.click(screen.getByTestId(`resource-row-${ids[0]}`))
+    fireEvent.click(screen.getByTestId(`resource-row-${ids[2]}`), { shiftKey: true })
+    expect(useViewStore.getState().selectedResourceIds).toEqual([ids[0], ids[1], ids[2]])
+    expect(useViewStore.getState().selectedResourceId).toBe(ids[0])
+
+    // 锚点仍是 ids[0] ⇒ 扩到 ids[4] 得到 ids[0..4]（若用「集合末元素」当锚点则会得到 ids[2..4]）
+    fireEvent.click(screen.getByTestId(`resource-row-${ids[4]}`), { shiftKey: true })
+    expect(useViewStore.getState().selectedResourceIds).toEqual([ids[0], ids[1], ids[2], ids[3], ids[4]])
+    expect(useViewStore.getState().selectedResourceId).toBe(ids[0])
   })
 })
 

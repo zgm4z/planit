@@ -23,7 +23,8 @@
     "zoomLabel": "缩放",
     "view": { "gantt": "甘特图", "outline": "任务列表", "calendar": "日历", "resources": "资源" },
     "language": "语言",
-    "more": "更多"
+    "more": "更多",
+    "assignResources": "快速分配资源"
   },
   "menu": {
     "file": "文件",
@@ -47,7 +48,8 @@
       "noneCollapsed": "没有折叠的任务",
       "noBaseline": "未设置基线",
       "noUndo": "没有可撤销的操作",
-      "noRedo": "没有可重做的操作"
+      "noRedo": "没有可重做的操作",
+      "allSummary": "选中项均为摘要任务"
     }
   },
   "outline": {
@@ -115,8 +117,17 @@
     "resourceSeparator": "、",
     "assignedResources": "已分配：{{names}}"
   },
+  "assignmentMenu": {
+    "title": "分配资源",
+    "searchPlaceholder": "搜索资源或组",
+    "empty": "还没有资源",
+    "noResults": "没有匹配的资源",
+    "clear": "清除分配",
+    "groupSummary": "{{total}} 人 · 已分配 {{assigned}}"
+  },
   "inspector": {
     "title": "任务详情",
+    "multiSelect": "已选 {{count}} 项（点此回到单选）",
     "projectTitle": "项目详情",
     "resourceTitle": "资源详情",
     "tabs": { "task": "任务", "project": "项目", "resource": "资源" },

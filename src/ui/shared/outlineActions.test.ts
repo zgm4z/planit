@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 
 import { createProject, createTask, __resetIdCounterForTests } from '../../domain/model/factories'
 import type { Project } from '../../domain/model/types'
-import { canIndent, canOutdent } from './outlineActions'
+import { canIndent, canOutdent, isLeafTask } from './outlineActions'
 
 let project: Project
 /** 顶层三个兄弟：first / second / third */
@@ -90,5 +90,20 @@ describe('canOutdent', () => {
   it('未选中任务 / 任务不存在时返回 false', () => {
     expect(canOutdent(project, null)).toBe(false)
     expect(canOutdent(project, 'task_不存在')).toBe(false)
+  })
+})
+
+describe('isLeafTask', () => {
+  it('存在的普通任务 / 里程碑是叶子；group 与不存在的 id 不是', () => {
+    expect(isLeafTask(project, third)).toBe(true) // 普通任务
+    expect(isLeafTask(project, milestone)).toBe(true) // 里程碑
+
+    // 一个摘要任务（group）
+    const group = createTask({ name: '组' })
+    group.kind = 'group'
+    project.tasks[group.id] = group
+
+    expect(isLeafTask(project, group.id)).toBe(false)
+    expect(isLeafTask(project, 'ghost')).toBe(false)
   })
 })

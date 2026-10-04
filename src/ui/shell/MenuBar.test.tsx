@@ -333,3 +333,52 @@ describe('MenuBar「项目」/「资源」菜单', () => {
     expect(useViewStore.getState().activeInspectorTab).toBe('resource')
   })
 })
+
+describe('MenuBar 的多选批量动作', () => {
+  it('选中多个任务时「删除任务」删除全部，且只留一条撤销记录（一次 Ctrl+Z 全恢复）', async () => {
+    renderBar()
+    await openMenu('edit', 'undo')
+    act(() => useViewStore.getState().setTaskSelection([ids.child1, ids.child2]))
+
+    fireEvent.click(screen.getByTestId('delete-task'))
+    // 两个子任务都没了，父任务还在
+    expect(Object.keys(useProjectStore.getState().project!.tasks)).toEqual([ids.parent])
+    expect(useProjectStore.getState().undoStack).toHaveLength(1)
+
+    useProjectStore.getState().undo()
+    expect(Object.keys(useProjectStore.getState().project!.tasks)).toHaveLength(3)
+  })
+
+  it('未选中任何任务时「删除任务」禁用并给理由', async () => {
+    renderBar()
+    await openMenu('edit', 'undo')
+    act(() => useViewStore.getState().setTaskSelection([]))
+    expect(screen.getByTestId('delete-task')).toBeDisabled()
+  })
+
+  it('多选下「设为里程碑」作用于全部选中任务（一次撤销全恢复）', async () => {
+    renderBar()
+    await openMenu('task', 'new-task')
+    act(() => useViewStore.getState().setTaskSelection([ids.child1, ids.child2]))
+
+    fireEvent.click(screen.getByTestId('toggle-milestone'))
+    const tasks = useProjectStore.getState().project!.tasks
+    expect(tasks[ids.child1].kind).toBe('milestone')
+    expect(tasks[ids.child2].kind).toBe('milestone')
+    expect(useProjectStore.getState().undoStack).toHaveLength(1)
+
+    useProjectStore.getState().undo()
+    const restored = useProjectStore.getState().project!.tasks
+    expect(restored[ids.child1].kind).toBe('task')
+    expect(restored[ids.child2].kind).toBe('task')
+  })
+
+  it('批量动作不合法时（任一选中项守卫不过）禁用并给原因', async () => {
+    renderBar()
+    await openMenu('task', 'new-task')
+    // 父任务是 group（摘要）→ 不能设为里程碑；连同子任务一起选 → 整批禁用
+    act(() => useViewStore.getState().setTaskSelection([ids.child1, ids.parent]))
+    expect(screen.getByTestId('toggle-milestone')).toBeDisabled()
+    expect(screen.getByTestId('toggle-milestone')).toHaveTextContent('摘要任务不支持')
+  })
+})
