@@ -24,7 +24,7 @@ import { usesLateSchedule } from './direction'
 
 export interface CpmInput {
   /** 只传叶子任务。摘要任务由 summarize 阶段汇总，不参与求解 */
-  tasks: Task[]
+  tasks: readonly Task[]
   dependencies: Dependency[]
   calendar: Calendar
   direction: SchedulingDirection
@@ -41,6 +41,15 @@ export interface CpmInput {
    * 的任务才会出现在这张表里，因此「无资源」的既有行为逐字节不变。
    */
   resourceBounds?: Record<TaskId, ResourceBounds>
+  /**
+   * 可选：与 `tasks` **按下标对齐**的工期覆盖（`durations[i]` 即 `tasks[i]` 的工期）。
+   * 缺省时退回读 `tasks[i].duration`。
+   *
+   * 存在的意义：`solve` 已经算出「有效工期」（fixedEffort 反解），旧写法为了把它塞进
+   * CPM 而 `tasks.map(leaf => ({ ...leaf, duration }))` 拷贝了整份叶子数组（10k 次浅拷贝，
+   * profile 里的 GC 热点之一）。下标化后直接把工期数组传进来即可，不必拷贝任务。
+   */
+  durations?: readonly number[]
 }
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
@@ -54,21 +63,31 @@ export function runCpmWithGraph(
   graph: TaskGraph,
 ): Record<TaskId, ComputedSchedule> {
   const { tasks, calendar, direction, projectStart, projectEnd, resourceBounds } = input
+  const n = tasks.length
   const latestProjectEnd = projectEnd
     ? snapToWorkdayOrPrevious(projectEnd, calendar)
     : undefined
 
-  const byId = new Map(tasks.map((task) => [task.id, task]))
+  // 任务状态一律按**下标**存放（数组），不再用 Map<TaskId, …> —— 见 graph.ts 顶部说明。
+  const durations: readonly number[] = input.durations ?? tasks.map((task) => task.duration)
+
+  // 资源可用期边界一次性按下标铺平；热循环里只做下标访问，不再逐任务查字符串键。
+  // 无 bounds 时整条分支不建数组（保持「无资源」路径的零开销）。
+  let boundsByIndex: (ResourceBounds | undefined)[] | undefined
+  if (resourceBounds) {
+    boundsByIndex = new Array(n)
+    for (let i = 0; i < n; i += 1) boundsByIndex[i] = resourceBounds[tasks[i].id]
+  }
 
   // ── 正推（early）───────────────────────────────────────
   // 抽成函数是因为 backward 下要跑两次：第一次只是为了拿到
   // 「无终点时」的完成日，第二次才用真正的锚点。
   const forwardPass = (anchor: DateStr) => {
-    const earlyStart = new Map<TaskId, DateStr>()
-    const earlyFinish = new Map<TaskId, DateStr>()
+    const earlyStart = new Array<DateStr>(n)
+    const earlyFinish = new Array<DateStr>(n)
 
-    for (const id of graph.order) {
-      const task = byId.get(id)!
+    for (const i of graph.order) {
+      const task = tasks[i]
       const scheduling = task.scheduling
 
       // manual：区间为定值 —— 直接取归一后的 manual 区间，**跳过**入边下界、
@@ -76,32 +95,32 @@ export function runCpmWithGraph(
       // manual 不被任何机制移动，违反只报冲突）。其**出边照常**给后继提供下界。
       if (scheduling.mode === 'manual') {
         const span = manualSpan(scheduling, calendar)
-        earlyStart.set(id, span.start)
-        earlyFinish.set(id, span.finish)
+        earlyStart[i] = span.start
+        earlyFinish[i] = span.finish
         continue
       }
 
-      let start = schedulingLowerBound(scheduling, task.duration, calendar, anchor)
+      let start = schedulingLowerBound(scheduling, durations[i], calendar, anchor)
 
       // 资源可用期的开始下界（availableFrom）—— 与任务自身的约束取较晚者
-      const earliest = resourceBounds?.[id]?.earliestStart
+      const earliest = boundsByIndex?.[i]?.earliestStart
       if (earliest && earliest > start) start = earliest
 
-      for (const dep of graph.incoming.get(id) ?? []) {
-        const fromTask = byId.get(dep.fromTaskId)!
+      for (let e = graph.inStart[i]; e < graph.inStart[i + 1]; e += 1) {
+        const from = graph.inFrom[e]
         const bound = forwardBound({
-          dep,
-          fromStart: earlyStart.get(dep.fromTaskId)!,
-          fromFinish: earlyFinish.get(dep.fromTaskId)!,
-          toDuration: task.duration,
-          fromDuration: fromTask.duration,
+          dep: graph.inDep[e],
+          fromStart: earlyStart[from],
+          fromFinish: earlyFinish[from],
+          toDuration: durations[i],
+          fromDuration: durations[from],
           cal: calendar,
         })
         if (bound > start) start = bound
       }
 
       start = snapToWorkday(start, calendar)
-      earlyStart.set(id, start)
+      earlyStart[i] = start
 
       // 可用期是任务级的**上下界**：availableFrom = 下界（最早能开始），
       // availableUntil = 上界（最晚能结束）。二者**有意只各进一趟** ——
@@ -115,7 +134,7 @@ export function runCpmWithGraph(
       // 任务谎报成更短。可用期不可行（availableUntil 早于自然完成日）时，逆推
       // 会把上界体现成负浮时，由 detectConflicts 如实报冲突 —— 只如实报，不夹
       // 边界调和。
-      earlyFinish.set(id, taskFinish(start, task.duration, calendar))
+      earlyFinish[i] = taskFinish(start, durations[i], calendar)
     }
 
     return { earlyStart, earlyFinish }
@@ -123,13 +142,14 @@ export function runCpmWithGraph(
 
   // ── 逆推（late）────────────────────────────────────────
   const backwardPass = (anchor: DateStr) => {
-    const lateStart = new Map<TaskId, DateStr>()
-    const lateFinish = new Map<TaskId, DateStr>()
+    const lateStart = new Array<DateStr>(n)
+    const lateFinish = new Array<DateStr>(n)
     // 负浮时归因：本任务最紧上界由哪条出边给出（仅当该边指向 manual 后继时才有意义）
-    const bindings = new Map<TaskId, ConflictBinding>()
+    const bindings = new Array<ConflictBinding | undefined>(n)
 
-    for (const id of [...graph.order].reverse()) {
-      const task = byId.get(id)!
+    for (let k = graph.order.length - 1; k >= 0; k -= 1) {
+      const i = graph.order[k]
+      const task = tasks[i]
       const scheduling = task.scheduling
 
       // manual：区间为定值 —— lateStart / lateFinish 直接取归一后的 manual 区间，
@@ -139,15 +159,15 @@ export function runCpmWithGraph(
       // manual 自身 late = early（浮时恒 0）→ 永不产生冲突，也就无需记录 binding。
       if (scheduling.mode === 'manual') {
         const span = manualSpan(scheduling, calendar)
-        lateStart.set(id, span.start)
-        lateFinish.set(id, span.finish)
+        lateStart[i] = span.start
+        lateFinish[i] = span.finish
         continue
       }
 
-      let finish = schedulingUpperBound(scheduling, task.duration, calendar, anchor)
+      let finish = schedulingUpperBound(scheduling, durations[i], calendar, anchor)
 
       // 资源可用期的结束上界（availableUntil）—— 与任务自身的约束取较早者
-      const latest = resourceBounds?.[id]?.latestFinish
+      const latest = boundsByIndex?.[i]?.latestFinish
       if (latest) {
         const latestWorkday = snapToWorkdayOrPrevious(latest, calendar)
         if (latestWorkday < finish) finish = latestWorkday
@@ -158,25 +178,23 @@ export function runCpmWithGraph(
       const nonEdgeBound = finish
 
       // 逐出边取上界，并记下每条边给出的 bound 与其后继是否为 manual。
-      const edgeBounds: { dep: Dependency; bound: DateStr; manual: boolean }[] = []
-      for (const dep of graph.outgoing.get(id) ?? []) {
+      const edgeBounds: { dep: Dependency; bound: DateStr; to: number; manual: boolean }[] = []
+      for (let e = graph.outStart[i]; e < graph.outStart[i + 1]; e += 1) {
+        const to = graph.outTo[e]
+        const dep = graph.outDep[e]
         const bound = backwardBound({
           dep,
-          toStart: lateStart.get(dep.toTaskId)!,
-          toFinish: lateFinish.get(dep.toTaskId)!,
-          fromDuration: task.duration,
+          toStart: lateStart[to],
+          toFinish: lateFinish[to],
+          fromDuration: durations[i],
           cal: calendar,
         })
-        edgeBounds.push({
-          dep,
-          bound,
-          manual: byId.get(dep.toTaskId)!.scheduling.mode === 'manual',
-        })
+        edgeBounds.push({ dep, bound, to, manual: tasks[to].scheduling.mode === 'manual' })
         if (bound < finish) finish = bound
       }
 
       finish = snapToWorkday(finish, calendar)
-      lateFinish.set(id, finish)
+      lateFinish[i] = finish
 
       // 归因规则（本任务的负浮时由谁顶出来）：
       //   · 出边上界必须**严格紧于**约束 / 资源上界（`nonEdgeBound > finish`）；
@@ -197,18 +215,17 @@ export function runCpmWithGraph(
         if (tightest.length > 0 && tightest.every((edge) => edge.manual)) {
           const chosen = [...tightest].sort((a, b) => (a.dep.id < b.dep.id ? -1 : 1))[0]
           const dep = chosen.dep
+          const to = chosen.to
           // boundary 是「该边消费的后继端日期」：FS/SS 看后继开始（manual 即其 start），
           // FF/SF 看后继结束（manual 即其 finish）—— 正是 UI 要展示的「边界 {date}」。
           const boundary =
-            dep.type === 'FF' || dep.type === 'SF'
-              ? lateFinish.get(dep.toTaskId)!
-              : lateStart.get(dep.toTaskId)!
+            dep.type === 'FF' || dep.type === 'SF' ? lateFinish[to] : lateStart[to]
           const lag = asLag(dep.lag)
           // elapsedDays 折不成工作日数（effectiveLagWorkdays 返回 NaN）——
           // 记 0，且文案不嵌数值（Ruling 2）。
           const lagDays =
-            lag.kind === 'elapsedDays' ? 0 : effectiveLagWorkdays(lag, task.duration)
-          bindings.set(id, { depType: dep.type, lagDays, boundary })
+            lag.kind === 'elapsedDays' ? 0 : effectiveLagWorkdays(lag, durations[i])
+          bindings[i] = { depType: dep.type, lagDays, boundary }
         }
       }
 
@@ -218,7 +235,7 @@ export function runCpmWithGraph(
       // —— 晚窗口反转，任何按 lateStart→lateFinish 求宽度的消费方得到负跨度。
       // 不可行（availableFrom 晚于 endDate 倒推出的开始日）时同样只以负浮时
       // 如实报冲突，不在这里夹。
-      lateStart.set(id, taskStart(finish, task.duration, calendar))
+      lateStart[i] = taskStart(finish, durations[i], calendar)
     }
 
     return { lateStart, lateFinish, bindings }
@@ -228,7 +245,7 @@ export function runCpmWithGraph(
   const firstPass = forwardPass(projectStart)
   let earlyStart = firstPass.earlyStart
   let earlyFinish = firstPass.earlyFinish
-  const forwardFinish = latestOf([...earlyFinish.values()], projectStart)
+  const forwardFinish = latestOf(earlyFinish, projectStart)
 
   let reverseAnchor: DateStr
   if (direction === 'backward') {
@@ -253,7 +270,7 @@ export function runCpmWithGraph(
     // earlyStart 与 earlyFinish 必须**一起**换掉：forward 模式下
     // scheduledFinish 就是从 earlyFinish 取的，只换 earlyStart 会让
     // 两个字段描述两个不同的排期。
-    const reran = forwardPass(earliestOf([...lateStart.values()], projectStart))
+    const reran = forwardPass(earliestOf(lateStart, projectStart))
     earlyStart = reran.earlyStart
     earlyFinish = reran.earlyFinish
   }
@@ -268,52 +285,53 @@ export function runCpmWithGraph(
   // workdaysBetween(addWorkdays(earlyFinish, 1), toEarlyStart)
   //   === workdaysBetween(earlyFinish, toEarlyStart) - 1
   // —— 两式在 lag = 0 时逐字等价，只是新式对四种依赖类型都成立。
-  const freeSlackOf = (id: TaskId): number => {
+  const freeSlackOf = (i: number): number => {
     // manual 任务不可推迟（early = late = manual 区间）→ 自由宽延恒 0。
     // 不特判的话，「按出边松弛算」会在关键路径上的 manual 任务上得出正的 freeSlack
     // （totalSlack 却是 0），破坏 types.ts 对 `freeSlack ≤ totalSlack` 的约定。
-    if (byId.get(id)!.scheduling.mode === 'manual') return 0
+    if (tasks[i].scheduling.mode === 'manual') return 0
 
-    const successors = graph.outgoing.get(id) ?? []
-    const totalSlack = workdaysBetween(earlyStart.get(id)!, lateStart.get(id)!, calendar)
-    if (successors.length === 0) return totalSlack
+    const totalSlack = workdaysBetween(earlyStart[i], lateStart[i], calendar)
+    if (graph.outStart[i + 1] === graph.outStart[i]) return totalSlack
 
-    return Math.min(
-      ...successors.map((dep) =>
-        workdaysBetween(
-          forwardBound({
-            dep,
-            fromStart: earlyStart.get(id)!,
-            fromFinish: earlyFinish.get(id)!,
-            toDuration: byId.get(dep.toTaskId)!.duration,
-            fromDuration: byId.get(id)!.duration,
-            cal: calendar,
-          }),
-          earlyStart.get(dep.toTaskId)!,
-          calendar,
-        ),
-      ),
-    )
+    let min = Number.POSITIVE_INFINITY
+    for (let e = graph.outStart[i]; e < graph.outStart[i + 1]; e += 1) {
+      const to = graph.outTo[e]
+      const value = workdaysBetween(
+        forwardBound({
+          dep: graph.outDep[e],
+          fromStart: earlyStart[i],
+          fromFinish: earlyFinish[i],
+          toDuration: durations[to],
+          fromDuration: durations[i],
+          cal: calendar,
+        }),
+        earlyStart[to],
+        calendar,
+      )
+      if (value < min) min = value
+    }
+    return min
   }
 
   // ── 浮时与关键路径 ─────────────────────────────────────
   const result: Record<TaskId, ComputedSchedule> = {}
-  for (const id of graph.order) {
-    const task = byId.get(id)!
-    const slack = workdaysBetween(earlyStart.get(id)!, lateStart.get(id)!, calendar)
+  for (const i of graph.order) {
+    const task = tasks[i]
+    const slack = workdaysBetween(earlyStart[i], lateStart[i], calendar)
     const useLate = usesLateSchedule(task)
     // 负浮时归因（派生量，不落盘）：仅当本任务确为负浮时且逆推记下了 binding 时带上。
-    const binding = slack < 0 ? conflictBindings.get(id) : undefined
+    const binding = slack < 0 ? conflictBindings[i] : undefined
 
-    result[id] = {
-      earlyStart: earlyStart.get(id)!,
-      earlyFinish: earlyFinish.get(id)!,
-      lateStart: lateStart.get(id)!,
-      lateFinish: lateFinish.get(id)!,
-      scheduledStart: useLate ? lateStart.get(id)! : earlyStart.get(id)!,
-      scheduledFinish: useLate ? lateFinish.get(id)! : earlyFinish.get(id)!,
+    result[task.id] = {
+      earlyStart: earlyStart[i],
+      earlyFinish: earlyFinish[i],
+      lateStart: lateStart[i],
+      lateFinish: lateFinish[i],
+      scheduledStart: useLate ? lateStart[i] : earlyStart[i],
+      scheduledFinish: useLate ? lateFinish[i] : earlyFinish[i],
       totalSlack: slack,
-      freeSlack: freeSlackOf(id),
+      freeSlack: freeSlackOf(i),
       isCritical: slack === 0,
       ...(binding ? { conflictBinding: binding } : {}),
     }
@@ -402,13 +420,18 @@ function schedulingUpperBound(
   return bounds.length === 0 ? projectFinish : bounds.reduce((a, b) => (a < b ? a : b))
 }
 
-function latestOf(dates: DateStr[], fallback: DateStr): DateStr {
+/** 数组里的最晚日期（空数组用 fallback，与旧 latestOf 对称） */
+function latestOf(dates: readonly DateStr[], fallback: DateStr): DateStr {
   if (dates.length === 0) return fallback
-  return dates.reduce((a, b) => (a > b ? a : b))
+  let max = dates[0]
+  for (let i = 1; i < dates.length; i += 1) if (dates[i] > max) max = dates[i]
+  return max
 }
 
 /** 取最早日期。空数组时用 fallback（与 latestOf 对称） */
-function earliestOf(dates: DateStr[], fallback: DateStr): DateStr {
+function earliestOf(dates: readonly DateStr[], fallback: DateStr): DateStr {
   if (dates.length === 0) return fallback
-  return dates.reduce((a, b) => (a < b ? a : b))
+  let min = dates[0]
+  for (let i = 1; i < dates.length; i += 1) if (dates[i] < min) min = dates[i]
+  return min
 }

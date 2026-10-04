@@ -38,8 +38,14 @@ describe('buildScheduleContext', () => {
       child2.id,
       standalone.id,
     ])
-    expect(context.graph.order).toEqual([child1.id, child2.id, standalone.id])
-    expect(context.graph.outgoing.get(child2.id)).toEqual([])
+    // 图是下标化 CSR（见 graph.ts）：order 是 `leaves` 的下标序列，出边查 CSR。
+    expect(context.graph.order.map((i) => context.leaves[i].id)).toEqual([
+      child1.id,
+      child2.id,
+      standalone.id,
+    ])
+    const child2Index = context.leaves.findIndex((task) => task.id === child2.id)
+    expect(context.graph.outStart[child2Index + 1] - context.graph.outStart[child2Index]).toBe(0)
   })
 
   it('索引多资源单位与可用期交集，忽略悬空资源分配且不改 Project', () => {

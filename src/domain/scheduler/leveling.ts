@@ -179,6 +179,7 @@ function isWorseCell(a: OverloadedCell, b: OverloadedCell): boolean {
  * 对 alap 任务，基线即它已用满浮时的位置（见 remainingSlack），延迟恒被夹成 0。
  */
 function leveledForwardPass(
+  tasks: readonly Task[],
   graph: TaskGraph,
   durations: ReadonlyMap<TaskId, number>,
   calendar: Calendar,
@@ -188,7 +189,9 @@ function leveledForwardPass(
 ): Record<TaskId, LeveledDates> {
   const out: Record<TaskId, LeveledDates> = {}
 
-  for (const id of graph.order) {
+  // 图的邻接是下标化 CSR（见 graph.ts）；`tasks[i]` 即该下标对应的叶子。
+  for (const i of graph.order) {
+    const id = tasks[i].id
     // manual：区间为定值 —— 跳过延迟与全部入边下界（与 runCpm 的正推同一条规则，
     // spec §2.2：manual 不被任何机制移动）。其**出边照常**给后继提供下界（out 已落表）。
     // 不特判会让 base 里的 manual.start 被前驱的 forwardBound 顶掉 —— 那正是「被机制移动」。
@@ -199,14 +202,15 @@ function leveledForwardPass(
 
     let start = addWorkdays(base[id]!.start, delays.get(id) ?? 0, calendar)
 
-    for (const dep of graph.incoming.get(id) ?? []) {
-      const from = out[dep.fromTaskId]!
+    for (let e = graph.inStart[i]; e < graph.inStart[i + 1]; e += 1) {
+      const fromId = tasks[graph.inFrom[e]].id
+      const from = out[fromId]!
       const bound = forwardBound({
-        dep,
+        dep: graph.inDep[e],
         fromStart: from.start,
         fromFinish: from.finish,
         toDuration: durations.get(id) ?? 0,
-        fromDuration: durations.get(dep.fromTaskId) ?? 0,
+        fromDuration: durations.get(fromId) ?? 0,
         cal: calendar,
       })
       if (bound > start) start = bound
@@ -290,15 +294,18 @@ function findFeasibleStart(
 
 /**
  * 平衡是否越界：任一任务的 start 超过它的 lateStart（= 推迟了项目完成）。
- * `order` 传入 `graph.order`（= `next` 的键集且同序）—— 避免每轮用 `Object.entries`
- * 为 10k 个任务分配 10k 个 `[key, value]` 数组（GC 热点），结果不变。
+ * `order` 传入 `graph.order`（拓扑序**下标**，= `next` 的键集且同序；`tasks[i]` 即该下标
+ * 对应的叶子）—— 避免每轮用 `Object.entries` 为 10k 个任务分配 10k 个 `[key, value]`
+ * 数组（GC 热点），结果不变。
  */
 function exceedsLateStart(
-  order: readonly TaskId[],
+  tasks: readonly Task[],
+  order: readonly number[],
   next: Readonly<Record<TaskId, LeveledDates>>,
   schedules: Readonly<Record<TaskId, ComputedSchedule>>,
 ): boolean {
-  for (const id of order) {
+  for (const i of order) {
+    const id = tasks[i].id
     const span = next[id]
     const schedule = schedules[id]
     if (span && schedule && span.start > schedule.lateStart) return true
@@ -413,7 +420,7 @@ export function levelLeaves(
     }
   }
 
-  let dates = leveledForwardPass(graph, durations, calendar, base, delays, manualIds)
+  let dates = leveledForwardPass(leaves, graph, durations, calendar, base, delays, manualIds)
 
   // 推不动的超载（资源@日期）→ 记录**冻结时的负载**（不是永久标记）。
   // 只在「当前负载 ≤ 冻结负载」时跳过：负载一旦增长就说明旧冻结的候选集已失效，
@@ -499,7 +506,8 @@ export function levelLeaves(
       if (entry) entry.delta += delta
       else net.set(key, { resourceId, date, delta })
     }
-    for (const id of graph.order) {
+    for (const i of graph.order) {
+      const id = leaves[i].id
       const from = before[id]!
       const to = after[id]!
       if (from.start === to.start && from.finish === to.finish) continue
@@ -574,8 +582,8 @@ export function levelLeaves(
 
       const previous = delays.get(candidate.id) ?? 0
       delays.set(candidate.id, workdaysBetween(base[candidate.id]!.start, target, calendar))
-      const next = leveledForwardPass(graph, durations, calendar, base, delays, manualIds)
-      if (exceedsLateStart(graph.order, next, schedules)) {
+      const next = leveledForwardPass(leaves, graph, durations, calendar, base, delays, manualIds)
+      if (exceedsLateStart(leaves, graph.order, next, schedules)) {
         delays.set(candidate.id, previous) // 回退
         continue
       }

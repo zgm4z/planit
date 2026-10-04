@@ -44,15 +44,21 @@ export function solve(project: Project, budget?: LevelingBudget): ScheduleResult
   // ① 有效工期计算：把 effort × 分配 × 资源 解成 CPM 需要的 duration 输入，
   //    同时算出每个任务的资源可用期边界。
   const durations = new Map<TaskId, number>()
+  // 与 `leaves` 按下标对齐的工期数组 —— 直接喂给 CPM，避免 `leaves.map(leaf => ({...leaf}))`
+  // 拷贝整份叶子数组（10k 次浅拷贝，GC 热点）。CPM 的图也建自同一份 `leaves`，下标一致。
+  const durationsByIndex: number[] = new Array(leaves.length)
 
-  for (const leaf of leaves) {
+  for (let i = 0; i < leaves.length; i += 1) {
+    const leaf = leaves[i]
     const unit = context.unitsByTask.get(leaf.id) ?? 0
-    durations.set(leaf.id, effectiveDuration(leaf, unit))
+    const duration = effectiveDuration(leaf, unit)
+    durations.set(leaf.id, duration)
+    durationsByIndex[i] = duration
   }
   const bounds = Object.fromEntries(context.resourceBoundsByTask)
 
   const leafSchedules = runCpmWithGraph({
-    tasks: leaves.map((leaf) => ({ ...leaf, duration: durations.get(leaf.id)! })),
+    tasks: leaves,
     // 消费展开后的叶子级依赖（摘要端点已展开，见 context.expandDependencies）
     dependencies: [...context.dependencies],
     calendar,
@@ -62,6 +68,7 @@ export function solve(project: Project, budget?: LevelingBudget): ScheduleResult
     projectStart: toDateStr(project.startDate),
     projectEnd: project.endDate ? toDateStr(project.endDate) : undefined,
     resourceBounds: bounds,
+    durations: durationsByIndex,
   }, context.graph)
 
   // ⑦ 资源平衡（v0.6）：用 CPM 算出的浮时，把资源超载处的任务往后推。
