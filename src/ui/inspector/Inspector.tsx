@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react'
+import { memo, useEffect, useId } from 'react'
 import type { ReactNode } from 'react'
 import {
   Accordion,
@@ -84,8 +84,14 @@ function makeLag(kind: Lag['kind'], n: number): Lag {
  * 标题的 <Text> **必须在 Tabs 之前**：e2e 用 `[data-testid="inspector"] p` 的
  * 第一个元素断言标题文案（acceptance.spec.ts:371）。分组标题用纯字符串渲染进
  * Accordion.Control（产出 <button>，不产出 <p>），以免打乱「第一个 <p>」。
+ *
+ * ── 为什么是 memo ────────────────────────────────────────────────────────
+ * 右栏**不收任何 props**，全部数据走 zustand 订阅。它挂在 ProjectView 里，滚动时
+ * 虚拟化器让 ProjectView 每帧重渲染 —— 右栏此刻没有任何输入变化，却连带把
+ * ProjectInspector（含一次全项目摘要扫描）与（选中任务时的）整棵任务面板
+ * 一起重跑。memo（无 props ⇒ 恒等跳过）挡住这笔浪费；自身的订阅仍照常驱动更新。
  */
-export function Inspector() {
+function InspectorComponent() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
@@ -169,6 +175,9 @@ export function Inspector() {
     </Box>
   )
 }
+
+/** memo 化（见上）。无 props ⇒ 滚动帧里恒等跳过整棵右栏。 */
+export const Inspector = memo(InspectorComponent)
 
 /** 任务 Tab：冲突告警（Accordion 之外，折叠不了）+ 按注册表渲染的 7 个分组 */
 function TaskPanel({ taskId }: { taskId: TaskId }) {

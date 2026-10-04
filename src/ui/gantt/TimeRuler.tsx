@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { CSSProperties } from 'react'
 import { addDays } from '../../domain/calendar/workdays'
 import type { TimelineScale } from './timeline'
@@ -50,7 +51,7 @@ const MIN_MONTH_LABEL_WIDTH = 56
  *
  * 日号的疏密随缩放档位变化（逐日 / 每周 / 每月），避免缩小时生成上千个 DOM 节点。
  */
-export function TimeRuler({ scale, totalDays, stickyLabelLeft }: TimeRulerProps) {
+function TimeRulerComponent({ scale, totalDays, stickyLabelLeft }: TimeRulerProps) {
   const step = scale.dayWidth >= 24 ? 1 : scale.dayWidth >= 10 ? 7 : 30
 
   // ── 上行：月份带 ──
@@ -146,3 +147,11 @@ export function TimeRuler({ scale, totalDays, stickyLabelLeft }: TimeRulerProps)
     </div>
   )
 }
+
+/**
+ * memo 化：`scale` / `totalDays` / `stickyLabelLeft` 三个 props 在调用方
+ * （ProjectView / ResourceTimeline）里都是 useMemo 或字面量，滚动时恒等。
+ * 而本组件每次渲染都要按 `totalDays` 循环切月份带与日号刻度 —— 长项目
+ * （时间轴跨数年）时是笔实打实的开销，滚动帧里重算纯属浪费。
+ */
+export const TimeRuler = memo(TimeRulerComponent)

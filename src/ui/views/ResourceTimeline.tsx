@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -35,8 +35,14 @@ interface ResourceTimelineProps {
  * 时间轴表头是**同一个 TimeRuler**、底纹是**同一个 day-grid / nonwork-band 令牌**
  * （甘特与资源视图共用一份实现，见 _tokens.scss 的注释）—— 于是这里能看出
  * **每一天一列**，超载带按天分格、分配条的落点可读。
+ *
+ * ── 为什么是 memo ────────────────────────────────────────────────────────
+ * 资源视图滚动时，ResourceView 因虚拟化器每帧重渲染；但真正驱动本时间轴的
+ * 六个 props（project / resourceId / schedules / leveling / scale / totalDays）
+ * 在滚动中全部恒等。而本组件每次渲染都要遍历全部 assignments 再排序 ——
+ * 大项目下是笔可观开销。memo 让它在滚动帧里整棵跳过。
  */
-export function ResourceTimeline({
+function ResourceTimelineComponent({
   project,
   resourceId,
   schedules,
@@ -169,3 +175,6 @@ export function ResourceTimeline({
     </div>
   )
 }
+
+/** memo 化（见上）。滚动帧里六个 props 恒等 ⇒ 整棵跳过。 */
+export const ResourceTimeline = memo(ResourceTimelineComponent)

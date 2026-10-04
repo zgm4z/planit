@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Button, Checkbox, NumberInput, Select, Text } from '@mantine/core'
 import { Calendar, DatePickerInput } from '@mantine/dates'
 import { IconTrash } from '@tabler/icons-react'
@@ -30,8 +30,13 @@ import chrome from '../styles/Chrome.module.scss'
  * 「正常时数」区块**保留 `data-testid="calendar-settings"`** 并承载那七个工作日复选框 ——
  * 既有 e2e（regression / acceptance）靠它定位复选组，保留可让它们只改「怎么到达日历」。
  * 按区间增删例外走 v0.7 的两条区间命令（命令层逐日展开，见 spec §4.2）。
+ *
+ * ── 为什么是 memo ────────────────────────────────────────────────────────
+ * 本视图不收任何 props（数据走 zustand），但挂在 ProjectView 的滚动容器里 ——
+ * 虚拟化器让 ProjectView 每帧重渲染时，这里没有任何输入变化。memo 让它在滚动帧里
+ * 整棵跳过；月锚点等本地 state 与 store 订阅仍照常驱动更新。
  */
-export function CalendarView() {
+function CalendarViewComponent() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const dispatch = useProjectStore((state) => state.dispatch)
@@ -292,3 +297,6 @@ export function CalendarView() {
     </div>
   )
 }
+
+/** memo 化（见上）。calendar 视图没有虚拟化行，但仍是 ProjectView 的每帧子节点。 */
+export const CalendarView = memo(CalendarViewComponent)

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
-import { computeProjectSummary } from '../shared/projectSummary'
+import { computeProjectSummary, countCriticalLeafTasks } from '../shared/projectSummary'
 import { formatDate } from '../shared/format'
 import styles from '../styles/Chrome.module.scss'
 
@@ -46,8 +46,18 @@ function useDelayedFlag(active: boolean, delayMs: number): boolean {
  * 「计算中」指示器（求解在 worker 里跑时出现）：**最弱的一层** —— 与元数据同色、
  * 靠右、`role="status"`（polite，不打断读屏）。它不遮不拦、不吃点击，且延迟出现
  * （见 COMPUTING_INDICATOR_DELAY_MS），所以快求解不会闪。
+ *
+ * ── 为什么是 memo 包一层 ──────────────────────────────────────────────────
+ * 状态栏**不收任何 props**，数据全靠 zustand 订阅。而它恰好挂在 ProjectView 里，
+ * 与虚拟化器同一个组件 —— 滚动时虚拟化器把可见区间存成内部 state，ProjectView
+ * **每帧重渲染**，于是状态栏也跟着每帧重跑（连同上面那次全项目扫描）。
+ * 它自己的订阅值在滚动中并不变，纯属被父组件带着走。
+ *
+ * `memo` 恰好解决这一点：无 props ⇒ 父组件重渲染时 props 恒等 ⇒ 整棵子树跳过；
+ * 而它自身的 store 订阅（project / result / computing）一旦变化仍会照常重渲染 ——
+ * 包括「计算中」指示器的延迟出现。所以这不是「牺牲实时性换性能」。
  */
-export function StatusBar() {
+function StatusBarComponent() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const result = useScheduleStore((state) => state.result)
@@ -56,15 +66,14 @@ export function StatusBar() {
 
   if (!project) return null
 
-  // 跨度 / 工作日换算走唯一的一份实现（projectSummary），与项目面板共用
+  // 跨度 / 工作日换算走唯一的一份实现（projectSummary），与项目面板共用。
+  // 两次扫描都按 (project, schedules) 记忆化 —— 即便本组件因别的原因重跑，
+  // 入参不变也不会重算（见 projectSummary 的注释）。
   const summary = computeProjectSummary(project, result.schedules)
 
-  // 关键任务数仍按叶子任务统计 —— 摘要任务的关键标记是从子任务继承来的，重复计数会翻倍
-  const criticalCount = Object.values(project.tasks)
-    .filter((task) => task.childIds.length === 0)
-    .map((task) => result.schedules[task.id])
-    .filter((schedule): schedule is NonNullable<typeof schedule> => Boolean(schedule))
-    .filter((schedule) => schedule.isCritical).length
+  // 关键任务数按叶子统计（摘要任务的关键标记是从子任务继承来的，重复计数会翻倍）。
+  // 与摘要同一处记忆化：两者都是全项目扫描、入参相同。
+  const criticalCount = countCriticalLeafTasks(project, result.schedules)
 
   const start = formatDate(summary?.start) ?? '—'
   const finish = formatDate(summary?.finish) ?? '—'
@@ -120,3 +129,10 @@ export function StatusBar() {
     </div>
   )
 }
+
+/**
+ * memo 化的状态栏。**不要**把它换成直接渲染 StatusBarComponent ——
+ * 那会重新引入「滚动时每帧重跑两次全项目扫描」的缺陷（见上）。
+ * 组件名保留为 `StatusBar`，其余调用方 / 测试无需感知 memo。
+ */
+export const StatusBar = memo(StatusBarComponent)

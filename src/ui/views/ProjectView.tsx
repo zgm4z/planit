@@ -120,6 +120,14 @@ export function ProjectView() {
     [schedulesResult.conflicts],
   )
 
+  // 依赖列表：DependencyLayer 的 props 之一。`Object.values` 每次调用都产出一个
+  // **新数组**，若在这里内联，即便依赖没变，memo(DependencyLayer) 也会因 props
+  // 引用变化而失效。按 project 记忆化后，滚动帧里引用恒定 → 连线层整层跳过。
+  const dependencyList = useMemo(
+    () => (project ? Object.values(project.dependencies) : []),
+    [project],
+  )
+
   // 甘特时间轴原点是几何锚点：`createScale` 内部按 `parseDate` 切日期段，
   // 若 `project.startDate` 带上时刻（Task 3 起）会得到 Invalid Date —— 先归一。
   const scale = useMemo(
@@ -326,7 +334,7 @@ export function ProjectView() {
                 />
 
                 <DependencyLayer
-                  dependencies={Object.values(project.dependencies)}
+                  dependencies={dependencyList}
                   rectByTaskId={rectByTaskId}
                   totalHeight={rows.length * ROW_HEIGHT}
                   totalWidth={ganttWidth}

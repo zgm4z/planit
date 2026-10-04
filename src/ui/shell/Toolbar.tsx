@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { memo, useEffect } from 'react'
 import { ActionIcon, Menu, SegmentedControl, Text, Tooltip } from '@mantine/core'
 import { IconArrowLeft, IconDotsVertical, IconCheck } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
@@ -35,8 +35,14 @@ import styles from '../styles/Chrome.module.scss'
  * §7 窄屏（< 1100）：缩放与语言收进「更多」溢出菜单 —— 溢出入口带**可感知指示器**
  * （⋯ 图标 + tooltip，非默认状态时点亮小圆点），见 OverflowMenu。菜单栏不清空
  * （它是操作入口，不是次要控件），项目名此时会自行截断。
+ *
+ * ── 为什么是 memo ────────────────────────────────────────────────────────
+ * 工具栏**不收任何 props**，全部数据走 zustand 订阅（project / viewStore /
+ * scheduleStore.error）。它挂在 ProjectView 里，而虚拟化器让 ProjectView 在滚动时
+ * 每帧重渲染 —— 工具栏其实没有一处输入在滚动中变化。memo（无 props ⇒ 恒等跳过）
+ * 消除这笔浪费；它自身的 store 订阅仍会在真正变化时触发重渲染。
  */
-export function Toolbar() {
+function ToolbarComponent() {
   const { t } = useTranslation()
   // §7 的断点来自唯一一份定义（shared/breakpoints 的 1100 / 900，由 useLayoutMode 消费）——
   // 不在工具栏里再写一个 1100，否则 JS 的媒体查询会与 CSS / 列注册表产生 off-by-one 分歧。
@@ -135,6 +141,9 @@ export function Toolbar() {
     </div>
   )
 }
+
+/** memo 化（见上）。无 props ⇒ 滚动帧里恒等跳过。 */
+export const Toolbar = memo(ToolbarComponent)
 
 /**
  * 绑定 Ctrl/Cmd+Z → 撤销，Ctrl/Cmd+Shift+Z → 重做（§10.3.3）。
