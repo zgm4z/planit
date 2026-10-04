@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 
 import { createProject, createTask, __resetIdCounterForTests } from '../../domain/model/factories'
 import type { Project } from '../../domain/model/types'
-import { canIndent, canOutdent, isLeafTask } from './outlineActions'
+import { canIndent, canOutdent, createdSiblingId, isLeafTask } from './outlineActions'
 
 let project: Project
 /** 顶层三个兄弟：first / second / third */
@@ -105,5 +105,25 @@ describe('isLeafTask', () => {
 
     expect(isLeafTask(project, group.id)).toBe(false)
     expect(isLeafTask(project, 'ghost')).toBe(false)
+  })
+})
+
+describe('createdSiblingId', () => {
+  it('返回 afterId 的紧后一位', () => {
+    expect(createdSiblingId(project, first)).toBe(second)
+  })
+
+  it('子层同样适用', () => {
+    project.tasks[first].childIds = [childOfFirst, childOfSecond]
+    project.tasks[childOfSecond].parentId = first
+    expect(createdSiblingId(project, childOfFirst)).toBe(childOfSecond)
+  })
+
+  it('afterId 已在末尾 → null', () => {
+    expect(createdSiblingId(project, third)).toBeNull()
+  })
+
+  it('afterId 不存在 → null', () => {
+    expect(createdSiblingId(project, 'ghost')).toBeNull()
   })
 })

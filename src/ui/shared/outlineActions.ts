@@ -54,3 +54,19 @@ export function canOutdent(project: Project, taskId: TaskId | null): boolean {
 
   return siblingIdsOf(project, parent.id) !== null
 }
+
+/**
+ * 提交 `task.create{afterId}` 之后，从新 project 里读出**刚插入的那条任务**的 id。
+ *
+ * 确定性来自命令层的契约：新任务必定紧跟在 `afterId` 之后（插位规则见
+ * `taskCommands.ts` 的 `insertAfter`）。找不到（`afterId` 不存在 / 已在末尾）时返回 null。
+ *
+ * 为什么是「事后读」而不是「让 UI 预生成 id」：id 的生成是命令层的职责，
+ * UI 不应成为第二个 id 生成入口 —— 那会让「谁造 id」出现两份真相。
+ */
+export function createdSiblingId(project: Project, afterId: TaskId): TaskId | null {
+  const siblings = siblingIdsOf(project, afterId)
+  if (!siblings) return null
+  const at = siblings.indexOf(afterId)
+  return at >= 0 && at + 1 < siblings.length ? siblings[at + 1]! : null
+}
