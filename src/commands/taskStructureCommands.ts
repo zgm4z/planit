@@ -1,5 +1,5 @@
-import type { Draft } from 'immer'
-import type { Project, TaskId } from '../domain/model/types'
+import type { TaskId } from '../domain/model/types'
+import { siblingIdsOf } from '../domain/model/tree'
 import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
 
@@ -10,18 +10,9 @@ export interface TaskOutdentPayload { taskId: TaskId }
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 
-/** 取任务所处的兄弟列表（顶层任务取 rootIds，子任务取父的 childIds） */
-function siblingList(draft: Draft<Project>, taskId: TaskId): TaskId[] | null {
-  const task = draft.tasks[taskId]
-  if (!task) return null
-  if (task.parentId === null) return draft.rootIds
-  const parent = draft.tasks[task.parentId]
-  return parent ? parent.childIds : null
-}
-
 export const taskStructureHandlers: Record<string, CommandHandler<any>> = {
   'task.reorder': (draft, payload: TaskReorderPayload) => {
-    const list = siblingList(draft, payload.taskId)
+    const list = siblingIdsOf(draft, payload.taskId)
     if (!list) return
 
     const from = list.indexOf(payload.taskId)
@@ -35,7 +26,7 @@ export const taskStructureHandlers: Record<string, CommandHandler<any>> = {
   },
 
   'task.indent': (draft, payload: TaskIndentPayload) => {
-    const list = siblingList(draft, payload.taskId)
+    const list = siblingIdsOf(draft, payload.taskId)
     if (!list) return
 
     const index = list.indexOf(payload.taskId)
@@ -61,7 +52,7 @@ export const taskStructureHandlers: Record<string, CommandHandler<any>> = {
     const parent = draft.tasks[oldParentId]
     if (!parent) return
 
-    const parentList = siblingList(draft, parent.id)
+    const parentList = siblingIdsOf(draft, parent.id)
     if (!parentList) return
 
     // 从原父任务下摘除

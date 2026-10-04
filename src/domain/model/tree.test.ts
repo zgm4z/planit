@@ -22,9 +22,11 @@ function seed(): { project: Project; root1: string; root2: string; child: string
 describe('siblingIdsOf', () => {
   beforeEach(() => __resetIdCounterForTests())
 
-  it('根层任务返回 rootIds', () => {
+  it('根层任务返回 rootIds（是树里那个数组本身，不是副本）', () => {
     const { project, root1, root2 } = seed()
-    expect(siblingIdsOf(project, root1)).toEqual([root1, root2])
+    const list = siblingIdsOf(project, root1)
+    expect(list).toEqual([root1, root2])
+    expect(list).toBe(project.rootIds) // 身份：命令层要 splice 它
   })
 
   it('子任务返回其父的 childIds', () => {
@@ -32,8 +34,14 @@ describe('siblingIdsOf', () => {
     expect(siblingIdsOf(project, child)).toEqual([child])
   })
 
-  it('不存在的任务返回空数组', () => {
+  it('任务不存在 → null', () => {
     const { project } = seed()
-    expect(siblingIdsOf(project, 'ghost')).toEqual([])
+    expect(siblingIdsOf(project, 'ghost')).toBeNull()
+  })
+
+  it('父任务不存在（数据损坏）→ null', () => {
+    const { project, child } = seed()
+    project.tasks[child].parentId = 'missing-parent'
+    expect(siblingIdsOf(project, child)).toBeNull()
   })
 })

@@ -1,4 +1,5 @@
 import type { Project, TaskId } from '../../domain/model/types'
+import { siblingIdsOf } from '../../domain/model/tree'
 
 /**
  * 该任务是**叶子**吗（存在且 `kind !== 'group'`）。
@@ -10,20 +11,6 @@ import type { Project, TaskId } from '../../domain/model/types'
 export function isLeafTask(project: Project, taskId: TaskId): boolean {
   const task = project.tasks[taskId]
   return task !== undefined && task.kind !== 'group'
-}
-
-/**
- * 取任务所处的兄弟列表（顶层任务取 rootIds，子任务取父的 childIds）。
- *
- * **这是命令层 `taskStructureCommands.ts` 里 `siblingList` 的只读镜像。**
- * 两处必须保持一致：这里判「能不能做」，那里判「做不做」。
- */
-function siblingIds(project: Project, taskId: TaskId): TaskId[] | null {
-  const task = project.tasks[taskId]
-  if (!task) return null
-  if (task.parentId === null) return project.rootIds
-  const parent = project.tasks[task.parentId]
-  return parent ? parent.childIds : null
 }
 
 /**
@@ -40,7 +27,7 @@ function siblingIds(project: Project, taskId: TaskId): TaskId[] | null {
 export function canIndent(project: Project, taskId: TaskId | null): boolean {
   if (!taskId) return false
 
-  const list = siblingIds(project, taskId)
+  const list = siblingIdsOf(project, taskId)
   if (!list) return false
 
   const index = list.indexOf(taskId)
@@ -65,5 +52,5 @@ export function canOutdent(project: Project, taskId: TaskId | null): boolean {
   const parent = project.tasks[task.parentId]
   if (!parent) return false
 
-  return siblingIds(project, parent.id) !== null
+  return siblingIdsOf(project, parent.id) !== null
 }
