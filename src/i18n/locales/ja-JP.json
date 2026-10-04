@@ -108,7 +108,9 @@
   },
   "gantt": {
     "dragHint": "{{start}} → {{finish}} · {{days}} 稼働日",
-    "startLink": "リンク開始"
+    "startLink": "リンク開始",
+    "resourceSeparator": "、",
+    "assignedResources": "割り当て: {{names}}"
   },
   "inspector": {
     "title": "タスクの詳細",

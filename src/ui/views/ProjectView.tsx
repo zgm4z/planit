@@ -33,6 +33,7 @@ import { useBarDrag } from '../gantt/useBarDrag'
 import { useDependencyLink } from '../gantt/useDependencyLink'
 import { useLayoutMode } from '../shared/useBreakpoints'
 import { nonworkBands } from '../shared/nonworkBands'
+import { resourceNamesByTask as resourceNamesByTaskOf } from '../shared/resourceNames'
 import { useSharedVirtualizer, ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { createCalendar } from '../../domain/model/factories'
 import { useProjectStore } from '../../store/projectStore'
@@ -129,6 +130,14 @@ export function ProjectView() {
   // 引用变化而失效。按 project 记忆化后，滚动帧里引用恒定 → 连线层整层跳过。
   const dependencyList = useMemo(
     () => (project ? Object.values(project.dependencies) : []),
+    [project],
+  )
+
+  // 任务 → 已分配资源名：条上文字的数据源。与 dependencyList 同一手法 ——
+  // 按 project 记忆化，滚动帧里引用恒定。GanttRows 无 memo、每帧重渲染，
+  // 若在 TaskBar 里现算就是「每可见行 × 每帧 × 遍历全部 assignments」。
+  const resourceNamesByTask = useMemo(
+    () => (project ? resourceNamesByTaskOf(project) : new Map()),
     [project],
   )
 
@@ -356,6 +365,7 @@ export function ProjectView() {
                   schedules={schedulesResult.schedules}
                   conflictIds={conflictIds}
                   scale={scale}
+                  resourceNamesByTask={resourceNamesByTask}
                   dragShadow={drag.shadow}
                   onBarPointerDown={(event, taskId, mode) => {
                     // 按下的同时选中该任务 —— 单击（未越过 3px 阈值）只应选中，

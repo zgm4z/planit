@@ -15,6 +15,8 @@ interface GanttRowsProps {
   schedules: Record<TaskId, ComputedSchedule>
   conflictIds: ReadonlySet<TaskId>
   scale: TimelineScale
+  /** 任务 → 已分配资源名（顺序 = 资源声明序）。由 ProjectView 按 project 记忆化后下传 */
+  resourceNamesByTask: Map<TaskId, string[]>
   /**
    * 拖拽期间的影子排期（**含被拖任务**），来自「假设项目」的解。
    * 非拖拽期间为 null。
@@ -33,6 +35,7 @@ export function GanttRows({
   schedules,
   conflictIds,
   scale,
+  resourceNamesByTask,
   dragShadow,
   onBarPointerDown,
   onStartLink,
@@ -95,6 +98,7 @@ export function GanttRows({
               scale={scale}
               calendar={calendar}
               hasConflict={conflictIds.has(task.id)}
+              resourceNames={resourceNamesByTask.get(task.id)}
               override={override}
               ghost={override !== undefined}
               showHint={isDragged && override !== undefined}

@@ -27,6 +27,8 @@ interface TaskBarProps {
   ghost?: boolean
   /** 是否显示浮动日期提示（只有被拖的那一根条需要） */
   showHint?: boolean
+  /** 该任务已分配的资源名（顺序 = 资源声明序）。缺省 / 空数组 = 无分配，不渲染药丸 */
+  resourceNames?: string[]
   onBarPointerDown?: (event: React.PointerEvent, mode: BarDragMode) => void
   onStartLink?: (event: React.PointerEvent, fromX: number, fromY: number) => void
 }
@@ -40,6 +42,7 @@ export function TaskBar({
   override,
   ghost = false,
   showHint = false,
+  resourceNames,
   onBarPointerDown,
   onStartLink,
 }: TaskBarProps) {
@@ -53,6 +56,14 @@ export function TaskBar({
   const displayFinish = override
     ? taskFinish(displayStart, displayDuration, calendar)
     : schedule.scheduledFinish
+
+  // 条内资源名（spec §4 呈现层）：空数组视同「无分配」—— 不渲染药丸、title 不加行。
+  const hasResourceNames = resourceNames !== undefined && resourceNames.length > 0
+  const resourceLabel = hasResourceNames ? resourceNames.join(t('gantt.resourceSeparator')) : ''
+  // 悬停清单行（§7），行尾自带换行 —— 无名字时是空串，title 与改动前逐字相同。
+  const assignedLine = hasResourceNames
+    ? `${t('gantt.assignedResources', { names: resourceLabel })}\n`
+    : ''
 
   if (task.kind === 'milestone') {
     // ⚠️ 里程碑**刻意**不画下面那个 manual 锁定标识（spec §4.2 的措辞是「manual **任务条**」）：
@@ -74,7 +85,11 @@ export function TaskBar({
           width: MILESTONE_SIZE,
           height: MILESTONE_SIZE,
         }}
-        title={`${task.name} · ${displayStart}`}
+        title={
+          hasResourceNames
+            ? `${task.name}\n${assignedLine}${displayStart}`
+            : `${task.name} · ${displayStart}`
+        }
         data-task-id={task.id}
         data-testid={`task-milestone-${task.id}`}
         onPointerDown={(event) => onBarPointerDown?.(event, 'move')}
@@ -106,7 +121,7 @@ export function TaskBar({
         width,
         height: barHeight,
       }}
-      title={`${task.name}\n${displayStart} → ${displayFinish}`}
+      title={`${task.name}\n${assignedLine}${displayStart} → ${displayFinish}`}
       data-task-id={task.id}
       data-testid={`task-bar-${task.id}`}
       onPointerDown={(event) => onBarPointerDown?.(event, 'move')}
@@ -126,6 +141,15 @@ export function TaskBar({
         style={{ width: `${task.progress}%` }}
         data-testid={`task-bar-progress-${task.id}`}
       />
+
+      {hasResourceNames && (
+        <div
+          className={`${styles.barLabel} ${isManual ? styles.barLabelManual : ''}`}
+          data-testid={`task-bar-label-${task.id}`}
+        >
+          <span className={styles.barLabelText}>{resourceLabel}</span>
+        </div>
+      )}
 
       {showHint && (
         <div className={styles.dragHint} data-testid={`drag-hint-${task.id}`}>

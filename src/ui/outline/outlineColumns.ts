@@ -16,6 +16,7 @@ import {
 } from '../../store/columnKeys'
 import type { ColumnWidths } from '../../store/viewStore'
 import { resolveScheduleDates } from '../shared/scheduleDates'
+import { taskResourceNames } from '../shared/resourceNames'
 
 /**
  * 列的**渲染描述**。**不进 localStorage** —— 那里只存 `OutlineColumnKey`。
@@ -285,13 +286,10 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
     case 'assignees': {
       const project = ctx.project
       if (!project) return EMPTY
-      // 从 Assignment 反查资源名 —— 这是全项目**唯一**一处该反查。
-      // 别处再写一遍就是「同一规则两份实现」（本项目出过的事故），
-      // 将来改分配语义（如多资源排序 / 过滤失效资源）必须只改这里。
-      const names = Object.values(project.assignments)
-        .filter((assignment) => assignment.taskId === task.id)
-        .map((assignment) => project.resources[assignment.resourceId]?.name)
-        .filter((name): name is string => Boolean(name))
+      // 反查逻辑**唯一**在 shared/resourceNames.ts —— 甘特条与这里共用同一份。
+      // 本模块只做呈现：单值/多值一律用固定的 ', '（取值层刻意不依赖 i18n，
+      // 见本文件 :154-157 的注释；甘特条另有 locale 分隔符，是呈现细节。
+      const names = taskResourceNames(project, task.id)
       return names.length > 0 ? { type: 'text', text: names.join(', ') } : EMPTY
     }
     case 'effort': {

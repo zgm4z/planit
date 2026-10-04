@@ -111,7 +111,9 @@
   },
   "gantt": {
     "dragHint": "{{start}} → {{finish}} · {{days}} 个工作日",
-    "startLink": "开始连线"
+    "startLink": "开始连线",
+    "resourceSeparator": "、",
+    "assignedResources": "已分配：{{names}}"
   },
   "inspector": {
     "title": "任务详情",
