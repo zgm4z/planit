@@ -59,6 +59,33 @@ export function resolveClickSelection(
 }
 
 /**
+ * 归一化「锚点 + 集合」：锚点非空且在集合里就用它，否则回落到末元素（集合空则 null）。
+ *
+ * 用途是把**悬空 / 缺省的锚点**收敛成一个合法值 —— 与 `viewStore.normalizeSelection`
+ * 同一条规则，所以两棵树（任务 / 资源）取锚点时不会各写一份。
+ */
+export function effectiveAnchor<T extends string>(
+  anchor: T | null | undefined,
+  ids: readonly T[],
+): T | null {
+  return anchor != null && ids.includes(anchor) ? anchor : ids.length > 0 ? ids[ids.length - 1] : null
+}
+
+/**
+ * `resolveClickSelection` 的锚点归一版：先把外部传入的锚点过 `effectiveAnchor`，
+ * 再交给唯一的点击语义实现。**任务侧与资源侧共用这一处** —— 两棵树的锚点取法因此只有一份。
+ */
+export function resolveEntityClick(
+  order: readonly string[],
+  current: readonly string[],
+  anchor: string | null,
+  clicked: string,
+  mods: SelectionMods,
+): { ids: string[]; anchor: string | null } {
+  return resolveClickSelection(order, current, effectiveAnchor(anchor, current), clicked, mods)
+}
+
+/**
  * Shift+↑/↓：以锚点为一端、当前焦点（离锚点最远的已选项）为另一端，向 delta 扩一格。
  * 到 order 边界后返回当前区间（不越界）。
  */

@@ -4,7 +4,7 @@ import { Drawer } from '@mantine/core'
 
 import { flattenVisibleRows } from '../shared/flattenRows'
 import { flattenResourceRows } from '../shared/flattenResources'
-import { extendRange, resolveClickSelection, type SelectionMods } from '../shared/selectionRange'
+import { extendRange, resolveEntityClick, type SelectionMods } from '../shared/selectionRange'
 import { isEditableTarget } from '../shared/isEditableTarget'
 import { CalendarView } from './CalendarView'
 import { ResourceView } from './ResourceView'
@@ -66,6 +66,7 @@ export function ProjectView() {
   const collapsedIds = useViewStore((state) => state.collapsedIds)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
   const selectedTaskIds = useViewStore((state) => state.selectedTaskIds)
+  const selectedResourceId = useViewStore((state) => state.selectedResourceId)
   const selectedResourceIds = useViewStore((state) => state.selectedResourceIds)
   const setTaskSelection = useViewStore((state) => state.setTaskSelection)
   const setResourceSelection = useViewStore((state) => state.setResourceSelection)
@@ -106,7 +107,7 @@ export function ProjectView() {
 
   const handleSelectTask = useCallback(
     (taskId: string, mods: SelectionMods) => {
-      const next = resolveClickSelection(visibleTaskIds, selectedTaskIds, selectedTaskId, taskId, mods)
+      const next = resolveEntityClick(visibleTaskIds, selectedTaskIds, selectedTaskId, taskId, mods)
       setTaskSelection(next.ids, next.anchor)
     },
     [visibleTaskIds, selectedTaskIds, selectedTaskId, setTaskSelection],
@@ -114,17 +115,17 @@ export function ProjectView() {
 
   const handleSelectResource = useCallback(
     (resourceId: string, mods: SelectionMods) => {
-      const next = resolveClickSelection(
+      // 与任务侧同一条路径：锚点 = 真实锚点（经 effectiveAnchor 归一，悬空时回落末元素）
+      const next = resolveEntityClick(
         visibleResourceIds,
         selectedResourceIds,
-        // 资源面板的锚点由 ResourceView 的容错逻辑兜底，这里只保证「集合里取一个」
-        selectedResourceIds[selectedResourceIds.length - 1] ?? null,
+        selectedResourceId,
         resourceId,
         mods,
       )
       setResourceSelection(next.ids, next.anchor)
     },
-    [visibleResourceIds, selectedResourceIds, setResourceSelection],
+    [visibleResourceIds, selectedResourceIds, selectedResourceId, setResourceSelection],
   )
 
   // 键盘：Esc 收敛多选；Shift+↑/↓ 以锚点扩选。焦点在输入框内时一律不接管。
