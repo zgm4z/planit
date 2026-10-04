@@ -128,10 +128,43 @@ export interface LevelingBudget {
 
 const DEFAULT_BUDGET: LevelingBudget = { maxIterations: 100000, maxElapsedMs: 4000 }
 
+/**
+ * **测试专用**钩子（生产调用点不传）。`levelLeaves` 每轮开始时回调**当前的增量负载表**
+ * 与对应的 `dates`，供不变量测试与 `resourceDayLoad(context, dates)` 的全量重建对拍 ——
+ * 这是「增量状态静默漂移」这一经典 bug 的守卫。缺省 undefined 时零开销（一个短路判断）。
+ */
+export interface LevelingHooks {
+  onIteration?: (
+    load: ReadonlyMap<ResourceId, ReadonlyMap<DateStr, number>>,
+    dates: Readonly<Record<TaskId, LeveledDates>>,
+  ) => void
+}
+
 /** 一个叶子在某资源上的占用量（只收 units > 0 的分配，与 `resourceDayLoad` 同口径） */
 interface ResourceUsage {
   readonly resourceId: ResourceId
   readonly units: number
+}
+
+/** 增量维护的「超载格」：与 `collectOverloads` 的产出同形，但只存当前超载的格。
+ *  `key` 是 `cellKeyOf(resourceId, date)` 的缓存 —— 每轮扫描超载集都要查 `frozenAt`，
+ *  预存键省掉每格每轮的字符串拼接。 */
+interface OverloadedCell {
+  readonly resourceId: ResourceId
+  readonly date: DateStr
+  readonly key: string
+  load: number
+}
+
+/**
+ * `a` 是否比 `b` 更该被选中为「最坏格」。判据与旧实现的
+ * 「先 `collectOverloads`（资源 id、日期升序）→ 再按负载降序稳定排序 → 取首个」
+ * **等价**：负载降序，同负载时资源 id 升序、日期升序。
+ */
+function isWorseCell(a: OverloadedCell, b: OverloadedCell): boolean {
+  if (a.load !== b.load) return a.load > b.load
+  if (a.resourceId !== b.resourceId) return a.resourceId < b.resourceId
+  return a.date < b.date
 }
 
 /**
@@ -255,14 +288,20 @@ function findFeasibleStart(
   return null
 }
 
-/** 平衡是否越界：任一任务的 start 超过它的 lateStart（= 推迟了项目完成） */
+/**
+ * 平衡是否越界：任一任务的 start 超过它的 lateStart（= 推迟了项目完成）。
+ * `order` 传入 `graph.order`（= `next` 的键集且同序）—— 避免每轮用 `Object.entries`
+ * 为 10k 个任务分配 10k 个 `[key, value]` 数组（GC 热点），结果不变。
+ */
 function exceedsLateStart(
+  order: readonly TaskId[],
   next: Readonly<Record<TaskId, LeveledDates>>,
   schedules: Readonly<Record<TaskId, ComputedSchedule>>,
 ): boolean {
-  for (const [id, span] of Object.entries(next)) {
+  for (const id of order) {
+    const span = next[id]
     const schedule = schedules[id]
-    if (schedule && span.start > schedule.lateStart) return true
+    if (span && schedule && span.start > schedule.lateStart) return true
   }
   return false
 }
@@ -321,6 +360,7 @@ export function levelLeaves(
   durations: ReadonlyMap<TaskId, number>,
   schedules: Readonly<Record<TaskId, ComputedSchedule>>,
   budget: LevelingBudget = DEFAULT_BUDGET,
+  hooks?: LevelingHooks,
 ): { result: LevelingResult; dates: Record<TaskId, LeveledDates> } {
   const { project, leaves, calendar, graph } = context
 
@@ -379,21 +419,124 @@ export function levelLeaves(
   // 只在「当前负载 ≤ 冻结负载」时跳过：负载一旦增长就说明旧冻结的候选集已失效，
   // 需要重新尝试（详见函数头注释的 v0.6.1 说明与终止性论证）。
   const frozenAt = new Map<string, number>()
-  const cellKey = (resourceId: ResourceId, date: DateStr): string => `${resourceId}@${date}`
+  const cellKeyOf = (resourceId: ResourceId, date: DateStr): string => `${resourceId}@${date}`
+
+  // 未变任务的工作日列表 memo（日期解析是热点，见 WorkdayCache）：初始建表用一次，
+  // 之后每次接受推动时，被移动任务的**旧区间**通常已在此命中。
+  const workdayCache: WorkdayCache = new Map()
+
+  // ── 增量负载（v0.8）─────────────────────────────────────────────────────
+  // 旧实现每轮 `resourceDayLoad` 全量重建负载表 + `collectOverloads` 全表扫描排序 ——
+  // 这是 10k×15 资源下 ~8.4ms/轮的主要来源（resourceDayLoad 25.7%、collectOverloads
+  // 14.6%）。现在负载表**只建一次**，此后每次**接受**的推动只对「日期发生变化的叶子」
+  // 施加 delta（旧区间减、新区间加）；被 `leveledForwardPass` 带走的后继同样在
+  // `dates` 的差集里，故一并覆盖。**拒绝**的推动已回滚 → 不施加 delta、状态不动。
+  // 超载集合同步增量维护：某格负载跨越阈值时才进/出集合。每轮改为对**超载集合**
+  // 单次扫描取最坏格（不再全表扫描 + 全排序）。结果与旧实现逐字节一致，见
+  // `leveling.incremental.test.ts` 的不变量与差分测试。
+  const load = resourceDayLoad(context, dates, workdayCache)
+  const overloaded = new Map<string, OverloadedCell>()
+  for (const [resourceId, byDay] of load) {
+    for (const [date, value] of byDay) {
+      if (value > 1 + OVERLOAD_EPSILON) {
+        const key = cellKeyOf(resourceId, date)
+        overloaded.set(key, { resourceId, date, key, load: value })
+      }
+    }
+  }
+
+  /**
+   * 对单格施加 delta，并同步维护结构 + 超载集合。
+   * 结构维护与 `resourceDayLoad` 的全量重建**同形**：负载归 0 的日键删除、资源表空则删除
+   * ——否则残留 0 键会让不变量测试与重建结果结构不一致。
+   */
+  const bump = (resourceId: ResourceId, date: DateStr, delta: number): void => {
+    const key = cellKeyOf(resourceId, date)
+    const byDay = load.get(resourceId)
+    const oldValue = byDay?.get(date) ?? 0
+    const newValue = oldValue + delta
+
+    if (newValue <= 0) {
+      if (byDay) {
+        byDay.delete(date)
+        if (byDay.size === 0) load.delete(resourceId)
+      }
+    } else if (byDay) {
+      byDay.set(date, newValue)
+    } else {
+      const created = new Map<DateStr, number>()
+      created.set(date, newValue)
+      load.set(resourceId, created)
+    }
+
+    if (newValue > 1 + OVERLOAD_EPSILON) {
+      const cell = overloaded.get(key)
+      if (cell) cell.load = newValue
+      else overloaded.set(key, { resourceId, date, key, load: newValue })
+    } else if (oldValue > 1 + OVERLOAD_EPSILON) {
+      overloaded.delete(key)
+    }
+  }
+
+  /** 某任务某区间的全部工作日；命中 `workdayCache` 则复用（与 `resourceDayLoad` 同口径） */
+  const daysOf = (taskId: TaskId, span: LeveledDates): DateStr[] => {
+    const cached = workdayCache.get(taskId)
+    if (cached && cached.start === span.start && cached.finish === span.finish) return cached.days
+    const days = workdaysInRange(span.start, span.finish, calendar)
+    workdayCache.set(taskId, { start: span.start, finish: span.finish, days })
+    return days
+  }
+
+  /** 接受一次推动后，对**所有**日期变化的叶子施加增量（先按格净额合并，减少浮点运算） */
+  const applyDeltas = (
+    before: Readonly<Record<TaskId, LeveledDates>>,
+    after: Record<TaskId, LeveledDates>,
+  ): void => {
+    const net = new Map<string, { resourceId: ResourceId; date: DateStr; delta: number }>()
+    const add = (resourceId: ResourceId, date: DateStr, delta: number): void => {
+      const key = cellKeyOf(resourceId, date)
+      const entry = net.get(key)
+      if (entry) entry.delta += delta
+      else net.set(key, { resourceId, date, delta })
+    }
+    for (const id of graph.order) {
+      const from = before[id]!
+      const to = after[id]!
+      if (from.start === to.start && from.finish === to.finish) continue
+      const usages = usagesByLeaf.get(id)
+      if (!usages || usages.length === 0) continue
+      for (const usage of usages) {
+        // 悬空资源（分配指向不存在的资源）在 `resourceDayLoad` 里被忽略 —— 这里同步忽略，
+        // 否则 delta 会给不存在的资源凭空建出负载格，与全量重建不一致。
+        if (!context.assignmentsByResource.has(usage.resourceId)) continue
+        for (const day of daysOf(id, from)) add(usage.resourceId, day, -usage.units)
+        for (const day of daysOf(id, to)) add(usage.resourceId, day, usage.units)
+      }
+    }
+    for (const { resourceId, date, delta } of net.values()) {
+      // delta === 0：该格上一任务离开、另一任务以等量单位进入（净额抵消）→ 跳过 bump。
+      // 全量重建会按新的任务集合重新求和，两者在非二进制分数单位下可能差 ~1e-16
+      // （远低于 1e-9 阈值，不影响任何决策）；不变量测试用相对容差覆盖这一情形。
+      if (delta !== 0) bump(resourceId, date, delta)
+    }
+  }
 
   const startedAt = Date.now()
   let iterations = 0
   let budgetExhausted = false
-  // 每轮重建负载时复用未变任务的「工作日列表」——日期解析是热点，见 WorkdayCache。
-  const workdayCache: WorkdayCache = new Map()
 
   for (;;) {
-    const load = resourceDayLoad(context, dates, workdayCache)
-    const overloads = collectOverloads(load).filter((overload) => {
-      const frozen = frozenAt.get(cellKey(overload.resourceId, overload.date))
-      return frozen === undefined || overload.load > frozen
-    })
-    if (overloads.length === 0) break
+    hooks?.onIteration?.(load, dates)
+
+    // ② 超载最严重者：对**超载集合**单次扫描。跳过「已冻结且负载未增长」的格
+    //    （v0.6.1：负载一旦超过冻结值就重新纳入考虑）。判据与旧实现等价 —— 见 isWorseCell。
+    let worst: OverloadedCell | undefined
+    for (const cell of overloaded.values()) {
+      const frozen = frozenAt.get(cell.key)
+      if (frozen !== undefined && cell.load <= frozen) continue
+      if (worst === undefined || isWorseCell(cell, worst)) worst = cell
+    }
+    if (worst === undefined) break
 
     // 安全预算：到点即停，把剩余超载留给 unresolved 如实上报（绝不冻 UI）。
     // 放在「确认仍有超载」之后，故只有**真被截断**时才置位 —— 正常收敛不会误报。
@@ -403,27 +546,11 @@ export function levelLeaves(
     }
     iterations += 1
 
-    // ② 超载最严重者：负载降序，其次资源 id、日期升序（确定性）
-    overloads.sort((a, b) =>
-      b.load !== a.load
-        ? b.load - a.load
-        : a.resourceId !== b.resourceId
-          ? a.resourceId < b.resourceId
-            ? -1
-            : 1
-          : a.date < b.date
-            ? -1
-            : a.date > b.date
-              ? 1
-              : 0,
-    )
-    const worst = overloads[0]
-
     // ③ 候选 = 该资源该日的当事叶子，按优先级升序（数值小 = 先推），同序按 id 升序
     const candidates = (leavesByResource.get(worst.resourceId) ?? [])
       .filter((id) => {
         const span = dates[id]
-        return span !== undefined && worst.date >= span.start && worst.date <= span.finish
+        return span !== undefined && worst!.date >= span.start && worst!.date <= span.finish
       })
       .map((id) => leafById.get(id)!)
       .sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : 1))
@@ -448,22 +575,25 @@ export function levelLeaves(
       const previous = delays.get(candidate.id) ?? 0
       delays.set(candidate.id, workdaysBetween(base[candidate.id]!.start, target, calendar))
       const next = leveledForwardPass(graph, durations, calendar, base, delays, manualIds)
-      if (exceedsLateStart(next, schedules)) {
+      if (exceedsLateStart(graph.order, next, schedules)) {
         delays.set(candidate.id, previous) // 回退
         continue
       }
+      applyDeltas(dates, next) // 接受：把负载增量化到新状态
       dates = next
       pushed = true
       break
     }
 
     // ④ 所有候选都推不动 → 按**当时的负载**冻结该格（负载再涨会被重新纳入考虑）
-    if (!pushed) frozenAt.set(cellKey(worst.resourceId, worst.date), worst.load)
+    if (!pushed) frozenAt.set(cellKeyOf(worst.resourceId, worst.date), worst.load)
   }
 
   return {
     result: {
       delays: Object.fromEntries(delays),
+      // 收敛后的 unresolved 仍走一次全量重建：一次性、可忽略，且保证与用户可见输出
+      // 完全同源（不把增量状态的浮点尾差暴露到结果里）。
       unresolved: collectOverloads(resourceDayLoad(context, dates)),
       budgetExhausted,
       iterations,
