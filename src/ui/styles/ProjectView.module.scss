@@ -58,6 +58,12 @@
   z-index: 2;
   background: var(--planit-bg-surface);
   border-bottom: 1px solid var(--planit-border-strong); // §2.2：标尺下方 1px 分隔
+  // 连续缩放（v1.1）：标尺是拖拽缩放的把手 —— 左右拖 = 缩放，故用横向缩放光标。
+  // touch-action:none 防触摸端把拖拽当成页面滚动；user-select:none 防拖拽选中刻度文字
+  // （与 useColumnResize 同一手法：不 preventDefault，防选择交给 CSS）。
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
 }
 
 // 左列在水平滚动时固定

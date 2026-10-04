@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { CSSProperties } from 'react'
 import { addDays } from '../../domain/calendar/workdays'
-import type { TimelineScale } from './timeline'
+import { dayTickStep, type TimelineScale } from './timeline'
 import styles from '../styles/GanttPane.module.scss'
 
 interface TimeRulerProps {
@@ -49,10 +49,10 @@ const MIN_MONTH_LABEL_WIDTH = 56
  * 盖掉了 —— 项目从 14 号开始，14/15 却消失。两行从结构上消除了这种遮盖：
  * 月份带只在上行、日号只在下行，二者不可能重叠。
  *
- * 日号的疏密随缩放档位变化（逐日 / 每周 / 每月），避免缩小时生成上千个 DOM 节点。
+ * 日号的疏密随 `dayWidth` 变化（逐日 / 每周 / 每月），避免缩小时生成上千个 DOM 节点。
  */
 function TimeRulerComponent({ scale, totalDays, stickyLabelLeft }: TimeRulerProps) {
-  const step = scale.dayWidth >= 24 ? 1 : scale.dayWidth >= 10 ? 7 : 30
+  const step = dayTickStep(scale.dayWidth)
 
   // ── 上行：月份带 ──
   // 按「月」切片，每片宽度 = 该月在本时间轴范围内的自然日数 × dayWidth。

@@ -38,6 +38,7 @@ import { createCalendar } from '../../domain/model/factories'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
+import { useTimelineZoom, scaleXFor } from '../gantt/useTimelineZoom'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../../domain/calendar/workdays'
 import { toDateStr } from '../../domain/calendar/dateTime'
@@ -65,6 +66,7 @@ export function ProjectView() {
   const selectTask = useViewStore((state) => state.selectTask)
   const toggleCollapsed = useViewStore((state) => state.toggleCollapsed)
   const dayWidth = useViewStore((state) => state.dayWidth)
+  const setDayWidth = useViewStore((state) => state.setDayWidth)
   const activeView = useViewStore((state) => state.activeView)
   const visibleColumns = useViewStore((state) => state.visibleColumns)
   const columnWidths = useViewStore((state) => state.columnWidths)
@@ -72,6 +74,8 @@ export function ProjectView() {
   const schedulesResult = useScheduleStore((state) => state.result)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  // 时间轴原点元素（scale 的 x=0）—— 缩放的锚点与手势都相对它度量
+  const ganttPaneRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(
     () => (project ? flattenVisibleRows(project, collapsedIds) : []),
@@ -135,18 +139,49 @@ export function ProjectView() {
     [project?.startDate, dayWidth],
   )
 
+  // 连续缩放：尺上拖拽 / Ctrl(Cmd)+滚轮 / 键盘 Cmd+/-/0 三种触发
+  const zoom = useTimelineZoom({
+    dayWidth,
+    setDayWidth,
+    scale,
+    scrollRef,
+    ganttPaneRef,
+  })
+
+  // ── 手势期间冻结依赖层几何（设计 §8）────────────────────────────────
+  // 缩放在几何上是仿射的：xOf(date) = daysFromStart(date) × dayWidth，而 daysFromStart
+  // 与 dayWidth 无关 —— 所有矩形与 totalWidth 都乘同一个 k = dayWidth / gestureStartDayWidth。
+  // 因此手势开始时捕获一份「冻结 scale」，让 rectByTaskId 的 memo 依赖它（而非活动的
+  // scale）；DependencyLayer 整层跳过，只靠外层 scaleX(k) 把它横向拉伸到当前宽度。
+  const frozenScale = useMemo(
+    () =>
+      zoom.gestureStartDayWidth !== null
+        ? createScale(
+            toDateStr(project?.startDate ?? '2026-01-01'),
+            zoom.gestureStartDayWidth,
+          )
+        : null,
+    [zoom.gestureStartDayWidth, project?.startDate],
+  )
+  // 无手势时恒等于活动的 scale（同一引用，零行为变化）
+  const geometryScale = frozenScale ?? scale
+
   // 时间轴总跨度：至少覆盖所有任务，且不少于 60 天
   const totalDays = useMemo(() => {
     let lastDay = 60
     for (const schedule of Object.values(schedulesResult.schedules)) {
-      lastDay = Math.max(lastDay, scale.daysFromStart(schedule.scheduledFinish) + 7)
+      lastDay = Math.max(lastDay, geometryScale.daysFromStart(schedule.scheduledFinish) + 7)
     }
     return lastDay
-  }, [schedulesResult.schedules, scale])
+  }, [schedulesResult.schedules, geometryScale])
 
   // 甘特图列宽必须与刻度的时间跨度一致 ——
   // 否则晚于 60 天的任务条与刻度会溢出列宽（横向滚动条也覆盖不到）
   const ganttWidth = totalDays * dayWidth
+
+  // 依赖层在冻结几何下按 gestureStartDayWidth 铺，由 wrapper 的 scaleX(k) 拉到当前宽度
+  const dependencyWidth =
+    zoom.gestureStartDayWidth !== null ? totalDays * zoom.gestureStartDayWidth : ganttWidth
 
   // 日历必须在下方的底纹之前取得：底纹要用**用户可编辑的日历**判断哪天不上班。
   // calendar 与 scale 一样要在 hook 里无条件取得。ProjectView 实际只在 store 里
@@ -190,10 +225,10 @@ export function ProjectView() {
       const rowTop = index * ROW_HEIGHT
 
       if (task.kind === 'milestone') {
-        const rect = milestoneRect(scale, schedule.scheduledStart)
+        const rect = milestoneRect(geometryScale, schedule.scheduledStart)
         map.set(row.taskId, { ...rect, y: rect.y + rowTop })
       } else {
-        const bar = barRect(scale, schedule.scheduledStart, schedule.scheduledFinish)
+        const bar = barRect(geometryScale, schedule.scheduledStart, schedule.scheduledFinish)
         // 关键条高 2px（§3.2），与 TaskBar 用同一条规则 —— 端点才会落在条的中线上。
         const barHeight = schedule.isCritical ? BAR_HEIGHT_CRITICAL : BAR_HEIGHT
         map.set(row.taskId, {
@@ -206,7 +241,7 @@ export function ProjectView() {
     })
 
     return map
-  }, [rows, project, schedulesResult.schedules, scale])
+  }, [rows, project, schedulesResult.schedules, geometryScale])
 
   const handleLink = useCallback(
     (fromTaskId: string, toTaskId: string) => {
@@ -266,7 +301,11 @@ export function ProjectView() {
                 {t('outline.columnTitle')}
               </div>
 
-              <div className={styles.ruler} data-testid="gantt-ruler">
+              <div
+                className={styles.ruler}
+                data-testid="gantt-ruler"
+                onPointerDown={zoom.beginRulerDrag}
+              >
                 <TimeRuler scale={scale} totalDays={totalDays} />
               </div>
 
@@ -288,6 +327,7 @@ export function ProjectView() {
               </div>
 
               <div
+                ref={ganttPaneRef}
                 className={styles.gantt}
                 style={{
                   height: `${rows.length * ROW_HEIGHT}px`,
@@ -333,12 +373,27 @@ export function ProjectView() {
                   onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
                 />
 
-                <DependencyLayer
-                  dependencies={dependencyList}
-                  rectByTaskId={rectByTaskId}
-                  totalHeight={rows.length * ROW_HEIGHT}
-                  totalWidth={ganttWidth}
-                />
+                <div
+                  data-testid="dependency-scale"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    transformOrigin: '0 0',
+                    // 手势中把冻结几何横向拉伸到当前宽度；无手势时不加 transform
+                    transform:
+                      zoom.gestureStartDayWidth !== null
+                        ? `scaleX(${scaleXFor(dayWidth, zoom.gestureStartDayWidth)})`
+                        : undefined,
+                  }}
+                >
+                  <DependencyLayer
+                    dependencies={dependencyList}
+                    rectByTaskId={rectByTaskId}
+                    totalHeight={rows.length * ROW_HEIGHT}
+                    totalWidth={dependencyWidth}
+                  />
+                </div>
               </div>
             </div>
           ) : activeView === 'outline' ? (

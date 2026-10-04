@@ -3,6 +3,7 @@ import {
   createScale,
   barRect,
   milestoneRect,
+  dayTickStep,
   MIN_BAR_WIDTH_RATIO,
   MILESTONE_SIZE,
 } from './timeline'
@@ -88,5 +89,21 @@ describe('milestoneRect', () => {
   it('垂直方向在行内居中', () => {
     const rect = milestoneRect(scale, '2026-03-04')
     expect(rect.y).toBeCloseTo((ROW_HEIGHT - MILESTONE_SIZE * Math.SQRT2) / 2, 6)
+  })
+})
+
+describe('dayTickStep（刻度疏密）', () => {
+  it('与旧内联三元表达式在任意输入上逐像素一致', () => {
+    // 旧实现：src/ui/gantt/TimeRuler.tsx:55
+    const legacy = (dw: number): 1 | 7 | 30 => (dw >= 24 ? 1 : dw >= 10 ? 7 : 30)
+    for (const dw of [32, 12, 4, 24, 23, 10, 9, 2, 256]) {
+      expect(dayTickStep(dw)).toBe(legacy(dw))
+    }
+  })
+
+  it('三个预设的刻度疏密：日=逐日、周=每周、月=每月', () => {
+    expect(dayTickStep(32)).toBe(1)
+    expect(dayTickStep(12)).toBe(7)
+    expect(dayTickStep(4)).toBe(30)
   })
 })

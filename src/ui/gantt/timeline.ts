@@ -36,6 +36,20 @@ export function createScale(startDate: DateStr, dayWidth: number): TimelineScale
   }
 }
 
+/**
+ * 日号刻度的疏密：`dayWidth` 越大，刻度越密。**阈值与旧内联表达式逐字相同**
+ * （此前内联在 `TimeRuler.tsx:55`）。
+ *
+ * 为什么保留「阈值阶跃」而不改成连续公式：刻度疏密是**离散决策**（一天一格 /
+ * 一周一格 / 一月一格）；连续公式会得到「每 3.7 天一格」这种既不可读、又会成倍
+ * 增加 DOM 节点的结果。三档之间阶跃正是想要的。
+ */
+export function dayTickStep(dayWidth: number): 1 | 7 | 30 {
+  if (dayWidth >= 24) return 1
+  if (dayWidth >= 10) return 7
+  return 30
+}
+
 /** 任务条最小宽度占一天的比例 —— 缩放很小或工期极短时，条不能细到看不见 */
 export const MIN_BAR_WIDTH_RATIO = 0.6
 
