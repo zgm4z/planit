@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
@@ -22,6 +22,8 @@ import {
 import { EditableCell } from './EditableCell'
 import { OUTLINE_CELL_EDITORS, getOutlineCellEditor, getCellDisabledReason } from './outlineCellEditors'
 import { useProjectStore } from '../../store/projectStore'
+import { useViewStore } from '../../store/viewStore'
+import { createdSiblingId } from '../shared/outlineActions'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { formatCost, formatDate, formatDays, formatEffort, formatPercent } from '../shared/format'
 import styles from '../styles/ProjectView.module.scss'
@@ -193,13 +195,47 @@ function TitleCell({
   const { t } = useTranslation()
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
+  const selectTask = useViewStore((state) => state.selectTask)
+  const beginTitleEdit = useViewStore((state) => state.beginTitleEdit)
+  const endTitleEdit = useViewStore((state) => state.endTitleEdit)
+  const editingTitleTaskId = useViewStore((state) => state.editingTitleTaskId)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(() => TITLE_SPEC.seed(task, undefined))
 
+  // 回车新建的那一行是**全新挂载**的实例，自己不知道「我刚被创建」；
+  // store 里的 editingTitleTaskId 就是让它进入编辑态的信号（双击路径也写同一个字段，
+  // 于是「谁在编辑标题」只有一条真相）。
+  useEffect(() => {
+    if (editingTitleTaskId === task.id && !editing) {
+      setDraft(TITLE_SPEC.seed(task, undefined))
+      setEditing(true)
+    }
+  }, [editingTitleTaskId, task.id, editing, task])
+
+  /** 提交改名。**草稿为空则不改名**（保持原名，避免出现无名行）—— 失焦与回车共用此规则。 */
   const commit = () => {
     setEditing(false)
+    endTitleEdit(task.id)
+    if (draft.trim() === '') return
     const command = TITLE_SPEC.toCommand(task, undefined, draft)
     if (command) dispatch(command)
+  }
+
+  /** 回车：提交改名，再在**紧下方**新建一条同级任务，选中它并直接进入编辑。 */
+  const commitAndCreateSibling = () => {
+    commit()
+    dispatch({
+      type: 'task.create',
+      label: 'commands.task.create',
+      payload: { name: t('outline.newTaskName'), afterId: task.id },
+    })
+    // id 由命令层生成，这里从 store 读出刚插入的那条（见 createdSiblingId）
+    const project = useProjectStore.getState().project
+    const created = project ? createdSiblingId(project, task.id) : null
+    if (created) {
+      selectTask(created)
+      beginTitleEdit(created)
+    }
   }
 
   return (
@@ -233,9 +269,12 @@ function TitleCell({
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault()
-              commit()
+              commitAndCreateSibling()
             }
-            if (event.key === 'Escape') setEditing(false)
+            if (event.key === 'Escape') {
+              setEditing(false)
+              endTitleEdit(task.id)
+            }
           }}
         />
       ) : (
@@ -247,6 +286,7 @@ function TitleCell({
             breakCoalescing()
             setDraft(TITLE_SPEC.seed(task, undefined))
             setEditing(true)
+            beginTitleEdit(task.id)
           }}
         >
           {task.name}

@@ -13,6 +13,7 @@ import { GANTT_OUTLINE_COLUMNS, OUTLINE_COLUMNS } from './outlineColumns'
 import { OutlineTree } from './OutlineTree'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { useProjectStore } from '../../store/projectStore'
+import { __resetViewStoreForTests, useViewStore } from '../../store/viewStore'
 import i18n from '../../i18n'
 
 let project: Project
@@ -72,6 +73,7 @@ beforeEach(async () => {
   __resetRegistryForTests()
   initCommands()
   __resetIdCounterForTests()
+  __resetViewStoreForTests()
   await i18n.changeLanguage('zh-CN')
 
   project = createProject('测试', '2026-03-02')
@@ -615,5 +617,86 @@ describe('OutlineTree 的多选高亮', () => {
 
     expect(screen.getByTestId(`outline-row-${parentId}`)).not.toHaveAttribute('data-selected')
     expect(screen.getByTestId(`outline-row-${childId}`)).toHaveAttribute('data-selected', 'true')
+  })
+})
+
+describe('标题回车新建同级任务', () => {
+  it('回车：提交改名 + 紧下方新建同级 + 选中并进入编辑', async () => {
+    const user = userEvent.setup()
+    renderTree()
+
+    await user.dblClick(screen.getByTestId(`outline-title-${parentId}`))
+    const input = screen.getByTestId(`outline-title-input-${parentId}`)
+    await user.clear(input)
+    await user.type(input, '改过的名字')
+    await user.keyboard('{Enter}')
+
+    const p = useProjectStore.getState().project!
+    expect(p.tasks[parentId].name).toBe('改过的名字') // ① 改名已提交
+
+    expect(p.rootIds).toHaveLength(2) // ② 新建了一条根任务
+    const newId = p.rootIds[1]
+    expect(newId).not.toBe(parentId)
+    expect(p.tasks[newId].name).toBe('新任务') // 默认名（三语 outline.newTaskName）
+
+    expect(useViewStore.getState().selectedTaskId).toBe(newId) // ③ 已选中
+    expect(useViewStore.getState().editingTitleTaskId).toBe(newId) // ③ 已进入编辑
+    expect(useProjectStore.getState().undoStack).toHaveLength(2) // 改名 + 新建，两条
+  })
+
+  it('标题清空后回车：不改名，但仍新建（只有一条撤销记录）', async () => {
+    const user = userEvent.setup()
+    renderTree()
+
+    await user.dblClick(screen.getByTestId(`outline-title-${parentId}`))
+    await user.clear(screen.getByTestId(`outline-title-input-${parentId}`))
+    await user.keyboard('{Enter}')
+
+    const p = useProjectStore.getState().project!
+    expect(p.tasks[parentId].name).toBe('阶段一') // 原名保留
+    expect(p.rootIds).toHaveLength(2) // 仍新建
+    expect(useProjectStore.getState().undoStack).toHaveLength(1) // 只有「新建」一条
+  })
+
+  it('连续回车可连续新建（每次都插在上一条之后）', async () => {
+    const user = userEvent.setup()
+    renderTree()
+
+    await user.dblClick(screen.getByTestId(`outline-title-${parentId}`))
+    await user.keyboard('{Enter}') // 第一次：建第 2 条
+
+    // rows 是静态传入的，新行不会自己出现 —— 把模块级 project 同步到 store 后重渲染。
+    // 重渲染时那一行因 editingTitleTaskId 指向它而**已在编辑态**，直接回车即可。
+    project = useProjectStore.getState().project!
+    const first = project.rootIds[1]
+    renderTree()
+    const secondInput = screen.getByTestId(`outline-title-input-${first}`)
+    await user.clear(secondInput) // 自动进入编辑时草稿已填默认名「新任务」
+    await user.type(secondInput, '第二条')
+    await user.keyboard('{Enter}')
+
+    const p = useProjectStore.getState().project!
+    expect(p.rootIds).toHaveLength(3)
+    expect(p.tasks[p.rootIds[1]].name).toBe('第二条')
+    expect(p.tasks[p.rootIds[2]].name).toBe('新任务')
+  })
+
+  it('editingTitleTaskId 指向某任务时，该行标题自动进入编辑态', () => {
+    useViewStore.getState().beginTitleEdit(childId)
+    renderTree()
+
+    expect(screen.getByTestId(`outline-title-input-${childId}`)).toBeTruthy()
+  })
+
+  it('备注单元格回车不新建（只有标题那条路径会建）', async () => {
+    const user = userEvent.setup()
+    renderTree([...OUTLINE_COLUMNS])
+
+    const before = useProjectStore.getState().project!.rootIds.length
+    await user.dblClick(screen.getByTestId(`outline-note-${parentId}`))
+    await user.type(screen.getByTestId(`outline-note-input-${parentId}`), 'abc')
+    await user.keyboard('{Enter}')
+
+    expect(useProjectStore.getState().project!.rootIds).toHaveLength(before)
   })
 })
