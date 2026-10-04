@@ -38,6 +38,7 @@ import { createCalendar } from '../../domain/model/factories'
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
 import { useViewStore } from '../../store/viewStore'
+import { useTimelineZoom } from '../gantt/useTimelineZoom'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../../domain/calendar/workdays'
 import { toDateStr } from '../../domain/calendar/dateTime'
@@ -65,6 +66,7 @@ export function ProjectView() {
   const selectTask = useViewStore((state) => state.selectTask)
   const toggleCollapsed = useViewStore((state) => state.toggleCollapsed)
   const dayWidth = useViewStore((state) => state.dayWidth)
+  const setDayWidth = useViewStore((state) => state.setDayWidth)
   const activeView = useViewStore((state) => state.activeView)
   const visibleColumns = useViewStore((state) => state.visibleColumns)
   const columnWidths = useViewStore((state) => state.columnWidths)
@@ -72,6 +74,8 @@ export function ProjectView() {
   const schedulesResult = useScheduleStore((state) => state.result)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  // 时间轴原点元素（scale 的 x=0）—— 缩放的锚点与手势都相对它度量
+  const ganttPaneRef = useRef<HTMLDivElement>(null)
 
   const rows = useMemo(
     () => (project ? flattenVisibleRows(project, collapsedIds) : []),
@@ -134,6 +138,15 @@ export function ProjectView() {
     () => createScale(toDateStr(project?.startDate ?? '2026-01-01'), dayWidth),
     [project?.startDate, dayWidth],
   )
+
+  // 连续缩放：尺上拖拽 / Ctrl(Cmd)+滚轮 / 键盘 Cmd+/-/0 三种触发
+  const zoom = useTimelineZoom({
+    dayWidth,
+    setDayWidth,
+    scale,
+    scrollRef,
+    ganttPaneRef,
+  })
 
   // 时间轴总跨度：至少覆盖所有任务，且不少于 60 天
   const totalDays = useMemo(() => {
@@ -266,7 +279,11 @@ export function ProjectView() {
                 {t('outline.columnTitle')}
               </div>
 
-              <div className={styles.ruler} data-testid="gantt-ruler">
+              <div
+                className={styles.ruler}
+                data-testid="gantt-ruler"
+                onPointerDown={zoom.beginRulerDrag}
+              >
                 <TimeRuler scale={scale} totalDays={totalDays} />
               </div>
 
@@ -288,6 +305,7 @@ export function ProjectView() {
               </div>
 
               <div
+                ref={ganttPaneRef}
                 className={styles.gantt}
                 style={{
                   height: `${rows.length * ROW_HEIGHT}px`,
