@@ -17,3 +17,7 @@ blob-report/
 *.planit.json
 
 .worktrees/
+/scripts/
+/e2e/
+/docs/
+/.claude/
