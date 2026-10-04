@@ -14,7 +14,12 @@ import { sumUnits } from '../domain/model/units'
 import { reconcileKind } from './reconcileKind'
 import type { CommandHandler } from './types'
 
-export interface TaskCreatePayload { name: string; parentId?: TaskId | null }
+export interface TaskCreatePayload {
+  name: string
+  parentId?: TaskId | null
+  /** 插到该任务在**同一父级**里的紧后一位；缺省或指向不存在的任务时回退为「追加到末尾」。 */
+  afterId?: TaskId
+}
 export interface TaskRenamePayload { taskId: TaskId; name: string }
 export interface TaskDeletePayload { taskId: TaskId }
 export interface TaskSetDurationPayload { taskId: TaskId; duration: number }
@@ -60,23 +65,34 @@ function detachTask(draft: Draft<Project>, taskId: TaskId): void {
   }
 }
 
+/** 把 `id` 插到 `anchorId` 之后；`anchorId` 缺省或不在列表里则追加到末尾。 */
+function insertAfter(ids: TaskId[], anchorId: TaskId | undefined, id: TaskId): void {
+  const at = anchorId ? ids.indexOf(anchorId) + 1 : ids.length
+  ids.splice(at > 0 ? at : ids.length, 0, id)
+}
+
 export const taskHandlers: Record<string, CommandHandler<any>> = {
   'task.create': (draft, payload: TaskCreatePayload) => {
     const task = createTask({ name: payload.name })
+
+    // afterId 有效时父级**由它决定**（payload.parentId 被忽略，避免两个位置来源打架）。
+    // 里程碑只作位置锚点：新任务的父级取自 anchor.parentId，与 anchor.kind 无关。
+    const anchor = payload.afterId ? draft.tasks[payload.afterId] : undefined
+    const effectiveParentId = anchor ? anchor.parentId : (payload.parentId ?? null)
+
     // 里程碑不能当父任务 —— 与 task.indent 的守卫是同一条规则。
     // 两条路径必须一致：indent 拒绝的事，create 也不该换个方式做成。
     // 不可用的 parentId（悬空 id / 里程碑）一律回退到根层，不留下悬空的 parentId。
-    // createTask 已把 parentId 默认为 null，因此回退分支无需再赋值。
-    const candidate = payload.parentId ? draft.tasks[payload.parentId] : undefined
+    const candidate = effectiveParentId ? draft.tasks[effectiveParentId] : undefined
     const parent = candidate && candidate.kind !== 'milestone' ? candidate : undefined
 
     draft.tasks[task.id] = task
     if (parent) {
       task.parentId = parent.id
-      parent.childIds.push(task.id)
+      insertAfter(parent.childIds, anchor?.id, task.id)
       reconcileKind(draft, parent.id)
     } else {
-      draft.rootIds.push(task.id)
+      insertAfter(draft.rootIds, anchor?.id, task.id)
     }
   },
 

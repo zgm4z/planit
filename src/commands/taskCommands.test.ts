@@ -47,6 +47,52 @@ describe('task.create', () => {
   })
 })
 
+describe('task.create 的 afterId', () => {
+  beforeEach(setup)
+
+  it('插到 afterId 之后（根层）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    const [a, b] = p.rootIds
+    p = run(p, 'task.create', { name: 'X', afterId: a })
+    expect(p.rootIds.map((id) => p.tasks[id].name)).toEqual(['A', 'X', 'B'])
+    expect(p.rootIds[1]).not.toBe(b) // 新任务挤在 A 与 B 之间
+  })
+
+  it('插到 afterId 之后（子层），且继承其父级', () => {
+    let p = run(project, 'task.create', { name: '父' })
+    const parentId = p.rootIds[0]
+    p = run(p, 'task.create', { name: '子1', parentId })
+    const c1 = p.tasks[parentId].childIds[0]
+    p = run(p, 'task.create', { name: '子2', parentId })
+    p = run(p, 'task.create', { name: '插', afterId: c1 })
+    expect(p.tasks[parentId].childIds.map((id) => p.tasks[id].name)).toEqual(['子1', '插', '子2'])
+    expect(p.tasks[p.tasks[parentId].childIds[1]].parentId).toBe(parentId)
+    expect(p.rootIds).toHaveLength(1) // 没有多出一个根节点
+  })
+
+  it('afterId 不存在时回退为追加', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'X', afterId: 'ghost' })
+    expect(p.rootIds.map((id) => p.tasks[id].name)).toEqual(['A', 'X'])
+  })
+
+  it('afterId 指向里程碑时，新任务与其同级（里程碑只作位置锚点）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.toggleMilestone', { taskId: p.rootIds[0] })
+    const msId = p.rootIds[0]
+    p = run(p, 'task.create', { name: 'X', afterId: msId })
+    expect(p.rootIds.map((id) => p.tasks[id].name)).toEqual(['A', 'X'])
+    expect(p.tasks[p.rootIds[1]].parentId).toBeNull()
+  })
+
+  it('不传 afterId 时行为不变（追加到末尾）', () => {
+    let p = run(project, 'task.create', { name: 'A' })
+    p = run(p, 'task.create', { name: 'B' })
+    expect(p.rootIds.map((id) => p.tasks[id].name)).toEqual(['A', 'B'])
+  })
+})
+
 describe('task.rename', () => {
   beforeEach(setup)
 
