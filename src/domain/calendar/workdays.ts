@@ -85,14 +85,16 @@ export function prevWorkday(iso: DateStr, cal: Calendar, index?: WorkdayIndex): 
 }
 
 /**
- * 当日或之后最近的工作日（on-or-after）。带索引 → O(log k)（已是工作日则早退）。
+ * 当日或之后最近的工作日（on-or-after）。带索引 → O(log k)：`firstWorkdayOnOrAfter(day)`
+ * 一步到位 —— **当日是工作日时它原样返回 `day`**（`rankBefore(day)` 就是 `day` 的 rank），
+ * 故无需再用 `isWorkdayDay` 做字符串键早退（那样每次多一次 `dayToIso`/`epochDay` 表查；
+ * 实测该早退退出热路径后 profile 里 `isWorkdayDay` 归零，端到端持平略好）。
  * 找不到（越过扫描窗）时与逐日实现一样抛 **nextWorkday** 的错（旧实现就把它委托给
  * `nextWorkdayDay`）。
  */
 function snapToWorkdayDay(day: number, cal: Calendar, index?: WorkdayIndex): number {
   if (index) {
-    if (isWorkdayDay(day, cal)) return day
-    const w = firstWorkdayOnOrAfter(day + 1, index)
+    const w = firstWorkdayOnOrAfter(day, index)
     if (w !== null && w - day <= MAX_SCAN_DAYS) return w
     throw new Error(`nextWorkday: 从 ${dayToIso(day)} 起扫描 ${MAX_SCAN_DAYS} 天未找到工作日，请检查日历配置`)
   }

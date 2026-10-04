@@ -32,20 +32,25 @@ export function activeBaseline(project: Project): Baseline | undefined {
  * 基准日早于基线开始 → 0；不早于基线结束 → 1。
  * 里程碑（start === finish）视为 1 个工作日：日期到点即「该完成」。
  */
-function plannedFraction(entry: { start: DateStr; finish: DateStr }, statusDate: DateStr, cal: Calendar): number {
+function plannedFraction(
+  entry: { start: DateStr; finish: DateStr },
+  statusDate: DateStr,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): number {
   // 参与比较的三个日期都先过唯一归一化入口，再落到**中性名**的局部量上：
   //   · `entry.start/finish` 本版仍是纯日期（spec 判断 B），包 `toDateStr` 对未来免疫；
   //   · `statusDate` 调用方已归一，`toDateStr` 幂等；
   //   · 用 `start/asOf/finish` 而非字段名，与 `effort.ts` 的 `from/until` 同源 —— 免得
-  //     `dateTime.guard.test.ts`（按**字段名**紧贴运算符判违规）把已归一的量误判成裸比较。
+  //     `dateTime.guard.test.ts`（按**字段名**紧贴运算符判违规）把已归一的量判成裸比较。
   const start = toDateStr(entry.start)
   const finish = toDateStr(entry.finish)
-  const total = workdaysInRange(start, finish, cal).length
+  const total = workdaysInRange(start, finish, cal, index).length
   if (total === 0) return 0 // 异常快照（finish < start）—— 不除零
   const asOf = toDateStr(statusDate)
   if (asOf < start) return 0
   const cap = asOf < finish ? asOf : finish
-  return workdaysInRange(start, cap, cal).length / total
+  return workdaysInRange(start, cap, cal, index).length / total
 }
 
 const clampPercent = (progress: number): number => Math.min(100, Math.max(0, progress))
@@ -75,6 +80,10 @@ export function collectEarnedValues(
   project: Project,
   costs: Record<TaskId, TaskCosts>,
   leaves: readonly Task[],
+  // 可选日历例外索引：`solve()` 传 context 预建的那份。`plannedFraction` 的
+  // `workdaysInRange` 数的是「基线区间内的工作日」（区间可跨整个基线跨度），带索引
+  // 走 O(log k)；省略 → 逐日实现，结果相同。
+  calendarIndex?: WorkdayIndex,
 ): Record<TaskId, EarnedValue> {
   const calendar = project.calendars[project.calendarId]
   const baseline = activeBaseline(project)
@@ -89,7 +98,8 @@ export function collectEarnedValues(
     const ev = bac * (clampPercent(leaf.progress) / 100)
 
     const entry = baseline?.entries[leaf.id]
-    const pv = entry && statusDate ? bac * plannedFraction(entry, statusDate, calendar) : null
+    const pv =
+      entry && statusDate ? bac * plannedFraction(entry, statusDate, calendar, calendarIndex) : null
 
     result[leaf.id] = { bac, ev, pv, sv: pv === null ? null : ev - pv }
   }

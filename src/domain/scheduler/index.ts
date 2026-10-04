@@ -93,7 +93,7 @@ export function solve(project: Project, budget?: LevelingBudget): ScheduleResult
   // ⑧ 基线与挣值（v1.0）：全部**派生**，不进 Project、不入撤销栈。
   //    必须在摘要汇总之后 —— 差异的「当前」端要最终的 scheduled*；
   //    也必须在 collectCosts 之后 —— 挣值的 BAC 取 costs.total。
-  const earnedValues = collectEarnedValues(project, costs, leaves)
+  const earnedValues = collectEarnedValues(project, costs, leaves, context.calendarIndex)
   const baselineDiffs = collectBaselineDiffs(project, schedules, context.calendarIndex)
 
   return { schedules, conflicts, efforts, costs, resourceTotals, leveling, earnedValues, baselineDiffs }
