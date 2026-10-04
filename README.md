@@ -2,6 +2,8 @@
 
 # Planit
 
+**Live demo:** https://zgm4z.github.io/planit/
+
 Planit is a browser-based project scheduling tool built around **dependency-driven
 scheduling**. Change any task, dependency, calendar, or resource and the whole plan
 re-solves automatically — the critical path stays highlighted, resource overloads are
