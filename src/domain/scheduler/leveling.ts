@@ -30,26 +30,25 @@ export interface LeveledDates {
   finish: DateStr
 }
 
-/** `resourceDayLoad` 的**可选**工作日 memo：`taskId → 该任务当前区间的全部工作日`。
- *  同一区间的 `workdaysInRange` 只算一次 —— `levelLeaves` 每轮重建负载时，绝大多数
- *  任务区间没变，省下的正是最贵的日期解析（`nextWorkday` 链）。纯 memo，不改变结果；
- *  省略时行为与不带缓存完全一致（UI 调用点不受影响）。 */
+/** 负载构建的**可选**工作日 memo：`taskId → 该任务当前区间的全部工作日`。
+ *  同一区间的 `workdaysInRange` 只算一次 —— 平衡每轮重建负载时，绝大多数任务区间没变，
+ *  省下的正是最贵的日期解析（`nextWorkday` 链）。纯 memo，不改变结果；省略行为一致。 */
 export type WorkdayCache = Map<TaskId, { start: DateStr; finish: DateStr; days: DateStr[] }>
 
 /**
- * 每个资源每日负载：`resourceId → (date → Σ assignmentUnits)`。
+ * 负载构建核心（**唯一的负载实现**，见 `resourceDayLoad` 的说明）。`spanOf(taskId)` 给出
+ * 该任务当前的占位区间；两个调用方各传各的取法：
+ *   · 公开的 `resourceDayLoad` —— 直接查「按 taskId 键的区间表」（任意 id 都行）；
+ *   · `levelLeaves` —— 把 taskId 经 `leafIndex` 折成下标后，查**下标对齐的 `dates` 数组**
+ *     （热路径，避免字符串键）。
+ * 一条负载语义（`availability × units × efficiency`，Σunits 的原语在 `model/units.ts`）
+ * 只有这一处实现，不会两份漂移。
  *
- * **这是「资源负载」的唯一实现** —— UI 与算法都读它，绝不重算 `availability × units ×
- * efficiency`（Σunits 的同一份原语在 `model/units.ts`，见 v0.5 的教训）。
- *
- * `dates` 是「任务的占位区间」（可能是 CPM 的 early/scheduled，也可能是平衡后的）。
- * 悬空分配（指向不存在资源）与缺区间的任务（摘要）被忽略。
- *
- * `cache` 见 `WorkdayCache`：仅供 `levelLeaves` 的内部循环复用，省略即无缓存。
+ * 悬空分配（指向不存在资源）与缺区间的任务（摘要 / 取不到区间）被忽略。
  */
-export function resourceDayLoad(
+function buildLoad(
   context: ScheduleContext,
-  dates: Readonly<Record<TaskId, LeveledDates>>,
+  spanOf: (taskId: TaskId) => LeveledDates | undefined,
   cache?: WorkdayCache,
 ): Map<ResourceId, Map<DateStr, number>> {
   const load = new Map<ResourceId, Map<DateStr, number>>()
@@ -57,7 +56,7 @@ export function resourceDayLoad(
   for (const [resourceId, assignments] of context.assignmentsByResource) {
     let byDay: Map<DateStr, number> | undefined
     for (const assignment of assignments) {
-      const span = dates[assignment.taskId]
+      const span = spanOf(assignment.taskId)
       const units = context.assignmentUnitsById.get(assignment.id) ?? 0
       if (!span || units <= 0) continue
 
@@ -79,6 +78,25 @@ export function resourceDayLoad(
   }
 
   return load
+}
+
+/**
+ * 每个资源每日负载：`resourceId → (date → Σ assignmentUnits)`。
+ *
+ * **这是「资源负载」的唯一实现** —— UI 与算法都读它，绝不重算 `availability × units ×
+ * efficiency`（Σunits 的同一份原语在 `model/units.ts`，见 v0.5 的教训）。
+ *
+ * `dates` 是「任务的占位区间」（可能是 CPM 的 early/scheduled，也可能是平衡后的）。
+ * 悬空分配（指向不存在资源）与缺区间的任务（摘要）被忽略。
+ *
+ * `cache` 见 `WorkdayCache`：仅供 `levelLeaves` 的内部循环复用，省略即无缓存。
+ */
+export function resourceDayLoad(
+  context: ScheduleContext,
+  dates: Readonly<Record<TaskId, LeveledDates>>,
+  cache?: WorkdayCache,
+): Map<ResourceId, Map<DateStr, number>> {
+  return buildLoad(context, (taskId) => dates[taskId], cache)
 }
 
 /** 负载表 → 超载清单（`load > 1 + ε`）。顺序确定：先资源 id，再日期升序 */
@@ -181,43 +199,42 @@ function isWorseCell(a: OverloadedCell, b: OverloadedCell): boolean {
 function leveledForwardPass(
   tasks: readonly Task[],
   graph: TaskGraph,
-  durations: ReadonlyMap<TaskId, number>,
+  durations: readonly number[],
   calendar: Calendar,
-  base: Readonly<Record<TaskId, LeveledDates>>,
-  delays: ReadonlyMap<TaskId, number>,
-  manualIds: ReadonlySet<TaskId>,
-): Record<TaskId, LeveledDates> {
-  const out: Record<TaskId, LeveledDates> = {}
+  base: readonly LeveledDates[],
+  delays: readonly number[],
+  manual: readonly boolean[],
+): LeveledDates[] {
+  const out = new Array<LeveledDates>(tasks.length)
 
-  // 图的邻接是下标化 CSR（见 graph.ts）；`tasks[i]` 即该下标对应的叶子。
+  // 图的邻接是下标化 CSR（见 graph.ts），各 per-task 状态按**下标**存在数组里。
   for (const i of graph.order) {
-    const id = tasks[i].id
     // manual：区间为定值 —— 跳过延迟与全部入边下界（与 runCpm 的正推同一条规则，
     // spec §2.2：manual 不被任何机制移动）。其**出边照常**给后继提供下界（out 已落表）。
     // 不特判会让 base 里的 manual.start 被前驱的 forwardBound 顶掉 —— 那正是「被机制移动」。
-    if (manualIds.has(id)) {
-      out[id] = { start: base[id]!.start, finish: base[id]!.finish }
+    if (manual[i]) {
+      out[i] = { start: base[i].start, finish: base[i].finish }
       continue
     }
 
-    let start = addWorkdays(base[id]!.start, delays.get(id) ?? 0, calendar)
+    let start = addWorkdays(base[i].start, delays[i], calendar)
 
     for (let e = graph.inStart[i]; e < graph.inStart[i + 1]; e += 1) {
-      const fromId = tasks[graph.inFrom[e]].id
-      const from = out[fromId]!
+      const from = graph.inFrom[e]
+      const fromSpan = out[from]
       const bound = forwardBound({
         dep: graph.inDep[e],
-        fromStart: from.start,
-        fromFinish: from.finish,
-        toDuration: durations.get(id) ?? 0,
-        fromDuration: durations.get(fromId) ?? 0,
+        fromStart: fromSpan.start,
+        fromFinish: fromSpan.finish,
+        toDuration: durations[i],
+        fromDuration: durations[from],
         cal: calendar,
       })
       if (bound > start) start = bound
     }
 
     start = snapToWorkday(start, calendar)
-    out[id] = { start, finish: taskFinish(start, durations.get(id) ?? 0, calendar) }
+    out[i] = { start, finish: taskFinish(start, durations[i], calendar) }
   }
 
   return out
@@ -245,16 +262,16 @@ function remainingSlack(schedule: ComputedSchedule, calendar: Calendar): number 
  */
 function fitsAt(
   calendar: Calendar,
-  durations: ReadonlyMap<TaskId, number>,
-  usagesByLeaf: ReadonlyMap<TaskId, readonly ResourceUsage[]>,
+  durations: readonly number[],
+  usagesByLeaf: readonly (readonly ResourceUsage[])[],
   load: ReadonlyMap<ResourceId, ReadonlyMap<DateStr, number>>,
   current: LeveledDates | undefined,
-  taskId: TaskId,
+  index: number,
   target: DateStr,
 ): boolean {
-  const usages = usagesByLeaf.get(taskId)
+  const usages = usagesByLeaf[index]
   if (!usages || usages.length === 0) return true
-  const finish = taskFinish(target, durations.get(taskId) ?? 0, calendar)
+  const finish = taskFinish(target, durations[index], calendar)
   for (const day of workdaysInRange(target, finish, calendar)) {
     const inCurrent = current !== undefined && day >= current.start && day <= current.finish
     for (const usage of usages) {
@@ -275,18 +292,18 @@ function fitsAt(
  */
 function findFeasibleStart(
   calendar: Calendar,
-  durations: ReadonlyMap<TaskId, number>,
-  usagesByLeaf: ReadonlyMap<TaskId, readonly ResourceUsage[]>,
+  durations: readonly number[],
+  usagesByLeaf: readonly (readonly ResourceUsage[])[],
   load: ReadonlyMap<ResourceId, ReadonlyMap<DateStr, number>>,
-  dates: Readonly<Record<TaskId, LeveledDates>>,
-  taskId: TaskId,
+  dates: readonly (LeveledDates | undefined)[],
+  index: number,
   lateStart: DateStr,
 ): DateStr | null {
-  const current = dates[taskId]
+  const current = dates[index]
   if (!current) return null
   let target = current.start
   while (target <= lateStart) {
-    if (fitsAt(calendar, durations, usagesByLeaf, load, current, taskId, target)) return target
+    if (fitsAt(calendar, durations, usagesByLeaf, load, current, index, target)) return target
     target = nextWorkday(target, calendar)
   }
   return null
@@ -301,13 +318,12 @@ function findFeasibleStart(
 function exceedsLateStart(
   tasks: readonly Task[],
   order: readonly number[],
-  next: Readonly<Record<TaskId, LeveledDates>>,
+  next: readonly (LeveledDates | undefined)[],
   schedules: Readonly<Record<TaskId, ComputedSchedule>>,
 ): boolean {
   for (const i of order) {
-    const id = tasks[i].id
-    const span = next[id]
-    const schedule = schedules[id]
+    const span = next[i]
+    const schedule = schedules[tasks[i].id]
     if (span && schedule && span.start > schedule.lateStart) return true
   }
   return false
@@ -370,40 +386,41 @@ export function levelLeaves(
   hooks?: LevelingHooks,
 ): { result: LevelingResult; dates: Record<TaskId, LeveledDates> } {
   const { project, leaves, calendar, graph } = context
+  const n = leaves.length
 
-  const base: Record<TaskId, LeveledDates> = {}
-  const slack = new Map<TaskId, number>()
+  // 所有 per-leaf 状态按**下标**存数组（见 graph.ts 顶部说明）：durations / base /
+  // manual / delays / usages / dates 一律 `arr[leafIndex]`，热循环里不再查字符串键。
+  // `durations` 形参仍是 Map（外部契约不变），只在建表时读一次。
+  const durationsByIndex = new Array<number>(n)
+  const base = new Array<LeveledDates>(n)
+  const delays = new Array<number>(n)
   // manual 任务：区间为定值，平衡不得推动（spec §2.5）。它们在 CPM 里 slack 恒 0，
   // 剩余浮时本就不会被推；但延迟正推的**基线**若被前驱下界改写同样算「被移动」，
   // 故这里显式收集，交给 leveledForwardPass 跳过。
-  const manualIds = new Set<TaskId>()
-  for (const leaf of leaves) {
+  const manual = new Array<boolean>(n)
+  for (let i = 0; i < n; i += 1) {
+    const leaf = leaves[i]
     const schedule = schedules[leaf.id]
-    base[leaf.id] = schedule
+    durationsByIndex[i] = durations.get(leaf.id) ?? 0
+    base[i] = schedule
       ? { start: schedule.scheduledStart, finish: schedule.scheduledFinish }
       // 无排期兜底：这两处日期随后进 `addWorkdays`，必须是纯日期 —— 先归一。
       : { start: toDateStr(project.startDate), finish: toDateStr(project.startDate) }
-    slack.set(leaf.id, schedule ? remainingSlack(schedule, calendar) : 0)
-    if (leaf.scheduling.mode === 'manual') manualIds.add(leaf.id)
-  }
-
-  // 初始延迟 = 用户 delay（工作日，floor），夹到剩余浮时（偏差 2）
-  const delays = new Map<TaskId, number>()
-  for (const leaf of leaves) {
-    delays.set(leaf.id, Math.min(Math.max(0, Math.round(leaf.delay)), slack.get(leaf.id) ?? 0))
+    // 初始延迟 = 用户 delay（工作日，floor），夹到剩余浮时（偏差 2）
+    const slack = schedule ? remainingSlack(schedule, calendar) : 0
+    delays[i] = Math.min(Math.max(0, Math.round(leaf.delay)), slack)
+    manual[i] = leaf.scheduling.mode === 'manual'
   }
 
   // 预索引：每个叶子持有的资源及占用量（同一资源的多条分配先求和）；每个资源被哪些
-  // 叶子持有。判据与 `resourceDayLoad` 一致 —— 只收 `units > 0` 的分配，否则一条
-  // `units=0` 的分配会让对负载毫无贡献的任务被当成候选推走（白耗浮时、污染 delays）。
-  // 「候选 = 该资源该日的当事叶子」由此直接查表，不再每轮全量扫 leaves。
-  const usagesByLeaf = new Map<TaskId, ResourceUsage[]>()
-  const leavesByResource = new Map<ResourceId, TaskId[]>()
-  const leafById = new Map<TaskId, Task>()
-  for (const leaf of leaves) {
-    leafById.set(leaf.id, leaf)
+  // 叶子（**下标**）持有。判据与 `resourceDayLoad` 一致 —— 只收 `units > 0` 的分配，
+  // 否则一条 `units=0` 的分配会让对负载毫无贡献的任务被当成候选推走（白耗浮时、污染
+  // delays）。「候选 = 该资源该日的当事叶子」由此直接查表，不再每轮全量扫 leaves。
+  const usagesByLeaf = new Array<ResourceUsage[]>(n)
+  const leavesByResource = new Map<ResourceId, number[]>()
+  for (let i = 0; i < n; i += 1) {
     const perResource = new Map<ResourceId, number>()
-    for (const assignment of context.assignmentsByTask.get(leaf.id) ?? []) {
+    for (const assignment of context.assignmentsByTask.get(leaves[i].id) ?? []) {
       const units = context.assignmentUnitsById.get(assignment.id) ?? 0
       if (units <= 0) continue
       perResource.set(assignment.resourceId, (perResource.get(assignment.resourceId) ?? 0) + units)
@@ -412,15 +429,22 @@ export function levelLeaves(
       resourceId,
       units,
     }))
-    usagesByLeaf.set(leaf.id, usages)
+    usagesByLeaf[i] = usages
     for (const usage of usages) {
       const list = leavesByResource.get(usage.resourceId) ?? []
-      list.push(leaf.id)
+      list.push(i)
       leavesByResource.set(usage.resourceId, list)
     }
   }
 
-  let dates = leveledForwardPass(leaves, graph, durations, calendar, base, delays, manualIds)
+  let dates = leveledForwardPass(leaves, graph, durationsByIndex, calendar, base, delays, manual)
+
+  // 热路径下标的区间数组 → 负载核心要的 taskId 取法（闭包读当前的 `dates`）。
+  const leafIndex = context.leafIndex
+  const spanOfByTaskId = (taskId: TaskId): LeveledDates | undefined => {
+    const index = leafIndex.get(taskId)
+    return index === undefined ? undefined : dates[index]
+  }
 
   // 推不动的超载（资源@日期）→ 记录**冻结时的负载**（不是永久标记）。
   // 只在「当前负载 ≤ 冻结负载」时跳过：负载一旦增长就说明旧冻结的候选集已失效，
@@ -441,7 +465,7 @@ export function levelLeaves(
   // 超载集合同步增量维护：某格负载跨越阈值时才进/出集合。每轮改为对**超载集合**
   // 单次扫描取最坏格（不再全表扫描 + 全排序）。结果与旧实现逐字节一致，见
   // `leveling.incremental.test.ts` 的不变量与差分测试。
-  const load = resourceDayLoad(context, dates, workdayCache)
+  const load = buildLoad(context, spanOfByTaskId, workdayCache)
   const overloaded = new Map<string, OverloadedCell>()
   for (const [resourceId, byDay] of load) {
     for (const [date, value] of byDay) {
@@ -485,7 +509,7 @@ export function levelLeaves(
     }
   }
 
-  /** 某任务某区间的全部工作日；命中 `workdayCache` 则复用（与 `resourceDayLoad` 同口径） */
+  /** 某任务某区间的全部工作日；命中 `workdayCache` 则复用（与 `buildLoad` 同口径） */
   const daysOf = (taskId: TaskId, span: LeveledDates): DateStr[] => {
     const cached = workdayCache.get(taskId)
     if (cached && cached.start === span.start && cached.finish === span.finish) return cached.days
@@ -496,8 +520,8 @@ export function levelLeaves(
 
   /** 接受一次推动后，对**所有**日期变化的叶子施加增量（先按格净额合并，减少浮点运算） */
   const applyDeltas = (
-    before: Readonly<Record<TaskId, LeveledDates>>,
-    after: Record<TaskId, LeveledDates>,
+    before: readonly LeveledDates[],
+    after: readonly LeveledDates[],
   ): void => {
     const net = new Map<string, { resourceId: ResourceId; date: DateStr; delta: number }>()
     const add = (resourceId: ResourceId, date: DateStr, delta: number): void => {
@@ -507,18 +531,18 @@ export function levelLeaves(
       else net.set(key, { resourceId, date, delta })
     }
     for (const i of graph.order) {
-      const id = leaves[i].id
-      const from = before[id]!
-      const to = after[id]!
+      const from = before[i]
+      const to = after[i]
       if (from.start === to.start && from.finish === to.finish) continue
-      const usages = usagesByLeaf.get(id)
+      const usages = usagesByLeaf[i]
       if (!usages || usages.length === 0) continue
+      const taskId = leaves[i].id
       for (const usage of usages) {
-        // 悬空资源（分配指向不存在的资源）在 `resourceDayLoad` 里被忽略 —— 这里同步忽略，
+        // 悬空资源（分配指向不存在的资源）在 `buildLoad` 里被忽略 —— 这里同步忽略，
         // 否则 delta 会给不存在的资源凭空建出负载格，与全量重建不一致。
         if (!context.assignmentsByResource.has(usage.resourceId)) continue
-        for (const day of daysOf(id, from)) add(usage.resourceId, day, -usage.units)
-        for (const day of daysOf(id, to)) add(usage.resourceId, day, usage.units)
+        for (const day of daysOf(taskId, from)) add(usage.resourceId, day, -usage.units)
+        for (const day of daysOf(taskId, to)) add(usage.resourceId, day, usage.units)
       }
     }
     for (const { resourceId, date, delta } of net.values()) {
@@ -529,12 +553,22 @@ export function levelLeaves(
     }
   }
 
+  /** 把下标对齐的 `dates` 折回 `TaskId` 键的 Record —— 只给**测试钩子**与返回值用
+   *  （生产热循环一律走下标的 `dates` 数组）。 */
+  const datesToRecord = (): Record<TaskId, LeveledDates> => {
+    const record: Record<TaskId, LeveledDates> = {}
+    for (let i = 0; i < n; i += 1) record[leaves[i].id] = dates[i]
+    return record
+  }
+
   const startedAt = Date.now()
   let iterations = 0
   let budgetExhausted = false
 
   for (;;) {
-    hooks?.onIteration?.(load, dates)
+    // 钩子是**测试专用**（生产不传）：只在提供了回调时才把下标数组折回 Record
+    // —— 缺省零开销。
+    if (hooks?.onIteration) hooks.onIteration(load, datesToRecord())
 
     // ② 超载最严重者：对**超载集合**单次扫描。跳过「已冻结且负载未增长」的格
     //    （v0.6.1：负载一旦超过冻结值就重新纳入考虑）。判据与旧实现等价 —— 见 isWorseCell。
@@ -554,37 +588,41 @@ export function levelLeaves(
     }
     iterations += 1
 
-    // ③ 候选 = 该资源该日的当事叶子，按优先级升序（数值小 = 先推），同序按 id 升序
+    // ③ 候选 = 该资源该日的当事叶子（**下标**），按优先级升序（数值小 = 先推），
+    //    同序按 id 升序
     const candidates = (leavesByResource.get(worst.resourceId) ?? [])
-      .filter((id) => {
-        const span = dates[id]
+      .filter((i) => {
+        const span = dates[i]
         return span !== undefined && worst!.date >= span.start && worst!.date <= span.finish
       })
-      .map((id) => leafById.get(id)!)
-      .sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : 1))
+      .sort((a, b) => {
+        const pa = leaves[a].priority
+        const pb = leaves[b].priority
+        return pa - pb || (leaves[a].id < leaves[b].id ? -1 : 1)
+      })
 
     let pushed = false
     for (const candidate of candidates) {
-      const lateStart = schedules[candidate.id]?.lateStart
+      const lateStart = schedules[leaves[candidate].id]?.lateStart
       if (lateStart === undefined) continue // 无排期 → 无浮时预算，不可推
 
       // 一次跳到最早的可行槽位（而非逐日推）。target > 当前起点 ⇒ delays 严格 +。
       const target = findFeasibleStart(
         calendar,
-        durations,
+        durationsByIndex,
         usagesByLeaf,
         load,
         dates,
-        candidate.id,
+        candidate,
         lateStart,
       )
       if (target === null) continue // 浮时窗口内无可行槽位 → 试下一个候选
 
-      const previous = delays.get(candidate.id) ?? 0
-      delays.set(candidate.id, workdaysBetween(base[candidate.id]!.start, target, calendar))
-      const next = leveledForwardPass(leaves, graph, durations, calendar, base, delays, manualIds)
+      const previous = delays[candidate]
+      delays[candidate] = workdaysBetween(base[candidate].start, target, calendar)
+      const next = leveledForwardPass(leaves, graph, durationsByIndex, calendar, base, delays, manual)
       if (exceedsLateStart(leaves, graph.order, next, schedules)) {
-        delays.set(candidate.id, previous) // 回退
+        delays[candidate] = previous // 回退
         continue
       }
       applyDeltas(dates, next) // 接受：把负载增量化到新状态
@@ -597,15 +635,18 @@ export function levelLeaves(
     if (!pushed) frozenAt.set(cellKeyOf(worst.resourceId, worst.date), worst.load)
   }
 
+  const delaysRecord: Record<TaskId, number> = {}
+  for (let i = 0; i < n; i += 1) delaysRecord[leaves[i].id] = delays[i]
+
   return {
     result: {
-      delays: Object.fromEntries(delays),
+      delays: delaysRecord,
       // 收敛后的 unresolved 仍走一次全量重建：一次性、可忽略，且保证与用户可见输出
       // 完全同源（不把增量状态的浮点尾差暴露到结果里）。
-      unresolved: collectOverloads(resourceDayLoad(context, dates)),
+      unresolved: collectOverloads(buildLoad(context, spanOfByTaskId)),
       budgetExhausted,
       iterations,
     },
-    dates,
+    dates: datesToRecord(),
   }
 }

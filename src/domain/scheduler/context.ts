@@ -23,6 +23,12 @@ export interface ScheduleContext {
    * CPM 与构图消费的是这一份，不是 `project.dependencies`。
    */
   readonly dependencies: readonly Dependency[]
+  /**
+   * `taskId → 该叶子在 `leaves` 里的下标`。热路径（图 / CPM / 平衡）一律按下标访问
+   * 数组，不再以 TaskId 字符串作哈希键（见 graph.ts 顶部说明）。只含**叶子** ——
+   * 摘要任务不进 CPM / 平衡，查不到即「不是叶子」，与旧行为一致。
+   */
+  readonly leafIndex: ReadonlyMap<TaskId, number>
   readonly graph: TaskGraph
   readonly assignmentsByTask: ReadonlyMap<TaskId, readonly Assignment[]>
   readonly assignmentsByResource: ReadonlyMap<ResourceId, readonly Assignment[]>
@@ -34,6 +40,8 @@ export interface ScheduleContext {
 /** 构建一次调度过程可共享的叶子、依赖图与 assignment 派生索引。 */
 export function buildScheduleContext(project: Project): ScheduleContext {
   const leaves = collectLeaves(project)
+  const leafIndex = new Map<TaskId, number>()
+  for (let i = 0; i < leaves.length; i += 1) leafIndex.set(leaves[i].id, i)
   const calendar = project.calendars[project.calendarId]
   const assignmentsByTask = new Map<TaskId, Assignment[]>()
   const assignmentsByResource = new Map<ResourceId, Assignment[]>()
@@ -81,6 +89,7 @@ export function buildScheduleContext(project: Project): ScheduleContext {
     leaves,
     calendar,
     dependencies: expanded.dependencies,
+    leafIndex,
     graph: buildGraph(leaves, expanded.dependencies),
     assignmentsByTask,
     assignmentsByResource,
