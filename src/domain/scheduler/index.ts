@@ -62,6 +62,7 @@ export function solve(project: Project, budget?: LevelingBudget): ScheduleResult
     // 消费展开后的叶子级依赖（摘要端点已展开，见 context.expandDependencies）
     dependencies: [...context.dependencies],
     calendar,
+    calendarIndex: context.calendarIndex,
     direction: project.schedulingDirection,
     // CPM 的起点 / 终点锚点消费的是日粒度：先把承载时刻的字段归一，
     // 否则引擎内部 `parseDate` 拿到带时刻串会静默算出 NaN。
@@ -93,7 +94,7 @@ export function solve(project: Project, budget?: LevelingBudget): ScheduleResult
   //    必须在摘要汇总之后 —— 差异的「当前」端要最终的 scheduled*；
   //    也必须在 collectCosts 之后 —— 挣值的 BAC 取 costs.total。
   const earnedValues = collectEarnedValues(project, costs, leaves)
-  const baselineDiffs = collectBaselineDiffs(project, schedules)
+  const baselineDiffs = collectBaselineDiffs(project, schedules, context.calendarIndex)
 
   return { schedules, conflicts, efforts, costs, resourceTotals, leveling, earnedValues, baselineDiffs }
 }

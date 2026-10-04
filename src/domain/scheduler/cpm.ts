@@ -11,11 +11,13 @@ import type {
 } from '../model/types'
 import type { ResourceBounds } from './effort'
 import {
+  buildWorkdayIndex,
   snapToWorkday,
   snapToWorkdayOrPrevious,
   taskFinish,
   taskStart,
   workdaysBetween,
+  type WorkdayIndex,
 } from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
 import { buildGraph, type TaskGraph } from './graph'
@@ -27,6 +29,11 @@ export interface CpmInput {
   tasks: readonly Task[]
   dependencies: Dependency[]
   calendar: Calendar
+  /**
+   * 可选：日历例外索引 —— 由 `solve()` 经 `buildScheduleContext` 预建并传入，
+   * 让浮时里的 `workdaysBetween` 走 O(log k) 闭式解。省略时 `runCpm` 现建一份。
+   */
+  calendarIndex?: WorkdayIndex
   direction: SchedulingDirection
   /** forward 用它做正推起点；backward 下作为无终点时的兜底锚 */
   projectStart: DateStr
@@ -54,7 +61,8 @@ export interface CpmInput {
 
 export function runCpm(input: CpmInput): Record<TaskId, ComputedSchedule> {
   const graph = buildGraph(input.tasks, input.dependencies) // 可能抛出 CycleError
-  return runCpmWithGraph(input, graph)
+  // 独立入口（不经 solve / buildScheduleContext）：无索引则现建一份，行为与旧实现一致。
+  return runCpmWithGraph(input.calendarIndex ? input : { ...input, calendarIndex: buildWorkdayIndex(input.calendar) }, graph)
 }
 
 /** 内部入口：复用 solve context 已构建的任务图；不从 scheduler barrel 导出。 */
@@ -62,7 +70,7 @@ export function runCpmWithGraph(
   input: CpmInput,
   graph: TaskGraph,
 ): Record<TaskId, ComputedSchedule> {
-  const { tasks, calendar, direction, projectStart, projectEnd, resourceBounds } = input
+  const { tasks, calendar, calendarIndex, direction, projectStart, projectEnd, resourceBounds } = input
   const n = tasks.length
   const latestProjectEnd = projectEnd
     ? snapToWorkdayOrPrevious(projectEnd, calendar)
@@ -291,7 +299,7 @@ export function runCpmWithGraph(
     // （totalSlack 却是 0），破坏 types.ts 对 `freeSlack ≤ totalSlack` 的约定。
     if (tasks[i].scheduling.mode === 'manual') return 0
 
-    const totalSlack = workdaysBetween(earlyStart[i], lateStart[i], calendar)
+    const totalSlack = workdaysBetween(earlyStart[i], lateStart[i], calendar, calendarIndex)
     if (graph.outStart[i + 1] === graph.outStart[i]) return totalSlack
 
     let min = Number.POSITIVE_INFINITY
@@ -308,6 +316,7 @@ export function runCpmWithGraph(
         }),
         earlyStart[to],
         calendar,
+        calendarIndex,
       )
       if (value < min) min = value
     }
@@ -318,7 +327,7 @@ export function runCpmWithGraph(
   const result: Record<TaskId, ComputedSchedule> = {}
   for (const i of graph.order) {
     const task = tasks[i]
-    const slack = workdaysBetween(earlyStart[i], lateStart[i], calendar)
+    const slack = workdaysBetween(earlyStart[i], lateStart[i], calendar, calendarIndex)
     const useLate = usesLateSchedule(task)
     // 负浮时归因（派生量，不落盘）：仅当本任务确为负浮时且逆推记下了 binding 时带上。
     const binding = slack < 0 ? conflictBindings[i] : undefined

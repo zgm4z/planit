@@ -9,6 +9,8 @@ import type {
   TaskId,
 } from '../model/types'
 import { assignmentUnits } from '../model/units'
+import type { WorkdayIndex } from '../calendar/workdays'
+import { buildWorkdayIndex } from '../calendar/workdays'
 import type { ResourceBounds } from './effort'
 import { resourceBoundsFromAssignments } from './effort'
 import { buildGraph, type TaskGraph } from './graph'
@@ -18,6 +20,13 @@ export interface ScheduleContext {
   readonly project: Project
   readonly leaves: readonly Task[]
   readonly calendar: Calendar
+  /**
+   * 日历例外索引：把「工作日计数」从逐日 O(天数) 降到 O(log 例外数)，热循环
+   * （CPM 浮时 / 平衡的剩余浮时）按此查表。**每次 `solve()` 现建**，求解期间日历
+   * 不变（纯函数）—— 刻意不做跨调用的身份缓存，因为日历在测试里会被就地改动
+   * （见 calendar/workdays.ts 的 `WorkdayIndex` 说明）。
+   */
+  readonly calendarIndex: WorkdayIndex
   /**
    * 叶子级依赖（摘要端点中可精确展开者已展开，见 `expandDependencies`）。
    * CPM 与构图消费的是这一份，不是 `project.dependencies`。
@@ -43,6 +52,8 @@ export function buildScheduleContext(project: Project): ScheduleContext {
   const leafIndex = new Map<TaskId, number>()
   for (let i = 0; i < leaves.length; i += 1) leafIndex.set(leaves[i].id, i)
   const calendar = project.calendars[project.calendarId]
+  // 日历例外索引一次建好，贯穿本次求解的全部工作日计数（CPM / 平衡 / 基线差异）。
+  const calendarIndex = buildWorkdayIndex(calendar)
   const assignmentsByTask = new Map<TaskId, Assignment[]>()
   const assignmentsByResource = new Map<ResourceId, Assignment[]>()
   const assignmentUnitsById = new Map<AssignmentId, number>()
@@ -88,6 +99,7 @@ export function buildScheduleContext(project: Project): ScheduleContext {
     project,
     leaves,
     calendar,
+    calendarIndex,
     dependencies: expanded.dependencies,
     leafIndex,
     graph: buildGraph(leaves, expanded.dependencies),

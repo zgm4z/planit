@@ -10,7 +10,7 @@ import type {
   TaskCosts,
   TaskId,
 } from '../model/types'
-import { workdaysBetween, workdaysInRange } from '../calendar/workdays'
+import { workdaysBetween, workdaysInRange, type WorkdayIndex } from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
 
 /**
@@ -137,6 +137,9 @@ export function collectEarnedValues(
 export function collectBaselineDiffs(
   project: Project,
   schedules: Record<TaskId, ComputedSchedule>,
+  // 可选日历例外索引：`solve()` 传 context 预建的那份（差异区间可能跨整个项目）。
+  // 省略 → `workdaysBetween` 走逐日实现，结果相同。
+  calendarIndex?: WorkdayIndex,
 ): Record<TaskId, BaselineComparison> {
   const baseline = activeBaseline(project)
   if (!baseline) return {}
@@ -152,8 +155,8 @@ export function collectBaselineDiffs(
     result[taskId] = {
       baselineStart: entry.start,
       baselineFinish: entry.finish,
-      startVariance: workdaysBetween(entry.start, schedule.scheduledStart, calendar),
-      finishVariance: workdaysBetween(entry.finish, schedule.scheduledFinish, calendar),
+      startVariance: workdaysBetween(entry.start, schedule.scheduledStart, calendar, calendarIndex),
+      finishVariance: workdaysBetween(entry.finish, schedule.scheduledFinish, calendar, calendarIndex),
     }
   }
 

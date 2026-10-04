@@ -18,6 +18,7 @@ import {
   taskFinish,
   workdaysBetween,
   workdaysInRange,
+  type WorkdayIndex,
 } from '../calendar/workdays'
 import { toDateStr } from '../calendar/dateTime'
 
@@ -241,8 +242,15 @@ function leveledForwardPass(
 }
 
 /** 剩余浮时 = 从当前排期到 `lateStart` 的工作日数。alap / 关键 / 负浮时任务均为 0 */
-function remainingSlack(schedule: ComputedSchedule, calendar: Calendar): number {
-  return Math.max(0, workdaysBetween(schedule.scheduledStart, schedule.lateStart, calendar))
+function remainingSlack(
+  schedule: ComputedSchedule,
+  calendar: Calendar,
+  index?: WorkdayIndex,
+): number {
+  return Math.max(
+    0,
+    workdaysBetween(schedule.scheduledStart, schedule.lateStart, calendar, index),
+  )
 }
 
 /**
@@ -385,7 +393,7 @@ export function levelLeaves(
   budget: LevelingBudget = DEFAULT_BUDGET,
   hooks?: LevelingHooks,
 ): { result: LevelingResult; dates: Record<TaskId, LeveledDates> } {
-  const { project, leaves, calendar, graph } = context
+  const { project, leaves, calendar, calendarIndex, graph } = context
   const n = leaves.length
 
   // 所有 per-leaf 状态按**下标**存数组（见 graph.ts 顶部说明）：durations / base /
@@ -407,7 +415,7 @@ export function levelLeaves(
       // 无排期兜底：这两处日期随后进 `addWorkdays`，必须是纯日期 —— 先归一。
       : { start: toDateStr(project.startDate), finish: toDateStr(project.startDate) }
     // 初始延迟 = 用户 delay（工作日，floor），夹到剩余浮时（偏差 2）
-    const slack = schedule ? remainingSlack(schedule, calendar) : 0
+    const slack = schedule ? remainingSlack(schedule, calendar, calendarIndex) : 0
     delays[i] = Math.min(Math.max(0, Math.round(leaf.delay)), slack)
     manual[i] = leaf.scheduling.mode === 'manual'
   }
@@ -619,7 +627,7 @@ export function levelLeaves(
       if (target === null) continue // 浮时窗口内无可行槽位 → 试下一个候选
 
       const previous = delays[candidate]
-      delays[candidate] = workdaysBetween(base[candidate].start, target, calendar)
+      delays[candidate] = workdaysBetween(base[candidate].start, target, calendar, calendarIndex)
       const next = leveledForwardPass(leaves, graph, durationsByIndex, calendar, base, delays, manual)
       if (exceedsLateStart(leaves, graph.order, next, schedules)) {
         delays[candidate] = previous // 回退
