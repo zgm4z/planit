@@ -66,7 +66,7 @@ function buildLoad(
       if (cached && cached.start === span.start && cached.finish === span.finish) {
         days = cached.days
       } else {
-        days = workdaysInRange(span.start, span.finish, context.calendar)
+        days = workdaysInRange(span.start, span.finish, context.calendar, context.calendarIndex)
         cache?.set(assignment.taskId, { start: span.start, finish: span.finish, days })
       }
 
@@ -205,6 +205,7 @@ function leveledForwardPass(
   base: readonly LeveledDates[],
   delays: readonly number[],
   manual: readonly boolean[],
+  calendarIndex?: WorkdayIndex,
 ): LeveledDates[] {
   const out = new Array<LeveledDates>(tasks.length)
 
@@ -218,7 +219,7 @@ function leveledForwardPass(
       continue
     }
 
-    let start = addWorkdays(base[i].start, delays[i], calendar)
+    let start = addWorkdays(base[i].start, delays[i], calendar, calendarIndex)
 
     for (let e = graph.inStart[i]; e < graph.inStart[i + 1]; e += 1) {
       const from = graph.inFrom[e]
@@ -230,12 +231,13 @@ function leveledForwardPass(
         toDuration: durations[i],
         fromDuration: durations[from],
         cal: calendar,
+        index: calendarIndex,
       })
       if (bound > start) start = bound
     }
 
-    start = snapToWorkday(start, calendar)
-    out[i] = { start, finish: taskFinish(start, durations[i], calendar) }
+    start = snapToWorkday(start, calendar, calendarIndex)
+    out[i] = { start, finish: taskFinish(start, durations[i], calendar, calendarIndex) }
   }
 
   return out
@@ -276,11 +278,12 @@ function fitsAt(
   current: LeveledDates | undefined,
   index: number,
   target: DateStr,
+  calendarIndex?: WorkdayIndex,
 ): boolean {
   const usages = usagesByLeaf[index]
   if (!usages || usages.length === 0) return true
-  const finish = taskFinish(target, durations[index], calendar)
-  for (const day of workdaysInRange(target, finish, calendar)) {
+  const finish = taskFinish(target, durations[index], calendar, calendarIndex)
+  for (const day of workdaysInRange(target, finish, calendar, calendarIndex)) {
     const inCurrent = current !== undefined && day >= current.start && day <= current.finish
     for (const usage of usages) {
       const value = load.get(usage.resourceId)?.get(day) ?? 0
@@ -306,13 +309,16 @@ function findFeasibleStart(
   dates: readonly (LeveledDates | undefined)[],
   index: number,
   lateStart: DateStr,
+  calendarIndex?: WorkdayIndex,
 ): DateStr | null {
   const current = dates[index]
   if (!current) return null
   let target = current.start
   while (target <= lateStart) {
-    if (fitsAt(calendar, durations, usagesByLeaf, load, current, index, target)) return target
-    target = nextWorkday(target, calendar)
+    if (fitsAt(calendar, durations, usagesByLeaf, load, current, index, target, calendarIndex)) {
+      return target
+    }
+    target = nextWorkday(target, calendar, calendarIndex)
   }
   return null
 }
@@ -445,7 +451,7 @@ export function levelLeaves(
     }
   }
 
-  let dates = leveledForwardPass(leaves, graph, durationsByIndex, calendar, base, delays, manual)
+  let dates = leveledForwardPass(leaves, graph, durationsByIndex, calendar, base, delays, manual, calendarIndex)
 
   // 热路径下标的区间数组 → 负载核心要的 taskId 取法（闭包读当前的 `dates`）。
   const leafIndex = context.leafIndex
@@ -521,7 +527,7 @@ export function levelLeaves(
   const daysOf = (taskId: TaskId, span: LeveledDates): DateStr[] => {
     const cached = workdayCache.get(taskId)
     if (cached && cached.start === span.start && cached.finish === span.finish) return cached.days
-    const days = workdaysInRange(span.start, span.finish, calendar)
+    const days = workdaysInRange(span.start, span.finish, calendar, calendarIndex)
     workdayCache.set(taskId, { start: span.start, finish: span.finish, days })
     return days
   }
@@ -623,12 +629,22 @@ export function levelLeaves(
         dates,
         candidate,
         lateStart,
+        calendarIndex,
       )
       if (target === null) continue // 浮时窗口内无可行槽位 → 试下一个候选
 
       const previous = delays[candidate]
       delays[candidate] = workdaysBetween(base[candidate].start, target, calendar, calendarIndex)
-      const next = leveledForwardPass(leaves, graph, durationsByIndex, calendar, base, delays, manual)
+      const next = leveledForwardPass(
+        leaves,
+        graph,
+        durationsByIndex,
+        calendar,
+        base,
+        delays,
+        manual,
+        calendarIndex,
+      )
       if (exceedsLateStart(leaves, graph.order, next, schedules)) {
         delays[candidate] = previous // 回退
         continue

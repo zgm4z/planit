@@ -1,4 +1,5 @@
 import type { Calendar, DateStr, Dependency, Lag } from '../model/types'
+import type { WorkdayIndex } from '../calendar/workdays'
 import { addDays, addWorkdays, nextWorkday, snapToWorkday, snapToWorkdayOrPrevious, taskFinish, taskStart } from '../calendar/workdays'
 
 export interface ForwardInput {
@@ -10,6 +11,12 @@ export interface ForwardInput {
   /** 前置任务的工期，percent 折算 lag 时需要 */
   fromDuration: number
   cal: Calendar
+  /**
+   * 可选：日历例外索引（由 `solve()` 经 `buildScheduleContext` 预建并传入）。带它时
+   * 本函数用到的 `addWorkdays` / `nextWorkday` / `snapToWorkday` / `taskStart/Finish`
+   * 走 O(log k) rank/select；省略则走逐日实现（结果恒等）。见 `workdays.ts`。
+   */
+  index?: WorkdayIndex
 }
 
 export interface BackwardInput {
@@ -19,6 +26,8 @@ export interface BackwardInput {
   /** 前置任务的工期，SS/SF 换算结束日期时需要 */
   fromDuration: number
   cal: Calendar
+  /** 可选：见 `ForwardInput.index`。 */
+  index?: WorkdayIndex
 }
 
 /** 裸数字兼容：旧存档 / 旧调用点传入的 number 视为 workdays */
@@ -51,7 +60,7 @@ export function effectiveLagWorkdays(lag: Lag, fromDuration: number): number {
  * 返回的日期一定落在工作日上。
  */
 export function forwardBound(input: ForwardInput): DateStr {
-  const { dep, fromStart, fromFinish, toDuration, fromDuration, cal } = input
+  const { dep, fromStart, fromFinish, toDuration, fromDuration, cal, index } = input
   const lag = asLag(dep.lag)
   const w = effectiveLagWorkdays(lag, fromDuration)
   const e = lag.kind === 'elapsedDays' ? lag.days : Number.NaN
@@ -60,29 +69,29 @@ export function forwardBound(input: ForwardInput): DateStr {
     case 'FS':
       // A.finish + lag < B.start，即 B 在 A 完成后的第 (lag + 1) 个工作日开工
       return lag.kind === 'elapsedDays'
-        ? nextWorkday(addDays(fromFinish, e), cal)
-        : addWorkdays(fromFinish, w + 1, cal)
+        ? nextWorkday(addDays(fromFinish, e), cal, index)
+        : addWorkdays(fromFinish, w + 1, cal, index)
 
     case 'SS':
       return lag.kind === 'elapsedDays'
-        ? snapToWorkday(addDays(fromStart, e), cal)
-        : addWorkdays(fromStart, w, cal)
+        ? snapToWorkday(addDays(fromStart, e), cal, index)
+        : addWorkdays(fromStart, w, cal, index)
 
     case 'FF': {
       // B.finish >= A.finish + lag → 再由 finish 反推 B.start
       const finishBound =
         lag.kind === 'elapsedDays'
-          ? snapToWorkday(addDays(fromFinish, e), cal)
-          : addWorkdays(fromFinish, w, cal)
-      return taskStart(finishBound, toDuration, cal)
+          ? snapToWorkday(addDays(fromFinish, e), cal, index)
+          : addWorkdays(fromFinish, w, cal, index)
+      return taskStart(finishBound, toDuration, cal, index)
     }
 
     case 'SF': {
       const finishBound =
         lag.kind === 'elapsedDays'
-          ? snapToWorkday(addDays(fromStart, e), cal)
-          : addWorkdays(fromStart, w, cal)
-      return taskStart(finishBound, toDuration, cal)
+          ? snapToWorkday(addDays(fromStart, e), cal, index)
+          : addWorkdays(fromStart, w, cal, index)
+      return taskStart(finishBound, toDuration, cal, index)
     }
   }
 }
@@ -92,7 +101,7 @@ export function forwardBound(input: ForwardInput): DateStr {
  * 返回的日期一定落在工作日上。
  */
 export function backwardBound(input: BackwardInput): DateStr {
-  const { dep, toStart, toFinish, fromDuration, cal } = input
+  const { dep, toStart, toFinish, fromDuration, cal, index } = input
   const lag = asLag(dep.lag)
   const w = effectiveLagWorkdays(lag, fromDuration)
   const e = lag.kind === 'elapsedDays' ? lag.days : Number.NaN
@@ -101,31 +110,31 @@ export function backwardBound(input: BackwardInput): DateStr {
     case 'FS':
       // A.finish <= B.start - (lag + 1)
       return lag.kind === 'elapsedDays'
-        ? snapToWorkdayOrPrevious(addDays(toStart, -e - 1), cal)
-        : addWorkdays(toStart, -(w + 1), cal)
+        ? snapToWorkdayOrPrevious(addDays(toStart, -e - 1), cal, index)
+        : addWorkdays(toStart, -(w + 1), cal, index)
 
     case 'SS': {
       // A.start <= B.start - lag → 再由 A.start 推 A.finish
       const startBound =
         lag.kind === 'elapsedDays'
-          ? snapToWorkdayOrPrevious(addDays(toStart, -e), cal)
-          : addWorkdays(toStart, -w, cal)
-      return taskFinish(startBound, fromDuration, cal)
+          ? snapToWorkdayOrPrevious(addDays(toStart, -e), cal, index)
+          : addWorkdays(toStart, -w, cal, index)
+      return taskFinish(startBound, fromDuration, cal, index)
     }
 
     case 'FF':
       // A.finish <= B.finish - lag
       return lag.kind === 'elapsedDays'
-        ? snapToWorkdayOrPrevious(addDays(toFinish, -e), cal)
-        : addWorkdays(toFinish, -w, cal)
+        ? snapToWorkdayOrPrevious(addDays(toFinish, -e), cal, index)
+        : addWorkdays(toFinish, -w, cal, index)
 
     case 'SF': {
       // A.start <= B.finish - lag
       const startBound =
         lag.kind === 'elapsedDays'
-          ? snapToWorkdayOrPrevious(addDays(toFinish, -e), cal)
-          : addWorkdays(toFinish, -w, cal)
-      return taskFinish(startBound, fromDuration, cal)
+          ? snapToWorkdayOrPrevious(addDays(toFinish, -e), cal, index)
+          : addWorkdays(toFinish, -w, cal, index)
+      return taskFinish(startBound, fromDuration, cal, index)
     }
   }
 }

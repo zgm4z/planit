@@ -73,7 +73,7 @@ export function runCpmWithGraph(
   const { tasks, calendar, calendarIndex, direction, projectStart, projectEnd, resourceBounds } = input
   const n = tasks.length
   const latestProjectEnd = projectEnd
-    ? snapToWorkdayOrPrevious(projectEnd, calendar)
+    ? snapToWorkdayOrPrevious(projectEnd, calendar, calendarIndex)
     : undefined
 
   // 任务状态一律按**下标**存放（数组），不再用 Map<TaskId, …> —— 见 graph.ts 顶部说明。
@@ -102,13 +102,13 @@ export function runCpmWithGraph(
       // 约束下界与资源可用期下界（availableFrom）的 max（spec §2.2 + Ruling 2：
       // manual 不被任何机制移动，违反只报冲突）。其**出边照常**给后继提供下界。
       if (scheduling.mode === 'manual') {
-        const span = manualSpan(scheduling, calendar)
+        const span = manualSpan(scheduling, calendar, calendarIndex)
         earlyStart[i] = span.start
         earlyFinish[i] = span.finish
         continue
       }
 
-      let start = schedulingLowerBound(scheduling, durations[i], calendar, anchor)
+      let start = schedulingLowerBound(scheduling, durations[i], calendar, anchor, calendarIndex)
 
       // 资源可用期的开始下界（availableFrom）—— 与任务自身的约束取较晚者
       const earliest = boundsByIndex?.[i]?.earliestStart
@@ -123,11 +123,12 @@ export function runCpmWithGraph(
           toDuration: durations[i],
           fromDuration: durations[from],
           cal: calendar,
+          index: calendarIndex,
         })
         if (bound > start) start = bound
       }
 
-      start = snapToWorkday(start, calendar)
+      start = snapToWorkday(start, calendar, calendarIndex)
       earlyStart[i] = start
 
       // 可用期是任务级的**上下界**：availableFrom = 下界（最早能开始），
@@ -142,7 +143,7 @@ export function runCpmWithGraph(
       // 任务谎报成更短。可用期不可行（availableUntil 早于自然完成日）时，逆推
       // 会把上界体现成负浮时，由 detectConflicts 如实报冲突 —— 只如实报，不夹
       // 边界调和。
-      earlyFinish[i] = taskFinish(start, durations[i], calendar)
+      earlyFinish[i] = taskFinish(start, durations[i], calendar, calendarIndex)
     }
 
     return { earlyStart, earlyFinish }
@@ -166,18 +167,18 @@ export function runCpmWithGraph(
       // 前置被 manual 顶住 → 负浮时 → 冲突（由 detectConflicts 如实上报）。
       // manual 自身 late = early（浮时恒 0）→ 永不产生冲突，也就无需记录 binding。
       if (scheduling.mode === 'manual') {
-        const span = manualSpan(scheduling, calendar)
+        const span = manualSpan(scheduling, calendar, calendarIndex)
         lateStart[i] = span.start
         lateFinish[i] = span.finish
         continue
       }
 
-      let finish = schedulingUpperBound(scheduling, durations[i], calendar, anchor)
+      let finish = schedulingUpperBound(scheduling, durations[i], calendar, anchor, calendarIndex)
 
       // 资源可用期的结束上界（availableUntil）—— 与任务自身的约束取较早者
       const latest = boundsByIndex?.[i]?.latestFinish
       if (latest) {
-        const latestWorkday = snapToWorkdayOrPrevious(latest, calendar)
+        const latestWorkday = snapToWorkdayOrPrevious(latest, calendar, calendarIndex)
         if (latestWorkday < finish) finish = latestWorkday
       }
 
@@ -196,12 +197,13 @@ export function runCpmWithGraph(
           toFinish: lateFinish[to],
           fromDuration: durations[i],
           cal: calendar,
+          index: calendarIndex,
         })
         edgeBounds.push({ dep, bound, to, manual: tasks[to].scheduling.mode === 'manual' })
         if (bound < finish) finish = bound
       }
 
-      finish = snapToWorkday(finish, calendar)
+      finish = snapToWorkday(finish, calendar, calendarIndex)
       lateFinish[i] = finish
 
       // 归因规则（本任务的负浮时由谁顶出来）：
@@ -243,7 +245,7 @@ export function runCpmWithGraph(
       // —— 晚窗口反转，任何按 lateStart→lateFinish 求宽度的消费方得到负跨度。
       // 不可行（availableFrom 晚于 endDate 倒推出的开始日）时同样只以负浮时
       // 如实报冲突，不在这里夹。
-      lateStart[i] = taskStart(finish, durations[i], calendar)
+      lateStart[i] = taskStart(finish, durations[i], calendar, calendarIndex)
     }
 
     return { lateStart, lateFinish, bindings }
@@ -313,6 +315,7 @@ export function runCpmWithGraph(
           toDuration: durations[to],
           fromDuration: durations[i],
           cal: calendar,
+          index: calendarIndex,
         }),
         earlyStart[to],
         calendar,
@@ -358,10 +361,11 @@ export function runCpmWithGraph(
 function manualSpan(
   scheduling: { start: DateTimeStr; finish: DateTimeStr },
   cal: Calendar,
+  index?: WorkdayIndex,
 ): { start: DateStr; finish: DateStr } {
   return {
-    start: snapToWorkday(toDateStr(scheduling.start), cal),
-    finish: snapToWorkday(toDateStr(scheduling.finish), cal),
+    start: snapToWorkday(toDateStr(scheduling.start), cal, index),
+    finish: snapToWorkday(toDateStr(scheduling.finish), cal, index),
   }
 }
 
@@ -388,6 +392,7 @@ function schedulingLowerBound(
   duration: number,
   cal: Calendar,
   projectStart: DateStr,
+  index?: WorkdayIndex,
 ): DateStr {
   // projectStart 先入集合，故恒为下界的一部分（Ruling 6）。
   const bounds: DateStr[] = [projectStart]
@@ -395,7 +400,7 @@ function schedulingLowerBound(
     bounds.push(toDateStr(scheduling.startConstraint.date))
   }
   if (scheduling.finishConstraint?.type === 'finishNoEarlierThan') {
-    bounds.push(taskStart(toDateStr(scheduling.finishConstraint.date), duration, cal))
+    bounds.push(taskStart(toDateStr(scheduling.finishConstraint.date), duration, cal, index))
   }
   return bounds.reduce((a, b) => (a > b ? a : b))
 }
@@ -416,14 +421,20 @@ function schedulingUpperBound(
   duration: number,
   cal: Calendar,
   projectFinish: DateStr,
+  index?: WorkdayIndex,
 ): DateStr {
   const bounds: DateStr[] = []
   if (scheduling.finishConstraint?.type === 'finishNoLaterThan') {
-    bounds.push(snapToWorkdayOrPrevious(toDateStr(scheduling.finishConstraint.date), cal))
+    bounds.push(snapToWorkdayOrPrevious(toDateStr(scheduling.finishConstraint.date), cal, index))
   }
   if (scheduling.startConstraint?.type === 'startNoLaterThan') {
     bounds.push(
-      taskFinish(snapToWorkdayOrPrevious(toDateStr(scheduling.startConstraint.date), cal), duration, cal),
+      taskFinish(
+        snapToWorkdayOrPrevious(toDateStr(scheduling.startConstraint.date), cal, index),
+        duration,
+        cal,
+        index,
+      ),
     )
   }
   return bounds.length === 0 ? projectFinish : bounds.reduce((a, b) => (a < b ? a : b))
