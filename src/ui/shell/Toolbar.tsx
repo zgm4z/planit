@@ -16,6 +16,7 @@ import { MenuBar } from './MenuBar'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from '../../i18n'
 import { useLayoutMode } from '../shared/useBreakpoints'
+import { isEditableTarget } from '../shared/isEditableTarget'
 import styles from '../styles/Chrome.module.scss'
 
 /**
@@ -177,14 +178,6 @@ function useUndoRedoShortcuts(undo: () => void, redo: () => void): void {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo, redo])
-}
-
-/** 焦点是否落在可编辑控件里（输入框 / 文本域 / 下拉 / contenteditable） */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
 /**
