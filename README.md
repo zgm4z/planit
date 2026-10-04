@@ -14,6 +14,8 @@ browser: no server, no account.
   the entire plan re-solves instantly
 - **Live critical path** — the zero-slack chain is always visible on the Gantt chart
 - **Resource leveling** — overloaded resources are leveled away using each task's slack
+- **Built for scale** — virtualized rendering and off-main-thread solving keep
+  10,000-task plans smooth
 - **One plan, four views** — Gantt, outline, calendar, and resource, plus a
   task/project inspector
 - **Full undo/redo** — one drag is one undo step; nothing is half-applied
@@ -55,7 +57,8 @@ browser: no server, no account.
   calendars, and assignments all trigger a re-solve.
 - **Live critical path** — the zero-slack chain is highlighted on the Gantt chart.
 - Conflicts are collected in a dedicated list, with how far off a schedule is where relevant.
-- The solve runs off the main thread, so large plans stay responsive while recomputing.
+- The solve runs on a Web Worker, so even a 10,000-task plan stays responsive while
+  recomputing; the outline and Gantt render through virtualized scrolling.
 
 ### Working Calendars
 
