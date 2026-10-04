@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useProjectStore } from '../../store/projectStore'
@@ -5,6 +6,31 @@ import { useScheduleStore } from '../../store/scheduleStore'
 import { computeProjectSummary } from '../shared/projectSummary'
 import { formatDate } from '../shared/format'
 import styles from '../styles/Chrome.module.scss'
+
+/**
+ * 「计算中」指示器出现前的延迟（毫秒）。
+ *
+ * 求解已移到 worker（主线程不阻塞），但仍要**告诉用户「有活儿在跑」**。
+ * 然而纯 CPM 只要 ~2ms —— 每个操作都闪一下提示是噪音。故延迟 300ms 才出现：
+ * 快求解一闪而过（用户根本看不到），只有真正耗时的求解才显示。
+ */
+export const COMPUTING_INDICATOR_DELAY_MS = 300
+
+/** 把布尔信号延迟一段时间再「上线」（下线立即）——用于「快就不要闪」。 */
+function useDelayedFlag(active: boolean, delayMs: number): boolean {
+  const [shown, setShown] = useState(false)
+
+  useEffect(() => {
+    if (!active) {
+      setShown(false)
+      return
+    }
+    const timer = setTimeout(() => setShown(true), delayMs)
+    return () => clearTimeout(timer)
+  }, [active, delayMs])
+
+  return shown
+}
 
 /**
  * 状态栏（§1.2 / §1.3 / §2.1）。
@@ -16,24 +42,22 @@ import styles from '../styles/Chrome.module.scss'
  *
  * 数字与日期一律走 formatDate（§1.3：YYYY-MM-DD），容器带 tabular-nums
  * —— 计数变化时整栏不发生左右抖动。
+ *
+ * 「计算中」指示器（求解在 worker 里跑时出现）：**最弱的一层** —— 与元数据同色、
+ * 靠右、`role="status"`（polite，不打断读屏）。它不遮不拦、不吃点击，且延迟出现
+ * （见 COMPUTING_INDICATOR_DELAY_MS），所以快求解不会闪。
  */
 export function StatusBar() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const result = useScheduleStore((state) => state.result)
+  const computing = useScheduleStore((state) => state.computing)
+  const showComputing = useDelayedFlag(computing, COMPUTING_INDICATOR_DELAY_MS)
 
   if (!project) return null
 
   // 跨度 / 工作日换算走唯一的一份实现（projectSummary），与项目面板共用
   const summary = computeProjectSummary(project, result.schedules)
-
-  if (!summary) {
-    return (
-      <div className={styles.statusbar} data-testid="status-bar">
-        <span className={styles.meta}>{t('statusBar.empty')}</span>
-      </div>
-    )
-  }
 
   // 关键任务数仍按叶子任务统计 —— 摘要任务的关键标记是从子任务继承来的，重复计数会翻倍
   const criticalCount = Object.values(project.tasks)
@@ -42,34 +66,54 @@ export function StatusBar() {
     .filter((schedule): schedule is NonNullable<typeof schedule> => Boolean(schedule))
     .filter((schedule) => schedule.isCritical).length
 
-  const start = formatDate(summary.start) ?? '—'
-  const finish = formatDate(summary.finish) ?? '—'
+  const start = formatDate(summary?.start) ?? '—'
+  const finish = formatDate(summary?.finish) ?? '—'
 
   return (
     <div className={styles.statusbar} data-testid="status-bar">
-      <span className={styles.meta} data-testid="status-span">
-        {t('statusBar.span', { start, finish })}
-      </span>
-      <span className={styles.dot} aria-hidden>
-        ·
-      </span>
-      <span className={styles.meta} data-testid="status-workdays">
-        {t('statusBar.totalWorkdays', { count: summary.totalWorkdays })}
-      </span>
-      <span className={styles.dot} aria-hidden>
-        ·
-      </span>
-      {/* 信号：唯一用色项 */}
-      <span className={styles.signal} data-testid="status-critical">
-        {t('statusBar.criticalCount', { count: criticalCount })}
-      </span>
-      {result.conflicts.length > 0 && (
+      {summary ? (
         <>
+          <span className={styles.meta} data-testid="status-span">
+            {t('statusBar.span', { start, finish })}
+          </span>
           <span className={styles.dot} aria-hidden>
             ·
           </span>
-          <span className={styles.conflict} data-testid="status-conflicts">
-            {t('statusBar.conflictCount', { count: result.conflicts.length })}
+          <span className={styles.meta} data-testid="status-workdays">
+            {t('statusBar.totalWorkdays', { count: summary.totalWorkdays })}
+          </span>
+          <span className={styles.dot} aria-hidden>
+            ·
+          </span>
+          {/* 信号：唯一用色项 */}
+          <span className={styles.signal} data-testid="status-critical">
+            {t('statusBar.criticalCount', { count: criticalCount })}
+          </span>
+          {result.conflicts.length > 0 && (
+            <>
+              <span className={styles.dot} aria-hidden>
+                ·
+              </span>
+              <span className={styles.conflict} data-testid="status-conflicts">
+                {t('statusBar.conflictCount', { count: result.conflicts.length })}
+              </span>
+            </>
+          )}
+        </>
+      ) : (
+        <span className={styles.meta}>{t('statusBar.empty')}</span>
+      )}
+
+      {/* 计算中：非阻塞、非模态，不吞点击。role=status 为 polite 播报 */}
+      {showComputing && (
+        <>
+          {summary && (
+            <span className={styles.dot} aria-hidden>
+              ·
+            </span>
+          )}
+          <span className={styles.computing} role="status" data-testid="status-computing">
+            {t('statusBar.computing')}
           </span>
         </>
       )}

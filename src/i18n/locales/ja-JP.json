@@ -277,7 +277,8 @@
     "span": "期間：{{start}} → {{finish}}",
     "totalWorkdays": "稼働日数 {{count}} 日",
     "criticalCount": "クリティカルタスク {{count}} 件",
-    "conflictCount": "競合 {{count}} 件"
+    "conflictCount": "競合 {{count}} 件",
+    "computing": "スケジュールを計算中…"
   },
   "calendar": {
     "holiday": "休日",

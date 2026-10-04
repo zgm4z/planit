@@ -277,7 +277,8 @@
     "span": "Span: {{start}} → {{finish}}",
     "totalWorkdays": "{{count}} workdays total",
     "criticalCount": "{{count}} critical tasks",
-    "conflictCount": "{{count}} conflicts"
+    "conflictCount": "{{count}} conflicts",
+    "computing": "Computing schedule…"
   },
   "calendar": {
     "holiday": "Holiday",

@@ -280,7 +280,8 @@
     "span": "项目周期：{{start}} → {{finish}}",
     "totalWorkdays": "共 {{count}} 个工作日",
     "criticalCount": "关键任务 {{count}} 个",
-    "conflictCount": "排期冲突 {{count}} 处"
+    "conflictCount": "排期冲突 {{count}} 处",
+    "computing": "正在计算排期…"
   },
   "calendar": {
     "holiday": "假日",

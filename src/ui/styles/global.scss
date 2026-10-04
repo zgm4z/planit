@@ -126,6 +126,19 @@
   }
 }
 
+// 状态栏「计算中」指示器的脉动点。刻意放**全局**（非 CSS Module）：
+// 这样 `animation` 引用的名字不被 CSS Modules 哈希，模块样式里按原名引用即可。
+// §5.3 的 prefers-reduced-motion 规则会把脉动停在首帧（保留静态点）。
+@keyframes planit-computing-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 // ── 项目列表条目 ─────────────────────────────────────────
 // UnstyledButton 不自带悬停反馈，这里补上，让条目看起来可点。
 .planit-project-item {

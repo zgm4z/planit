@@ -225,6 +225,28 @@
   font-size: var(--planit-fs-xs);
 }
 
+// 「计算中」指示器：与元数据同层（安静），带一个脉动的小点表示「有活儿在跑」——
+// **不是**进度百分比（那会是假的）。延迟出现（见 StatusBar 的 300ms），快求解不闪。
+// 不遮不拦、不吃点击；§5.3 的 prefers-reduced-motion 会停掉脉动。
+.computing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto; // 靠右，与左侧元数据／信号拉开，避免在读数字时抢视线
+  font-size: var(--planit-fs-xs);
+  color: var(--planit-text-muted);
+  white-space: nowrap;
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--planit-work);
+    animation: planit-computing-pulse 900ms ease-in-out infinite;
+  }
+}
+
 // ── 日历设置块（「项目」Tab 的「工作日历」分组内）───────────
 // 它现在是项目面板 Accordion 的一个**分组内容**：分组标题（lg/600 + 下沿，见
 // Inspector.module.scss 的 .accControl）由外部给出，本文件只负责分组**内部**的两小节
