@@ -143,6 +143,11 @@ export function __cancelColumnWidthsPersistForTests(): void {
 
 interface ViewState {
   selectedTaskId: TaskId | null
+  /**
+   * 多选集合（锚点 `selectedTaskId` 是其「焦点」）。恒含锚点（后者非空时）；
+   * 单选即长度 1，清空即长度 0。**顺序即加入顺序**，Shift 范围保留可见行序。
+   */
+  selectedTaskIds: TaskId[]
   collapsedIds: Set<TaskId>
   /** 甘特图一天的像素宽度 */
   dayWidth: number
@@ -163,6 +168,8 @@ interface ViewState {
    * 容错（悬空 id 回落到第一个资源）由消费方 ResourceInspector 承担 —— 与搬移前一致。
    */
   selectedResourceId: ResourceId | null
+  /** 资源侧的多选集合，与 `selectedTaskIds` 同构 */
+  selectedResourceIds: ResourceId[]
   /**
    * 资源树里被折叠的**组**（有子资源的节点）。与 `collapsedIds`（任务树）同族：
    * 纯 UI 状态，「怎么看」而非「是什么」—— 不持久化、不写进 Project、不进撤销栈。
@@ -170,6 +177,13 @@ interface ViewState {
   collapsedResourceIds: Set<ResourceId>
 
   selectTask: (taskId: TaskId | null) => void
+  /**
+   * 多选集合的唯一写入口：去重 + 锚点归一化（anchor 缺省/不在集合里 → 取末元素；
+   * 空集合 → 锚点置空）。锚点变化时打断合并（与 `selectTask` 同一耦合）。
+   */
+  setTaskSelection: (ids: readonly TaskId[], anchor?: TaskId | null) => void
+  /** Esc：收敛到只含锚点（锚点不变 ⇒ 不打断合并） */
+  clearTaskMultiSelect: () => void
   toggleCollapsed: (taskId: TaskId) => void
   /** 折叠全部（只折叠有子任务的行）。纯 UI 状态，不入撤销栈 —— 与 toggleCollapsed 同族 */
   collapseAll: () => void
@@ -187,6 +201,9 @@ interface ViewState {
   /** 选中一个资源（null = 清空，由消费方回落到第一个资源）。**刻意不 breakCoalescing** ——
    *  见实现处的说明：打断合并留在交互现场（Select 的 onChange），本动作是纯 setter。 */
   selectResource: (resourceId: ResourceId | null) => void
+  /** 资源侧同上；**刻意不 breakCoalescing**（与 `selectResource` 同一条理由） */
+  setResourceSelection: (ids: readonly ResourceId[], anchor?: ResourceId | null) => void
+  clearResourceMultiSelect: () => void
   toggleResourceCollapsed: (resourceId: ResourceId) => void
 }
 
@@ -233,8 +250,24 @@ function persistVisibleColumns(keys: readonly OutlineColumnKey[]): void {
   }
 }
 
+/**
+ * 把「一组 id + 可选锚点」收敛成去重集合 + 合法锚点。
+ * 规则：去重保序；集合空 → 锚点 null；锚点缺省或不在集合里 → 取末元素；否则保留锚点。
+ * 全应用只有这一处实现锚点不变式 —— `selectTask` 与 `setTaskSelection` 都经它。
+ */
+function normalizeSelection<T extends string>(
+  ids: readonly T[],
+  anchor: T | null | undefined,
+): { ids: T[]; anchor: T | null } {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return { ids: unique, anchor: null }
+  const nextAnchor = anchor != null && unique.includes(anchor) ? anchor : unique[unique.length - 1]
+  return { ids: unique, anchor: nextAnchor }
+}
+
 export const useViewStore = create<ViewState>((set, get) => ({
   selectedTaskId: null,
+  selectedTaskIds: [],
   collapsedIds: new Set<TaskId>(),
   dayWidth: DAY_WIDTH_PRESETS.day,
   activeView: 'gantt',
@@ -242,6 +275,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   columnWidths: loadColumnWidths(),
   activeInspectorTab: 'task',
   selectedResourceId: null,
+  selectedResourceIds: [],
   collapsedResourceIds: new Set<ResourceId>(),
 
   setActiveView: (activeView) => set({ activeView }), // 刻意不落盘
@@ -252,7 +286,22 @@ export const useViewStore = create<ViewState>((set, get) => ({
   // ResourceInspector 的 Select.onChange 现场 —— 那是「用户手动换资源」这一交互边界，
   // 而菜单栏「新建资源」这条路径**不**打断合并（与搬移前 handleCreate 的行为一致）。
   // 若把打断合并塞进这里，就会给菜单路径凭空加一次语义变更。
-  selectResource: (selectedResourceId) => set({ selectedResourceId }),
+  selectResource: (selectedResourceId) => {
+    set({
+      selectedResourceId,
+      selectedResourceIds: selectedResourceId ? [selectedResourceId] : [],
+    })
+  },
+
+  setResourceSelection: (ids, anchor) => {
+    const next = normalizeSelection(ids, anchor)
+    set({ selectedResourceId: next.anchor, selectedResourceIds: next.ids })
+  },
+
+  clearResourceMultiSelect: () => {
+    const { selectedResourceId } = get()
+    set({ selectedResourceIds: selectedResourceId ? [selectedResourceId] : [] })
+  },
 
   // 与 toggleCollapsed（任务树）同一手法：换一个 Set 引用，让订阅者看到变化
   toggleResourceCollapsed: (resourceId) => {
@@ -300,7 +349,20 @@ export const useViewStore = create<ViewState>((set, get) => ({
     if (get().selectedTaskId !== taskId) {
       useProjectStore.getState().breakCoalescing()
     }
-    set({ selectedTaskId: taskId })
+    set({ selectedTaskId: taskId, selectedTaskIds: taskId ? [taskId] : [] })
+  },
+
+  setTaskSelection: (ids, anchor) => {
+    const next = normalizeSelection(ids, anchor)
+    if (get().selectedTaskId !== next.anchor) {
+      useProjectStore.getState().breakCoalescing()
+    }
+    set({ selectedTaskId: next.anchor, selectedTaskIds: next.ids })
+  },
+
+  clearTaskMultiSelect: () => {
+    const { selectedTaskId } = get()
+    set({ selectedTaskIds: selectedTaskId ? [selectedTaskId] : [] })
   },
 
   toggleCollapsed: (taskId) => {
@@ -344,6 +406,7 @@ export function __resetViewStoreForTests(): void {
   __cancelColumnWidthsPersistForTests()
   useViewStore.setState({
     selectedTaskId: null,
+    selectedTaskIds: [],
     collapsedIds: new Set(),
     dayWidth: DAY_WIDTH_PRESETS.day,
     activeView: 'gantt',
@@ -351,6 +414,7 @@ export function __resetViewStoreForTests(): void {
     columnWidths: {},
     activeInspectorTab: 'task',
     selectedResourceId: null,
+    selectedResourceIds: [],
     collapsedResourceIds: new Set(),
   })
 }

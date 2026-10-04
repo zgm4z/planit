@@ -351,3 +351,67 @@ describe('dayWidth 单一事实源（连续缩放）', () => {
     expect(useViewStore.getState().dayWidth).toBe(32)
   })
 })
+
+// v?.x：选中模型从单值扩成「锚点 + 集合」。锚点保留原语义（右栏/拖拽仍读它），
+// 集合是新增的全集。这三条不变式是后面所有交互的地基。
+describe('viewStore 的选中集合（多选）', () => {
+  it('selectTask 同时写锚点与集合（单选 = 长度 1）', () => {
+    useViewStore.getState().selectTask('t1')
+    expect(useViewStore.getState().selectedTaskId).toBe('t1')
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t1'])
+
+    useViewStore.getState().selectTask(null)
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+  })
+
+  it('setTaskSelection 去重；缺省 anchor 取集合末元素', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2', 't1'])
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t1', 't2'])
+    expect(useViewStore.getState().selectedTaskId).toBe('t2')
+  })
+
+  it('anchor 不在集合里时回落到末元素；空集合清空锚点', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2'], 'ghost')
+    expect(useViewStore.getState().selectedTaskId).toBe('t2')
+
+    useViewStore.getState().setTaskSelection([], 't1')
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+  })
+
+  it('anchor 在集合里时被保留（Shift 扩选不动锚点）', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2', 't3'], 't1')
+    expect(useViewStore.getState().selectedTaskId).toBe('t1')
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('clearTaskMultiSelect 收敛到只含锚点，且不换锚点', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2', 't3'], 't2')
+    useViewStore.getState().clearTaskMultiSelect()
+    expect(useViewStore.getState().selectedTaskIds).toEqual(['t2'])
+    expect(useViewStore.getState().selectedTaskId).toBe('t2')
+  })
+
+  it('资源侧同构：selectResource 同步集合；setResourceSelection 归一化', () => {
+    useViewStore.getState().selectResource('r1')
+    expect(useViewStore.getState().selectedResourceIds).toEqual(['r1'])
+
+    useViewStore.getState().setResourceSelection(['r1', 'r2', 'r2'])
+    expect(useViewStore.getState().selectedResourceIds).toEqual(['r1', 'r2'])
+    expect(useViewStore.getState().selectedResourceId).toBe('r2')
+
+    useViewStore.getState().clearResourceMultiSelect()
+    expect(useViewStore.getState().selectedResourceIds).toEqual(['r2'])
+  })
+
+  it('__resetViewStoreForTests 把两个集合清空（否则跨用例泄漏）', () => {
+    useViewStore.getState().setTaskSelection(['t1', 't2'])
+    useViewStore.getState().setResourceSelection(['r1', 'r2'])
+    __resetViewStoreForTests()
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+    expect(useViewStore.getState().selectedResourceIds).toEqual([])
+    expect(useViewStore.getState().selectedTaskId).toBeNull()
+    expect(useViewStore.getState().selectedResourceId).toBeNull()
+  })
+})
