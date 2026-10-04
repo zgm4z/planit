@@ -173,7 +173,8 @@ test.describe('§3/§8 几何与连接柄', () => {
 test.describe('§9 .barLabel 不拦截指针', () => {
   test('在条中心（名字文字上）按下拖动，仍触发任务条拖拽并落 manual', async ({ page }) => {
     await loadFixture(page, orderedFixture())
-    // 条中心正落在药丸文字上 —— pointer-events:none 让事件穿透到 .bar
+    // 条中心由 .barLabel（inset:0，覆盖整条）占据 —— 它 pointer-events:none，
+    // 事件穿透到 .bar，故拖拽仍从条中心发起
     await dragBar(page, 'task-bar-t1', 40)
     const scheduling = (await readStore(page)).schedulingOfT1 as { mode: string }
     expect(scheduling.mode).toBe('manual')

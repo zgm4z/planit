@@ -288,7 +288,7 @@ export function getOutlineCellValue(key: OutlineColumnKey, ctx: ColumnCellContex
       if (!project) return EMPTY
       // 反查逻辑**唯一**在 shared/resourceNames.ts —— 甘特条与这里共用同一份。
       // 本模块只做呈现：单值/多值一律用固定的 ', '（取值层刻意不依赖 i18n，
-      // 见本文件 :154-157 的注释；甘特条另有 locale 分隔符，是呈现细节。
+      // 见本文件 :154-157 的注释）；甘特条另有 locale 分隔符，是呈现细节。
       const names = taskResourceNames(project, task.id)
       return names.length > 0 ? { type: 'text', text: names.join(', ') } : EMPTY
     }
