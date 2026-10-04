@@ -175,6 +175,12 @@ interface ViewState {
    * 纯 UI 状态，「怎么看」而非「是什么」—— 不持久化、不写进 Project、不进撤销栈。
    */
   collapsedResourceIds: Set<ResourceId>
+  /**
+   * 哪个任务的**标题**正处于内联编辑态。与 `collapsedResourceIds` 同族：纯 UI 状态，
+   * 不落盘、不进撤销栈。存在的理由：回车新建的那一行是**全新挂载**的组件实例，
+   * 自己不知道「我刚被创建」，需要一个 store 侧的信号让它进入编辑态。
+   */
+  editingTitleTaskId: TaskId | null
 
   selectTask: (taskId: TaskId | null) => void
   /**
@@ -210,6 +216,13 @@ interface ViewState {
   /** 资源侧同上；**刻意不 breakCoalescing**（与 `selectResource` 同一条理由） */
   setResourceSelection: (ids: readonly ResourceId[], anchor?: ResourceId | null) => void
   clearResourceMultiSelect: () => void
+  /** 进入某个任务的标题编辑态（双击或回车新建后调用）。 */
+  beginTitleEdit: (taskId: TaskId) => void
+  /**
+   * 退出标题编辑态。**仅当当前值等于 taskId 时清空** —— 回车新建后新行会立刻把值改成新 id，
+   * 此时旧行的退出流程不能把新行的编辑态误清掉。
+   */
+  endTitleEdit: (taskId: TaskId) => void
   toggleResourceCollapsed: (resourceId: ResourceId) => void
 }
 
@@ -283,6 +296,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   selectedResourceId: null,
   selectedResourceIds: [],
   collapsedResourceIds: new Set<ResourceId>(),
+  editingTitleTaskId: null,
 
   setActiveView: (activeView) => set({ activeView }), // 刻意不落盘
 
@@ -307,6 +321,12 @@ export const useViewStore = create<ViewState>((set, get) => ({
   clearResourceMultiSelect: () => {
     const { selectedResourceId } = get()
     set({ selectedResourceIds: selectedResourceId ? [selectedResourceId] : [] })
+  },
+
+  beginTitleEdit: (taskId) => set({ editingTitleTaskId: taskId }),
+
+  endTitleEdit: (taskId) => {
+    if (get().editingTitleTaskId === taskId) set({ editingTitleTaskId: null })
   },
 
   pruneSelection: (project) => {
@@ -466,5 +486,6 @@ export function __resetViewStoreForTests(): void {
     selectedResourceId: null,
     selectedResourceIds: [],
     collapsedResourceIds: new Set(),
+    editingTitleTaskId: null,
   })
 }

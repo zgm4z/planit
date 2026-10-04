@@ -489,3 +489,24 @@ describe('pruneSelection：project 变更时自动剔除悬空选中 id', () => 
     expect(useViewStore.getState().selectedResourceId).toBe(r2.id)
   })
 })
+
+describe('viewStore 的标题编辑态', () => {
+  it('beginTitleEdit 置为该任务；endTitleEdit 只在 id 相同时清空', () => {
+    useViewStore.getState().beginTitleEdit('t1')
+    expect(useViewStore.getState().editingTitleTaskId).toBe('t1')
+
+    // 新行已进入编辑（值变成 t2）时，旧行退出不能误清
+    useViewStore.getState().beginTitleEdit('t2')
+    useViewStore.getState().endTitleEdit('t1')
+    expect(useViewStore.getState().editingTitleTaskId).toBe('t2')
+
+    useViewStore.getState().endTitleEdit('t2')
+    expect(useViewStore.getState().editingTitleTaskId).toBeNull()
+  })
+
+  it('__resetViewStoreForTests 清空该字段', () => {
+    useViewStore.getState().beginTitleEdit('t1')
+    __resetViewStoreForTests()
+    expect(useViewStore.getState().editingTitleTaskId).toBeNull()
+  })
+})
