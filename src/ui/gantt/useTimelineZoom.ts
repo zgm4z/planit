@@ -61,9 +61,8 @@ interface UseTimelineZoomOptions {
 }
 
 export interface TimelineZoomApi {
-  /** 是否正处于一次缩放手势中。依赖层据此冻结几何（设计 §8）。 */
-  isZooming: boolean
-  /** 手势开始时的 dayWidth（非手势中为 null）—— 依赖层冻结的基准 */
+  /** 手势开始时的 dayWidth（非手势中为 null）。**非 null 即是「手势进行中」的唯一判据**
+   *  —— 依赖层据此冻结几何（设计 §8）。不再另设 isZooming，避免两份真相。 */
   gestureStartDayWidth: number | null
   /** 标尺容器的 onPointerDown —— 尺上左右拖拽缩放 */
   beginRulerDrag: (event: React.PointerEvent) => void
@@ -97,7 +96,6 @@ export function useTimelineZoom({
   const setDayWidthRef = useRef(setDayWidth)
   setDayWidthRef.current = setDayWidth
 
-  const [isZooming, setIsZooming] = useState(false)
   const [gestureStartDayWidth, setGestureStartDayWidth] = useState<number | null>(null)
 
   const rafRef = useRef<number | null>(null)
@@ -111,21 +109,28 @@ export function useTimelineZoom({
     [ganttPaneRef, scrollRef],
   )
 
-  // 手势开始：置 isZooming，并在第一次进入时固定 gestureStartDayWidth（之后不变）
+  // 手势开始：在第一次进入时固定 gestureStartDayWidth（之后不变）。
+  // 它非 null 即是「手势进行中」的**唯一判据**（依赖层冻结几何也读它）—— 不再另设 isZooming。
   const beginGesture = useCallback((): void => {
     setGestureStartDayWidth((prev) => (prev === null ? dayWidthRef.current : prev))
-    setIsZooming(true)
   }, [])
 
-  // 滚轮 / 键盘的「手势结束」防抖：150ms 静默后落回 false
+  // 滚轮 / 键盘的「手势结束」防抖：150ms 静默后落回「无手势」。
+  // 一并清掉本手势残留的 pending / anchor —— 否则下一手势会拿到陈旧基准、或把陈旧锚点
+  // 施加到后续与本次无关的 dayWidth 变化上（见 requestZoom / stop 的同处复位）。
   const endGestureSoon = useCallback((): void => {
     if (idleTimerRef.current !== null) clearTimeout(idleTimerRef.current)
     idleTimerRef.current = setTimeout(() => {
       idleTimerRef.current = null
-      setIsZooming(false)
+      pendingRef.current = null
+      anchorRef.current = null
       setGestureStartDayWidth(null)
     }, ZOOM_GESTURE_IDLE_MS)
   }, [])
+
+  // 手势中的「当前基准宽」：本帧已有挂起待应用值就用它（吸收同一帧内多次滚轮的增量），
+  // 否则用 store 里的实际值。**滚轮与键盘共用这一处定义**，避免两份同源逻辑各自漂移。
+  const baseDayWidth = useCallback((): number => pendingRef.current ?? dayWidthRef.current, [])
 
   // rAF 合并的写入口。anchor 为 null 表示不改滚动位（拖拽整个手势复用起点锚点）
   const requestZoom = useCallback((next: number, anchor: Anchor | null): void => {
@@ -135,6 +140,9 @@ export function useTimelineZoom({
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null
       const w = pendingRef.current
+      // 应用后立刻清空：本手势下一次事件的基准应回到 store 实际值（dayWidthRef），
+      // 而不是这个已被消费的挂起值 —— 否则手势之外的 store 变化（如点预设）会被它顶掉。
+      pendingRef.current = null
       if (w === null) return
       setDayWidthRef.current(w)
     })
@@ -161,8 +169,7 @@ export function useTimelineZoom({
     const onWheel = (event: WheelEvent): void => {
       if (!(event.ctrlKey || event.metaKey)) return
       event.preventDefault() // 命中才拦：普通滚轮仍纵向滚动、Shift+滚轮仍横向滚动
-      const base = pendingRef.current ?? dayWidthRef.current
-      const next = dayWidthFromWheel(base, normalizeWheelDelta(event))
+      const next = dayWidthFromWheel(baseDayWidth(), normalizeWheelDelta(event))
       const contentX = event.clientX - currentOriginX()
       const date = scaleRef.current.dateAt(contentX)
       beginGesture()
@@ -172,7 +179,7 @@ export function useTimelineZoom({
 
     scrollEl.addEventListener('wheel', onWheel, { passive: false })
     return () => scrollEl.removeEventListener('wheel', onWheel)
-  }, [scrollRef, currentOriginX, beginGesture, endGestureSoon, requestZoom])
+  }, [scrollRef, currentOriginX, beginGesture, endGestureSoon, requestZoom, baseDayWidth])
 
   // ③ 键盘：全局 window keydown，焦点在可编辑控件里时不接管
   useEffect(() => {
@@ -180,7 +187,7 @@ export function useTimelineZoom({
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return
       if (isEditableTarget(event.target)) return
 
-      const base = pendingRef.current ?? dayWidthRef.current
+      const base = baseDayWidth()
       let next: number | null = null
       // '+' 需 Shift、某些布局下 key 为 '='；'-' 与 '_' 同理
       if (event.key === '+' || event.key === '=') next = base * KEYBOARD_ZOOM_FACTOR
@@ -200,7 +207,7 @@ export function useTimelineZoom({
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [scrollRef, currentOriginX, beginGesture, endGestureSoon, requestZoom])
+  }, [scrollRef, currentOriginX, beginGesture, endGestureSoon, requestZoom, baseDayWidth])
 
   // ① 尺上拖拽
   const beginRulerDrag = useCallback(
@@ -225,7 +232,10 @@ export function useTimelineZoom({
         window.removeEventListener('pointerup', handleUp)
         window.removeEventListener('pointercancel', handleCancel)
         captureTarget?.removeEventListener('lostpointercapture', handleLostCapture)
-        setIsZooming(false)
+        // 手势收尾清掉残留：pending（否则下次手势拿陈旧基准）× anchor（否则陈旧锚点会污染
+        // 后续与本次手势无关的 dayWidth 变化，如点预设导致的横跳）。
+        pendingRef.current = null
+        anchorRef.current = null
         setGestureStartDayWidth(null)
       }
       stopRef.current = stop
@@ -278,5 +288,5 @@ export function useTimelineZoom({
     [],
   )
 
-  return { isZooming, gestureStartDayWidth, beginRulerDrag }
+  return { gestureStartDayWidth, beginRulerDrag }
 }

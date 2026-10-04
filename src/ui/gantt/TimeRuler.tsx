@@ -49,7 +49,7 @@ const MIN_MONTH_LABEL_WIDTH = 56
  * 盖掉了 —— 项目从 14 号开始，14/15 却消失。两行从结构上消除了这种遮盖：
  * 月份带只在上行、日号只在下行，二者不可能重叠。
  *
- * 日号的疏密随缩放档位变化（逐日 / 每周 / 每月），避免缩小时生成上千个 DOM 节点。
+ * 日号的疏密随 `dayWidth` 变化（逐日 / 每周 / 每月），避免缩小时生成上千个 DOM 节点。
  */
 function TimeRulerComponent({ scale, totalDays, stickyLabelLeft }: TimeRulerProps) {
   const step = dayTickStep(scale.dayWidth)
