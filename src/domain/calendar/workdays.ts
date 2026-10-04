@@ -16,10 +16,10 @@ const MAX_SCAN_DAYS = 3660
  * `dayToIso` 的 memo 命中，而不是让调用方直接用整数。若将来某个热点确实需要
  * 直接吃天整数，再按需把对应的 `*Day` 导出；现在不预留死接口。
  *
- * `cal.exceptions` 只按**单日精确查表**（见 calendarCommands 的区间展开说明）。
- * 这里**不预计算**例外集合：日历对象在测试里会被就地改动
- * （`c.exceptions[date] = ...`），任何按对象身份缓存例外表的方案都会读到陈旧值；
- * 直接 `cal.exceptions[dayToIso(day)]` 查活动数据，既安全又只多一次查表。
+ * `isWorkdayDay` 对 `cal.exceptions` 只按**单日精确查表**（见 calendarCommands 的区间
+ * 展开说明）。带索引的快路径（`buildWorkdayIndex` → `workdaysBetween` / advance/search
+ * 家族）见下方 `WorkdayIndex` 一节：索引**每次 `solve()` 现建**，**绝不**按日历对象
+ * 身份缓存例外表 —— 仓库测试会**就地**改 `cal.exceptions`，身份缓存会读到陈旧值。
  */
 /** 周一 = 0 … 周日 = 6，与 Calendar.workingDays 的索引顺序一致 */
 export function workdayIndex(iso: DateStr): number {
@@ -42,67 +42,127 @@ export function isWorkday(iso: DateStr, cal: Calendar): boolean {
   return isWorkdayDay(epochDay(iso), cal)
 }
 
-function nextWorkdayDay(day: number, cal: Calendar): number {
-  for (let i = 1; i <= MAX_SCAN_DAYS; i += 1) {
-    const cursor = day + i
-    if (isWorkdayDay(cursor, cal)) return cursor
+/**
+ * 下一个工作日（**严格**晚于 `day`）。带索引 → O(log k) 的 `firstWorkdayOnOrAfter` 一次
+ * 定位；只有当结果越过 `MAX_SCAN_DAYS` 扫描窗（病态日历）时才与逐日实现一样**抛错**。
+ */
+function nextWorkdayDay(day: number, cal: Calendar, index?: WorkdayIndex): number {
+  if (index) {
+    const w = firstWorkdayOnOrAfter(day + 1, index)
+    if (w !== null && w - day <= MAX_SCAN_DAYS) return w
+  } else {
+    for (let i = 1; i <= MAX_SCAN_DAYS; i += 1) {
+      const cursor = day + i
+      if (isWorkdayDay(cursor, cal)) return cursor
+    }
   }
   throw new Error(`nextWorkday: 从 ${dayToIso(day)} 起扫描 ${MAX_SCAN_DAYS} 天未找到工作日，请检查日历配置`)
 }
 
-export function nextWorkday(iso: DateStr, cal: Calendar): DateStr {
-  return dayToIso(nextWorkdayDay(epochDay(iso), cal))
+export function nextWorkday(iso: DateStr, cal: Calendar, index?: WorkdayIndex): DateStr {
+  return dayToIso(nextWorkdayDay(epochDay(iso), cal, index))
 }
 
-function prevWorkdayDay(day: number, cal: Calendar): number {
-  for (let i = 1; i <= MAX_SCAN_DAYS; i += 1) {
-    const cursor = day - i
-    if (isWorkdayDay(cursor, cal)) return cursor
+/**
+ * 上一个工作日（**严格**早于 `day`）。带索引 → O(log k) 的 `lastWorkdayOnOrBefore`
+ * （扫描窗 `[day−MAX_SCAN_DAYS, day−1]`，与逐日实现一致）。
+ */
+function prevWorkdayDay(day: number, cal: Calendar, index?: WorkdayIndex): number {
+  if (index) {
+    const w = lastWorkdayOnOrBefore(day - 1, index)
+    if (w !== null && day - w <= MAX_SCAN_DAYS) return w
+  } else {
+    for (let i = 1; i <= MAX_SCAN_DAYS; i += 1) {
+      const cursor = day - i
+      if (isWorkdayDay(cursor, cal)) return cursor
+    }
   }
   throw new Error(`prevWorkday: 从 ${dayToIso(day)} 起扫描 ${MAX_SCAN_DAYS} 天未找到工作日，请检查日历配置`)
 }
 
-export function prevWorkday(iso: DateStr, cal: Calendar): DateStr {
-  return dayToIso(prevWorkdayDay(epochDay(iso), cal))
+export function prevWorkday(iso: DateStr, cal: Calendar, index?: WorkdayIndex): DateStr {
+  return dayToIso(prevWorkdayDay(epochDay(iso), cal, index))
 }
 
-function snapToWorkdayDay(day: number, cal: Calendar): number {
+/**
+ * 当日或之后最近的工作日（on-or-after）。带索引 → O(log k)（已是工作日则早退）。
+ * 找不到（越过扫描窗）时与逐日实现一样抛 **nextWorkday** 的错（旧实现就把它委托给
+ * `nextWorkdayDay`）。
+ */
+function snapToWorkdayDay(day: number, cal: Calendar, index?: WorkdayIndex): number {
+  if (index) {
+    if (isWorkdayDay(day, cal)) return day
+    const w = firstWorkdayOnOrAfter(day + 1, index)
+    if (w !== null && w - day <= MAX_SCAN_DAYS) return w
+    throw new Error(`nextWorkday: 从 ${dayToIso(day)} 起扫描 ${MAX_SCAN_DAYS} 天未找到工作日，请检查日历配置`)
+  }
   return isWorkdayDay(day, cal) ? day : nextWorkdayDay(day, cal)
 }
 
-export function snapToWorkday(iso: DateStr, cal: Calendar): DateStr {
-  return dayToIso(snapToWorkdayDay(epochDay(iso), cal))
+export function snapToWorkday(iso: DateStr, cal: Calendar, index?: WorkdayIndex): DateStr {
+  return dayToIso(snapToWorkdayDay(epochDay(iso), cal, index))
 }
 
-/** 上界归一：保留工作日，否则向前吸附到最近的工作日（当日或之前）。 */
-function snapToWorkdayOrPreviousDay(day: number, cal: Calendar): number {
-  let cursor = day
-  for (let i = 0; i < MAX_SCAN_DAYS; i += 1) {
-    if (isWorkdayDay(cursor, cal)) return cursor
-    cursor -= 1
+/**
+ * 上界归一：保留工作日，否则向前吸附到最近的工作日（当日或之前）。
+ * 带索引 → O(log k)（扫描窗 `[day−MAX_SCAN_DAYS+1, day]`，与逐日实现一致）。
+ */
+function snapToWorkdayOrPreviousDay(day: number, cal: Calendar, index?: WorkdayIndex): number {
+  if (index) {
+    const w = lastWorkdayOnOrBefore(day, index)
+    if (w !== null && day - w < MAX_SCAN_DAYS) return w
+  } else {
+    let cursor = day
+    for (let i = 0; i < MAX_SCAN_DAYS; i += 1) {
+      if (isWorkdayDay(cursor, cal)) return cursor
+      cursor -= 1
+    }
   }
   throw new Error(
     `snapToWorkdayOrPrevious: 从 ${dayToIso(day)} 起扫描 ${MAX_SCAN_DAYS} 天未找到工作日，请检查日历配置`,
   )
 }
 
-export function snapToWorkdayOrPrevious(iso: DateStr, cal: Calendar): DateStr {
-  return dayToIso(snapToWorkdayOrPreviousDay(epochDay(iso), cal))
+export function snapToWorkdayOrPrevious(
+  iso: DateStr,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): DateStr {
+  return dayToIso(snapToWorkdayOrPreviousDay(epochDay(iso), cal, index))
 }
 
 /**
  * 在 `iso` 基础上推进 `n` 个工作日。`n` 可为负。
  * 起点若落在非工作日，先吸附到下一个工作日再计数。
+ *
+ * `n` 非整数时逐日实现跑的是 `ceil(|n|)` 步（`for i<n` / `for i>n` 的边界），索引版
+ * 用同一个 `ceil(|n|)` 一次 select 到位，逐字节一致（elapsed lag 的小数路径）。
+ *
+ * 索引版对一般日历（`perWeek > 0`）用一次 `selectByRank` —— O(log k)，取代原来的
+ * `|n|` 次扫描。唯一不逐字节等价的角落是「相邻工作日间隔 > MAX_SCAN_DAYS」的病态日历
+ * （需 ≳500 条相邻 holiday 例外才能造出）—— 逐日版会在中途抛错，索引版直达终点。
+ * `perWeek === 0`（全休周，工作日有限）退回逐日实现：逐步的 MAX_SCAN_DAYS 抛错语义
+ * 原样保留（见 `addWorkdays` 的模糊测试）。
  */
-function addWorkdaysDay(day: number, n: number, cal: Calendar): number {
-  let cursor = snapToWorkdayDay(day, cal)
-  for (let i = 0; i < n; i += 1) cursor = nextWorkdayDay(cursor, cal)
-  for (let i = 0; i > n; i -= 1) cursor = prevWorkdayDay(cursor, cal)
-  return cursor
+function addWorkdaysDay(day: number, n: number, cal: Calendar, index?: WorkdayIndex): number {
+  if (!index || index.perWeek === 0) {
+    let cursor = snapToWorkdayDay(day, cal, index)
+    for (let i = 0; i < n; i += 1) cursor = nextWorkdayDay(cursor, cal, index)
+    for (let i = 0; i > n; i -= 1) cursor = prevWorkdayDay(cursor, cal, index)
+    return cursor
+  }
+  const cursor = snapToWorkdayDay(day, cal, index)
+  // 起点（工作日）的 rank = 它前面有几个工作日
+  const r0 = rankBefore(cursor, index)
+  const steps = Number.isFinite(n) ? Math.ceil(Math.abs(n)) : 0
+  // 包含约束：正向结果 >= cursor，反向 <= cursor（再与 mag 窗口取交收紧二分范围）。
+  return n < 0
+    ? selectByRank(r0 - steps, index, Number.NEGATIVE_INFINITY, cursor)
+    : selectByRank(r0 + steps, index, cursor)
 }
 
-export function addWorkdays(iso: DateStr, n: number, cal: Calendar): DateStr {
-  return dayToIso(addWorkdaysDay(epochDay(iso), n, cal))
+export function addWorkdays(iso: DateStr, n: number, cal: Calendar, index?: WorkdayIndex): DateStr {
+  return dayToIso(addWorkdaysDay(epochDay(iso), n, cal, index))
 }
 
 /**
@@ -145,6 +205,18 @@ export interface WorkdayIndex {
   readonly perWeek: number
   /** `partialWeekly[r]` = 一周内前 r 天（自 epoch 对齐）的工作日数，r ∈ [0,7] */
   readonly partialWeekly: readonly number[]
+  /**
+   * Σ|delta|（`exceptionDays` 上各例外日 delta 的绝对值之和）。用作 select 二分窗口的
+   * 半宽：任一天 x 的累计例外 `E(x) = exceptionCountBefore(x)` 落在 [−Σ|δ⁻|, +Σ|δ⁺|]
+   * ⊆ [−exceptionMagnitude, exceptionMagnitude]。见 `selectByRank`。
+   */
+  readonly exceptionMagnitude: number
+  /**
+   * `perWeekSelect[c]` = 一周内最小的天偏移 r ∈ [0,6] 使 `partialWeekly[r] >= c`
+   * （c ∈ [0,7]；无解时取 6）。`weeklySelect` 用它把「本周需累积 c 个工作日」O(1)
+   * 折成天偏移，取代对 `partialWeekly` 的线性扫描。
+   */
+  readonly perWeekSelect: readonly number[]
 }
 
 /** 现建一份日历索引。只读 `cal`，不持有对其可变字段的长期缓存（见上方说明）。 */
@@ -157,8 +229,18 @@ export function buildWorkdayIndex(cal: Calendar): WorkdayIndex {
   for (let r = 1; r <= 7; r += 1) {
     partialWeekly[r] = partialWeekly[r - 1] + (cal.workingDays[weekdayMon0(r - 1)] ? 1 : 0)
   }
+  // perWeekSelect[c] = 最小的 r ∈ [0,6] 使 partialWeekly[r] >= c（partialWeekly 非减）
+  const perWeekSelect = new Array<number>(8)
+  {
+    let r = 0
+    for (let c = 0; c <= 7; c += 1) {
+      while (r < 6 && partialWeekly[r] < c) r += 1
+      perWeekSelect[c] = r
+    }
+  }
 
   const raws: { day: number; delta: number }[] = []
+  let exceptionMagnitude = 0
   for (const key in cal.exceptions) {
     if (!Object.prototype.hasOwnProperty.call(cal.exceptions, key)) continue
     const day = epochDay(key)
@@ -167,7 +249,9 @@ export function buildWorkdayIndex(cal: Calendar): WorkdayIndex {
     const isWeeklyWorkday = cal.workingDays[weekdayMon0(day)]
     const isWorkdayNow = cal.exceptions[key].kind === 'custom'
     if (isWorkdayNow === isWeeklyWorkday) continue
-    raws.push({ day, delta: isWorkdayNow ? 1 : -1 })
+    const delta = isWorkdayNow ? 1 : -1
+    exceptionMagnitude += delta < 0 ? -delta : delta
+    raws.push({ day, delta })
   }
   raws.sort((a, b) => a.day - b.day)
 
@@ -184,7 +268,14 @@ export function buildWorkdayIndex(cal: Calendar): WorkdayIndex {
     }
   }
 
-  return { exceptionDays, exceptionPrefix, perWeek, partialWeekly }
+  return {
+    exceptionDays,
+    exceptionPrefix,
+    perWeek,
+    partialWeekly,
+    exceptionMagnitude,
+    perWeekSelect,
+  }
 }
 
 /** 纯周规则下 `[0, D)` 的工作日数。对任意整数 D（含负）成立（floor 除 + 非负余数）。 */
@@ -205,6 +296,114 @@ function exceptionCountBefore(D: number, index: WorkdayIndex): number {
     else hi = mid
   }
   return index.exceptionPrefix[lo]
+}
+
+/**
+ * ── rank / select：把「第 n 个工作日 / 下一个工作日」变成 O(log k) ────────────
+ *
+ * `workdaysBetween` 用 rank（数个数）就够了；advance/search 家族（`nextWorkday` /
+ * `addWorkdays` / `snapToWorkday` …）原本要**逐日扫描**找下一个工作日，现在改成对
+ * 「工作日计数」求逆（select）。三方口径与旧实现逐字节一致（见 `workdays.index.test.ts`
+ * 的差分模糊测试）。
+ *
+ * `rankBefore(D)` = `[0, D)` 内的工作日数 = 纯周闭式 + 例外 delta 前缀和（均见上）。
+ * `select` = 求 `rankBefore` 的逆 —— 第 r 个工作日的天整数。
+ */
+
+/** `[0, D)` 内的工作日数。任意整数 D（含负）成立。O(log k)。 */
+function rankBefore(D: number, index: WorkdayIndex): number {
+  return weeklyCountBefore(D, index) + exceptionCountBefore(D, index)
+}
+
+/**
+ * 纯周规则下，最小的 x 使 `weeklyCountBefore(x) >= u`。要求 `perWeek > 0`（否则
+ * `weeklyCountBefore ≡ 0`，无解 —— 调用方须先走 perWeek === 0 分支）。
+ *
+ * 半开周：`weeklyCountBefore(7k + r) = k·P + partialWeekly[r]`（r ∈ [0,6]）。最小 x
+ * 落在**最小的、能命中的周** k 上（该周内再取最小的 r）。O(1)。
+ */
+function weeklySelect(u: number, index: WorkdayIndex): number {
+  const P = index.perWeek
+  // 一周内 r ∈ [0,6] 的最大工作日数（r = 6 是一周最后一天；partialWeekly[7] = P 不参与）
+  const maxInWeek = index.partialWeekly[6]
+  const k = Math.ceil((u - maxInWeek) / P)
+  const need = u - k * P // 落在 [.., maxInWeek]；`perWeekSelect[need]` 给出所需天偏移
+  if (need <= 0) return k * 7
+  return k * 7 + index.perWeekSelect[need]
+}
+
+/**
+ * 第 r 个工作日（0-indexed，可为负 —— 表示「第 0 个工作日之前的第 |r| 个」）。
+ * 要求 `perWeek > 0`（工作日无限，任意 r 恒有解）。
+ *
+ * 关键：`rankBefore` 数的是**严格小于** x 的工作日，故 `rankBefore(w_r) = r`。要定位
+ * w_r，对 `x = w_r + 1` 求「最小的 x 使 `rankBefore(x) >= r + 1`」再减一
+ * （`rankBefore` 每过一天只增 0 或 1，故该 x 恰是 w_r + 1）。
+ *
+ * 窗口**自包含**（把 O(log 天数) 压到 O(log k)）：记 T = r + 1、mag =
+ * exceptionMagnitude、E(x) ∈ [−mag, mag]，x* = 最小的 x 使
+ * `rankBefore(x) = W(x) + E(x) >= T`。则
+ *   · `rankBefore(x*) >= T` 且 `E <= mag` ⇒ `W(x*) >= T − mag` ⇒ `x* >= weeklySelect(T − mag)`；
+ *   · `y = weeklySelect(T + mag)` ⇒ `rankBefore(y) >= T + mag − mag = T` ⇒ `x* <= y`。
+ * 故二分只需在 [weeklySelect(T − mag), weeklySelect(T + mag)] 内 —— 调用方不必给界。
+ * mag = 0（无有效例外）时窗口退化成一点 → 零次二分，纯 O(1)。
+ */
+function selectByRank(
+  r: number,
+  index: WorkdayIndex,
+  lo = Number.NEGATIVE_INFINITY,
+  hi = Number.POSITIVE_INFINITY,
+): number {
+  const T = r + 1
+  const mag = index.exceptionMagnitude
+  // 调用方已知的包含约束 [lo, hi]（结果工作日必落其中）与 mag 窗口取交 —— 只收紧、不放大。
+  let a = Math.max(lo + 1, weeklySelect(T - mag, index)) // x 的下界
+  let b = Math.min(hi + 1, weeklySelect(T + mag, index)) // x 的上界
+  while (a < b) {
+    const mid = (a + b) >> 1
+    if (rankBefore(mid, index) >= T) b = mid
+    else a = mid + 1
+  }
+  return a - 1
+}
+
+/**
+ * 第一个 `>= lo` 的工作日。O(log k)。
+ * - `perWeek > 0`：工作日无限 → 恒有解（`selectByRank`）。
+ * - `perWeek === 0`（全休周）：工作日 = `exceptionDays`（holiday 落在非周工作日上
+ *   delta = 0，不入表；故表里全是 custom）→ 二分例外表；lo 之后没有则 `null`。
+ */
+function firstWorkdayOnOrAfter(lo: number, index: WorkdayIndex): number | null {
+  if (index.perWeek === 0) {
+    const days = index.exceptionDays
+    let a = 0
+    let b = days.length
+    while (a < b) {
+      const m = (a + b) >> 1
+      if (days[m] < lo) a = m + 1
+      else b = m
+    }
+    const d = days[a]
+    return d === undefined ? null : d
+  }
+  return selectByRank(rankBefore(lo, index), index, lo)
+}
+
+/** 最后一个 `<= hi` 的工作日。语义 / 边界与 `firstWorkdayOnOrAfter` 对称。O(log k)。 */
+function lastWorkdayOnOrBefore(hi: number, index: WorkdayIndex): number | null {
+  if (index.perWeek === 0) {
+    const days = index.exceptionDays
+    let a = 0
+    let b = days.length
+    while (a < b) {
+      const m = (a + b) >> 1
+      if (days[m] <= hi) a = m + 1
+      else b = m
+    }
+    const d = days[a - 1]
+    return d === undefined ? null : d
+  }
+  return selectByRank(rankBefore(hi + 1, index) - 1, index, Number.NEGATIVE_INFINITY, hi)
 }
 
 /**
@@ -270,23 +469,43 @@ export function workdaysBetween(
  * 任务的结束日期：从 `start` 起，工期为 `duration` 个工作日（含起始日）。
  * 工期为 0（里程碑）时返回 `start` 本身吸附到的工作日。
  */
-function taskFinishDay(start: number, duration: number, cal: Calendar): number {
-  if (duration <= 0) return snapToWorkdayDay(start, cal)
-  return addWorkdaysDay(start, duration - 1, cal)
+function taskFinishDay(
+  start: number,
+  duration: number,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): number {
+  if (duration <= 0) return snapToWorkdayDay(start, cal, index)
+  return addWorkdaysDay(start, duration - 1, cal, index)
 }
 
-export function taskFinish(start: DateStr, duration: number, cal: Calendar): DateStr {
-  return dayToIso(taskFinishDay(epochDay(start), duration, cal))
+export function taskFinish(
+  start: DateStr,
+  duration: number,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): DateStr {
+  return dayToIso(taskFinishDay(epochDay(start), duration, cal, index))
 }
 
 /** 任务的开始日期：从 `finish` 倒推 `duration` 个工作日（含结束日）。 */
-function taskStartDay(finish: number, duration: number, cal: Calendar): number {
-  if (duration <= 0) return snapToWorkdayDay(finish, cal)
-  return addWorkdaysDay(finish, -(duration - 1), cal)
+function taskStartDay(
+  finish: number,
+  duration: number,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): number {
+  if (duration <= 0) return snapToWorkdayDay(finish, cal, index)
+  return addWorkdaysDay(finish, -(duration - 1), cal, index)
 }
 
-export function taskStart(finish: DateStr, duration: number, cal: Calendar): DateStr {
-  return dayToIso(taskStartDay(epochDay(finish), duration, cal))
+export function taskStart(
+  finish: DateStr,
+  duration: number,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): DateStr {
+  return dayToIso(taskStartDay(epochDay(finish), duration, cal, index))
 }
 
 /**
@@ -320,8 +539,8 @@ export function workdaysInclusive(
   cal: Calendar,
   index?: WorkdayIndex,
 ): number {
-  const from = snapToWorkdayDay(epochDay(start), cal)
-  const to = snapToWorkdayDay(epochDay(finish), cal)
+  const from = snapToWorkdayDay(epochDay(start), cal, index)
+  const to = snapToWorkdayDay(epochDay(finish), cal, index)
   if (from > to) return 0
   return workdaysBetweenDay(from, to, cal, index) + 1
 }
@@ -334,13 +553,18 @@ export function workdaysInclusive(
  * 与 `workdaysBetween` 的分工：后者只**计数**（左闭右开），本函数给**列表** ——
  * 负载要逐个日期累加，需要列表。日期迭代只此一处，别在调度器里再写一遍。
  */
-export function workdaysInRange(start: DateStr, finish: DateStr, cal: Calendar): DateStr[] {
+export function workdaysInRange(
+  start: DateStr,
+  finish: DateStr,
+  cal: Calendar,
+  index?: WorkdayIndex,
+): DateStr[] {
   const out: DateStr[] = []
-  let cursor = snapToWorkdayDay(epochDay(start), cal)
+  let cursor = snapToWorkdayDay(epochDay(start), cal, index)
   const to = epochDay(finish)
   while (cursor <= to) {
     out.push(dayToIso(cursor))
-    cursor = nextWorkdayDay(cursor, cal)
+    cursor = nextWorkdayDay(cursor, cal, index)
   }
   return out
 }

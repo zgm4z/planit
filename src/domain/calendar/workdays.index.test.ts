@@ -15,8 +15,20 @@
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createProject, createTask } from '../model/factories'
 import type { Calendar, CalendarException, DateStr } from '../model/types'
-import { dayToIso, epochDay } from '../dateUtils'
-import { buildWorkdayIndex, workdaysBetween, workdaysInclusive } from './workdays'
+import { dayToIso, epochDay, weekdayMon0 } from '../dateUtils'
+import {
+  addWorkdays,
+  buildWorkdayIndex,
+  nextWorkday,
+  prevWorkday,
+  snapToWorkday,
+  snapToWorkdayOrPrevious,
+  taskFinish,
+  taskStart,
+  workdaysBetween,
+  workdaysInclusive,
+  workdaysInRange,
+} from './workdays'
 import { solve } from '../scheduler'
 
 /** 确定性 PRNG（mulberry32）—— 固定种子 → 可复现，CI 与本地同结果 */
@@ -207,5 +219,156 @@ describe('就地改动日历 —— 不做按对象身份的缓存（陷阱守�
     // 若索引被跨 solve 按对象身份缓存 → 这里会仍读到 03-06（陈旧）。
     const second = solve(project, budget).schedules[t.id].earlyFinish
     expect(second).toBe('2026-03-09')
+  })
+})
+
+/**
+ * ── advance/search 家族：rank/select 闭环 vs 逐日扫描（差分模糊测试）───────────
+ *
+ * `nextWorkday` / `prevWorkday` / `snapToWorkday(OrPrevious)` / `addWorkdays` /
+ * `taskFinish` / `taskStart` 此前逐日扫描；现在带索引走 `firstWorkdayIn` /
+ * `lastWorkdayIn` / `selectByRank`（O(log k)）。这里对每个函数逐例比对
+ * 「带索引」与「逐日实现」（后者是**改动前的冻结真值**）—— **逐字节相等**，
+ * 且**抛错的场合也必须一致**（全休日历 / 超出 MAX_SCAN_DAYS 扫描窗）。
+ *
+ * 维度：任意 7 位 `workingDays` 形态（含全休 / 全工作日）、0–40 条 holiday/custom
+ * 混合例外、随机天（含远离例外集）、`n ∈ {0, ±1, ±2, ±7, 大值, 小数}`。
+ */
+type Outcome = { ok: true; value: unknown } | { ok: false; msg: string }
+function catchOutcome(fn: () => unknown): Outcome {
+  try {
+    return { ok: true, value: fn() }
+  } catch (e) {
+    return { ok: false, msg: e instanceof Error ? e.message : String(e) }
+  }
+}
+function outcomesEqual(a: Outcome, b: Outcome): boolean {
+  if (a.ok !== b.ok) return false
+  if (a.ok && b.ok) return JSON.stringify(a.value) === JSON.stringify(b.value)
+  return !a.ok && !b.ok && a.msg === b.msg
+}
+function describeOutcome(o: Outcome): string {
+  return o.ok ? JSON.stringify(o.value) : `THROW(${o.msg})`
+}
+
+function randomDay(rng: () => number): DateStr {
+  return isoAt(Math.floor(rng() * 6000) - 3000)
+}
+
+describe('advance/search 家族 —— 差分模糊测试（带索引 vs 逐日真值）', () => {
+  it('6 个函数 × 随机日历 × 随机输入，逐例逐位相等（含抛错一致）', () => {
+    const rng = mulberry32(0xa11ce)
+    const nValues = [0, 1, -1, 2, -2, 7, -7, 40, -40, 400, -400, 1.5, -2.5]
+    let checked = 0
+    let mismatches = 0
+    const firstMismatch: string[] = []
+
+    const check = (fn: string, truth: Outcome, fast: Outcome, ctx: string): void => {
+      checked += 1
+      if (!outcomesEqual(truth, fast)) {
+        mismatches += 1
+        if (firstMismatch.length < 8) {
+          firstMismatch.push(`${fn} ${ctx}: truth=${describeOutcome(truth)} fast=${describeOutcome(fast)}`)
+        }
+      }
+    }
+
+    for (let c = 0; c < 300; c += 1) {
+      const cal = randomCalendar(rng)
+      const index = buildWorkdayIndex(cal)
+      for (let k = 0; k < 120; k += 1) {
+        const day = randomDay(rng)
+        const ctx = `cal#${c} day=${day}`
+        check('nextWorkday', catchOutcome(() => nextWorkday(day, cal)), catchOutcome(() => nextWorkday(day, cal, index)), ctx)
+        check('prevWorkday', catchOutcome(() => prevWorkday(day, cal)), catchOutcome(() => prevWorkday(day, cal, index)), ctx)
+        check('snapToWorkday', catchOutcome(() => snapToWorkday(day, cal)), catchOutcome(() => snapToWorkday(day, cal, index)), ctx)
+        check('snapOrPrevious', catchOutcome(() => snapToWorkdayOrPrevious(day, cal)), catchOutcome(() => snapToWorkdayOrPrevious(day, cal, index)), ctx)
+        const n = nValues[Math.floor(rng() * nValues.length)]
+        check('addWorkdays', catchOutcome(() => addWorkdays(day, n, cal)), catchOutcome(() => addWorkdays(day, n, cal, index)), `${ctx} n=${n}`)
+        const dur = Math.floor(rng() * 30)
+        check('taskFinish', catchOutcome(() => taskFinish(day, dur, cal)), catchOutcome(() => taskFinish(day, dur, cal, index)), `${ctx} dur=${dur}`)
+        check('taskStart', catchOutcome(() => taskStart(day, dur, cal)), catchOutcome(() => taskStart(day, dur, cal, index)), `${ctx} dur=${dur}`)
+        const day2 = randomDay(rng)
+        check('workdaysInclusive', catchOutcome(() => workdaysInclusive(day, day2, cal)), catchOutcome(() => workdaysInclusive(day, day2, cal, index)), `${ctx}..${day2}`)
+        check('workdaysInRange', catchOutcome(() => workdaysInRange(day, day2, cal)), catchOutcome(() => workdaysInRange(day, day2, cal, index)), `${ctx}..${day2}`)
+      }
+    }
+
+    expect(mismatches, `mismatches:\n${firstMismatch.join('\n')}`).toBe(0)
+    expect(checked).toBe(300 * 120 * 9)
+  }, 120_000)
+
+  it('全休日历（workingDays 全 false）逐函数抛错一致', () => {
+    const cal = createCalendar()
+    cal.workingDays = [false, false, false, false, false, false, false]
+    const index = buildWorkdayIndex(cal)
+    for (const day of ['2026-03-06', '2026-03-07', '1970-01-01']) {
+      for (const [name, fn] of [
+        ['nextWorkday', (i: boolean) => nextWorkday(day, cal, i ? index : undefined)],
+        ['prevWorkday', (i: boolean) => prevWorkday(day, cal, i ? index : undefined)],
+        ['snapToWorkday', (i: boolean) => snapToWorkday(day, cal, i ? index : undefined)],
+        ['snapOrPrevious', (i: boolean) => snapToWorkdayOrPrevious(day, cal, i ? index : undefined)],
+        ['addWorkdays+3', (i: boolean) => addWorkdays(day, 3, cal, i ? index : undefined)],
+        ['addWorkdays-3', (i: boolean) => addWorkdays(day, -3, cal, i ? index : undefined)],
+        ['taskFinish', (i: boolean) => taskFinish(day, 5, cal, i ? index : undefined)],
+        ['taskStart', (i: boolean) => taskStart(day, 5, cal, i ? index : undefined)],
+      ] as const) {
+        const truth = catchOutcome(() => fn(false))
+        const fast = catchOutcome(() => fn(true))
+        expect(truth.ok, `${name} 逐日实现应当抛错`).toBe(false)
+        expect(outcomesEqual(truth, fast), `${name}: truth=${describeOutcome(truth)} fast=${describeOutcome(fast)}`).toBe(true)
+      }
+    }
+  })
+
+  it('全休日历 + 扫描窗内有一个 custom 例外 → 两条路径都返回它；窗外的则都抛错', () => {
+    const setup = (excOffset: number) => {
+      const cal = createCalendar()
+      cal.workingDays = [false, false, false, false, false, false, false]
+      const iso = isoAt(excOffset)
+      cal.exceptions[iso] = { kind: 'custom', start: `${iso}T09:00`, end: `${iso}T12:00` }
+      return { cal, iso, index: buildWorkdayIndex(cal) }
+    }
+    // 窗内（offset 100 <= MAX_SCAN_DAYS = 3660）：两条路径都命中同一个 custom 日。
+    {
+      const { cal, iso, index } = setup(100)
+      expect(nextWorkday(isoAt(0), cal)).toBe(iso)
+      expect(nextWorkday(isoAt(0), cal, index)).toBe(iso)
+      expect(snapToWorkday(isoAt(0), cal, index)).toBe(iso)
+      expect(addWorkdays(isoAt(0), 0, cal, index)).toBe(iso)
+      // +1 个工作日需要「第二个工作日」—— 日历里只有一个 → 两条路径都抛错。
+      expect(catchOutcome(() => addWorkdays(isoAt(0), 1, cal)).ok).toBe(false)
+      expect(catchOutcome(() => addWorkdays(isoAt(0), 1, cal, index)).ok).toBe(false)
+    }
+    // 窗外（offset 4000 > 3660）：扫描不到 → 两条路径都抛同样的错。
+    {
+      const { cal, index } = setup(4000)
+      const truth = catchOutcome(() => nextWorkday(isoAt(0), cal))
+      const fast = catchOutcome(() => nextWorkday(isoAt(0), cal, index))
+      expect(truth.ok).toBe(false)
+      expect(outcomesEqual(truth, fast)).toBe(true)
+      expect(catchOutcome(() => addWorkdays(isoAt(0), 1, cal, index)).ok).toBe(false)
+    }
+  })
+
+  it('相邻工作日间隔超过 MAX_SCAN_DAYS 的极端日历被标记为已知边界（不静默错值）', () => {
+    // ≳500 条相邻 holiday 才能造出 >3660 天的空档 —— 逐日版会在中途抛错，索引版直达
+    // 终点。这是**已知且有意**的唯一不逐字节等价角落（见 workdays.ts 的 addWorkdaysDay
+    // 注释）；此处只钉住「单步函数（next/snap）仍与逐日一致抛错」，不试图复刻 addWorkdays
+    // 的逐步抛错（该场景任何真实日历都不会出现）。
+    const cal = createCalendar() // 周一至周五工作
+    const index = buildWorkdayIndex(cal)
+    for (let i = 0; i < 5000; i += 1) {
+      // 连续 5000 个**日历日**里的周内工作日全部放假 → 造出 >3660 天的空档。
+      const iso = isoAt(i)
+      if (cal.workingDays[weekdayMon0(epochDay(iso))]) cal.exceptions[iso] = { kind: 'holiday' }
+    }
+    const idx2 = buildWorkdayIndex(cal)
+    // 单步函数：都抛错，且消息一致。
+    const truth = catchOutcome(() => nextWorkday(isoAt(0), cal))
+    const fast = catchOutcome(() => nextWorkday(isoAt(0), cal, idx2))
+    expect(truth.ok).toBe(false)
+    expect(outcomesEqual(truth, fast)).toBe(true)
+    void index
   })
 })
