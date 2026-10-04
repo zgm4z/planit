@@ -5,7 +5,13 @@ import { useTranslation } from 'react-i18next'
 
 import { useProjectStore } from '../../store/projectStore'
 import { useScheduleStore } from '../../store/scheduleStore'
-import { useViewStore, type ActiveView, type ZoomLevel } from '../../store/viewStore'
+import {
+  useViewStore,
+  DAY_WIDTH_PRESETS,
+  presetOfDayWidth,
+  type ActiveView,
+  type ZoomPreset,
+} from '../../store/viewStore'
 import { MenuBar } from './MenuBar'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from '../../i18n'
@@ -54,8 +60,8 @@ function ToolbarComponent() {
   const redo = useProjectStore((state) => state.redo)
   const closeProject = useProjectStore((state) => state.closeProject)
 
-  const zoom = useViewStore((state) => state.zoom)
-  const setZoom = useViewStore((state) => state.setZoom)
+  const dayWidth = useViewStore((state) => state.dayWidth)
+  const setDayWidth = useViewStore((state) => state.setDayWidth)
   const activeView = useViewStore((state) => state.activeView)
   const setActiveView = useViewStore((state) => state.setActiveView)
   const scheduleError = useScheduleStore((state) => state.error)
@@ -113,12 +119,14 @@ function ToolbarComponent() {
         <div className={styles.group}>
           <SegmentedControl
             size="xs"
-            value={zoom}
-            onChange={(value) => setZoom(value as ZoomLevel)}
+            // 连续值（presetOfDayWidth 返回 null）时 value='' ⇒ 不勾选任何一段
+            value={presetOfDayWidth(dayWidth) ?? ''}
+            onChange={(value) => setDayWidth(DAY_WIDTH_PRESETS[value as ZoomPreset])}
+            data-testid="zoom-switcher"
             data={[
-              { value: 'day', label: t('toolbar.zoom.day') },
-              { value: 'week', label: t('toolbar.zoom.week') },
-              { value: 'month', label: t('toolbar.zoom.month') },
+              { value: 'day', label: <span data-testid="zoom-preset-day">{t('toolbar.zoom.day')}</span> },
+              { value: 'week', label: <span data-testid="zoom-preset-week">{t('toolbar.zoom.week')}</span> },
+              { value: 'month', label: <span data-testid="zoom-preset-month">{t('toolbar.zoom.month')}</span> },
             ]}
           />
         </div>
@@ -126,7 +134,7 @@ function ToolbarComponent() {
 
       {/* 设置组：语言（+ 窄屏溢出菜单）。全局偏好，与显示类控件刻意拉开 16px。 */}
       {narrow ? (
-        <OverflowMenu zoom={zoom} setZoom={setZoom} />
+        <OverflowMenu dayWidth={dayWidth} setDayWidth={setDayWidth} />
       ) : (
         <div className={styles.group}>
           <LanguageSwitcher />
@@ -192,22 +200,23 @@ function isEditableTarget(target: EventTarget | null): boolean {
  *      右上角点亮一个小圆点 —— 否则用户会以为自己的设置丢了。
  */
 function OverflowMenu({
-  zoom,
-  setZoom,
+  dayWidth,
+  setDayWidth,
 }: {
-  zoom: ZoomLevel
-  setZoom: (zoom: ZoomLevel) => void
+  dayWidth: number
+  setDayWidth: (dayWidth: number) => void
 }) {
   const { t, i18n } = useTranslation()
 
-  const zoomLevels: ZoomLevel[] = ['day', 'week', 'month']
+  const presets: ZoomPreset[] = ['day', 'week', 'month']
 
   // 被收进菜单的控件里存在「非默认状态」吗？—— 用于点亮溢出指示器。
-  //   · 缩放：默认「日」（viewStore 的初值 dayWidth = day）。
-  //   · 语言：默认中文（i18n 的 fallbackLng / DEFAULT_LANGUAGE）。resolvedLanguage
-  //     在 init 前可能为 undefined，用 ?? 兜成默认，避免误亮。
+  //   · 缩放：默认「日」（DAY_WIDTH_PRESETS.day = 32）。连续值（presetOfDayWidth
+  //     返回 null）也算非默认，同样点亮角标。
+  //   · 语言：默认中文（i18n 的 fallbackLng / DEFAULT_LANGUAGE）。
   const hasNonDefault =
-    zoom !== 'day' || (i18n.resolvedLanguage ?? DEFAULT_LANGUAGE) !== DEFAULT_LANGUAGE
+    presetOfDayWidth(dayWidth) !== 'day' ||
+    (i18n.resolvedLanguage ?? DEFAULT_LANGUAGE) !== DEFAULT_LANGUAGE
 
   return (
     <Menu position="bottom-end" withinPortal>
@@ -229,14 +238,18 @@ function OverflowMenu({
 
       <Menu.Dropdown>
         <Menu.Label>{t('toolbar.zoomLabel')}</Menu.Label>
-        {zoomLevels.map((level) => (
+        {presets.map((level) => (
           <Menu.Item
             key={level}
             data-testid={`zoom-option-${level}`}
             leftSection={
-              zoom === level ? <IconCheck size={14} /> : <span style={{ width: 14 }} aria-hidden />
+              presetOfDayWidth(dayWidth) === level ? (
+                <IconCheck size={14} />
+              ) : (
+                <span style={{ width: 14 }} aria-hidden />
+              )
             }
-            onClick={() => setZoom(level)}
+            onClick={() => setDayWidth(DAY_WIDTH_PRESETS[level])}
           >
             {t(`toolbar.zoom.${level}`)}
           </Menu.Item>

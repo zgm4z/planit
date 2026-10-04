@@ -2,12 +2,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN, TITLE_COLUMN_WIDTH_MIN, DEFAULT_VISIBLE_COLUMNS } from './columnKeys'
 import {
   COLUMN_WIDTHS_PERSIST_DEBOUNCE_MS,
+  DAY_WIDTH_MAX,
+  DAY_WIDTH_MIN,
+  DAY_WIDTH_PRESETS,
   OUTLINE_COLUMNS_STORAGE_KEY,
   OUTLINE_COLUMN_WIDTHS_STORAGE_KEY,
   loadColumnWidths,
   loadVisibleColumns,
   normalizeColumnWidths,
   normalizeVisibleColumns,
+  presetOfDayWidth,
   useViewStore,
   __resetViewStoreForTests,
 } from './viewStore'
@@ -291,5 +295,59 @@ describe('viewStore 的列宽（columnWidths）', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+// v1.1：连续缩放 —— dayWidth 成为唯一事实源，zoom 枚举删除。
+describe('dayWidth 单一事实源（连续缩放）', () => {
+  it('默认 dayWidth = 32；预设表就是 32 / 12 / 4', () => {
+    expect(useViewStore.getState().dayWidth).toBe(32)
+    expect(DAY_WIDTH_PRESETS).toEqual({ day: 32, week: 12, month: 4 })
+  })
+
+  it('zoom / setZoom / ZoomLevel 已彻底移除（状态上没有这两个键）', () => {
+    const state = useViewStore.getState() as unknown as Record<string, unknown>
+    expect('zoom' in state).toBe(false)
+    expect('setZoom' in state).toBe(false)
+  })
+
+  it('presetOfDayWidth：命中三预设、连续值不命中、非有限数不命中', () => {
+    expect(presetOfDayWidth(32)).toBe('day')
+    expect(presetOfDayWidth(12)).toBe('week')
+    expect(presetOfDayWidth(4)).toBe('month')
+    expect(presetOfDayWidth(31.9)).toBeNull()
+    expect(presetOfDayWidth(2)).toBeNull()
+    expect(presetOfDayWidth(256)).toBeNull()
+    expect(presetOfDayWidth(NaN)).toBeNull()
+    expect(presetOfDayWidth(Infinity)).toBeNull()
+  })
+
+  it('presetOfDayWidth 用 1e-9 表示容差，但不吞掉邻近的连续值', () => {
+    expect(presetOfDayWidth(32 + 1e-10)).toBe('day')
+    expect(presetOfDayWidth(32 + 1e-8)).toBeNull()
+    expect(presetOfDayWidth(12 - 1e-10)).toBe('week')
+  })
+
+  it('setDayWidth clamp 到 [DAY_WIDTH_MIN, DAY_WIDTH_MAX]', () => {
+    useViewStore.getState().setDayWidth(1000)
+    expect(useViewStore.getState().dayWidth).toBe(DAY_WIDTH_MAX)
+    useViewStore.getState().setDayWidth(0)
+    expect(useViewStore.getState().dayWidth).toBe(DAY_WIDTH_MIN)
+    useViewStore.getState().setDayWidth(20)
+    expect(useViewStore.getState().dayWidth).toBe(20)
+  })
+
+  it('setDayWidth 对 NaN / ±Infinity 是 no-op（不写入，也不静默跳回默认值）', () => {
+    useViewStore.getState().setDayWidth(20)
+    useViewStore.getState().setDayWidth(NaN)
+    expect(useViewStore.getState().dayWidth).toBe(20)
+    useViewStore.getState().setDayWidth(Infinity)
+    expect(useViewStore.getState().dayWidth).toBe(20)
+  })
+
+  it('__resetViewStoreForTests 把 dayWidth 复位到 32', () => {
+    useViewStore.getState().setDayWidth(100)
+    __resetViewStoreForTests()
+    expect(useViewStore.getState().dayWidth).toBe(32)
   })
 })

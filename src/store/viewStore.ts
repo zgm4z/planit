@@ -10,7 +10,36 @@ import {
 } from './columnKeys'
 import { useProjectStore } from './projectStore'
 
-export type ZoomLevel = 'day' | 'week' | 'month'
+/**
+ * 三个**预设**（不是档位）。缩放的事实源是连续数字 `dayWidth`，这三个名字只是
+ * 「把 dayWidth 设成某个整数值」的快捷方式，以及在 dayWidth 恰等于该值时点亮按钮。
+ */
+export const DAY_WIDTH_PRESETS = { day: 32, week: 12, month: 4 } as const
+export type ZoomPreset = keyof typeof DAY_WIDTH_PRESETS
+
+/** 一天像素宽的下界（沿用旧 `Math.max(2, …)`）。见设计 §6。 */
+export const DAY_WIDTH_MIN = 2
+/** 一天像素宽的上界。见设计 §6：`ganttWidth = totalDays × dayWidth` 直接进 CSS 列宽。 */
+export const DAY_WIDTH_MAX = 256
+
+/**
+ * 预设判定的**表示容差**（1e-9）——不是「邻近带」。
+ *
+ * 拖拽 / 滚轮走的是乘法路径（`dayWidthFromWheel` / `dayWidthFromDrag`），理论上
+ * 会算出 `32 * (1/1)` 这类表示层非整值；epsilon 只吸收这种 1e-9 量级的误差。
+ * 预设间最小间距是 4，任何有意义的邻近带都会把用户刻意停下的连续值（如 31.9）
+ * 误判成预设——1e-9 远小于用户可达的连续差异，不可能误判。
+ */
+const PRESET_EPSILON = 1e-9
+
+/** dayWidth 恰命中某个预设时返回预设名，否则 null（连续值 = 无按钮高亮）。 */
+export function presetOfDayWidth(dayWidth: number): ZoomPreset | null {
+  if (!Number.isFinite(dayWidth)) return null
+  for (const level of Object.keys(DAY_WIDTH_PRESETS) as ZoomPreset[]) {
+    if (Math.abs(dayWidth - DAY_WIDTH_PRESETS[level]) < PRESET_EPSILON) return level
+  }
+  return null
+}
 
 /**
  * 四个并列的视图。不是一种布局的两种宽度 —— 见 spec §1。
@@ -113,7 +142,6 @@ export function __cancelColumnWidthsPersistForTests(): void {
 }
 
 interface ViewState {
-  zoom: ZoomLevel
   selectedTaskId: TaskId | null
   collapsedIds: Set<TaskId>
   /** 甘特图一天的像素宽度 */
@@ -141,7 +169,6 @@ interface ViewState {
    */
   collapsedResourceIds: Set<ResourceId>
 
-  setZoom: (zoom: ZoomLevel) => void
   selectTask: (taskId: TaskId | null) => void
   toggleCollapsed: (taskId: TaskId) => void
   /** 折叠全部（只折叠有子任务的行）。纯 UI 状态，不入撤销栈 —— 与 toggleCollapsed 同族 */
@@ -161,12 +188,6 @@ interface ViewState {
    *  见实现处的说明：打断合并留在交互现场（Select 的 onChange），本动作是纯 setter。 */
   selectResource: (resourceId: ResourceId | null) => void
   toggleResourceCollapsed: (resourceId: ResourceId) => void
-}
-
-const ZOOM_DAY_WIDTH: Record<ZoomLevel, number> = {
-  day: 32,
-  week: 12,
-  month: 4,
 }
 
 /** 注册顺序 → 序号。归一化时按它排序，让 visibleColumns 的顺序可预测 */
@@ -213,18 +234,15 @@ function persistVisibleColumns(keys: readonly OutlineColumnKey[]): void {
 }
 
 export const useViewStore = create<ViewState>((set, get) => ({
-  zoom: 'day',
   selectedTaskId: null,
   collapsedIds: new Set<TaskId>(),
-  dayWidth: ZOOM_DAY_WIDTH.day,
+  dayWidth: DAY_WIDTH_PRESETS.day,
   activeView: 'gantt',
   visibleColumns: loadVisibleColumns(),
   columnWidths: loadColumnWidths(),
   activeInspectorTab: 'task',
   selectedResourceId: null,
   collapsedResourceIds: new Set<ResourceId>(),
-
-  setZoom: (zoom) => set({ zoom, dayWidth: ZOOM_DAY_WIDTH[zoom] }),
 
   setActiveView: (activeView) => set({ activeView }), // 刻意不落盘
 
@@ -313,17 +331,21 @@ export const useViewStore = create<ViewState>((set, get) => ({
 
   expandAll: () => set({ collapsedIds: new Set<TaskId>() }),
 
-  setDayWidth: (dayWidth) => set({ dayWidth: Math.max(2, dayWidth) }),
+  setDayWidth: (dayWidth) => {
+    // 非有限数（NaN / ±Infinity，来自异常的 deltaY 或键盘连击的中间态）直接忽略，
+    // 不写入 —— 也绝不静默跳回默认值（那会让界面无故跳变）。
+    if (!Number.isFinite(dayWidth)) return
+    set({ dayWidth: Math.min(DAY_WIDTH_MAX, Math.max(DAY_WIDTH_MIN, dayWidth)) })
+  },
 }))
 
 /** 仅供测试使用：把视图状态复位到初始值 */
 export function __resetViewStoreForTests(): void {
   __cancelColumnWidthsPersistForTests()
   useViewStore.setState({
-    zoom: 'day',
     selectedTaskId: null,
     collapsedIds: new Set(),
-    dayWidth: ZOOM_DAY_WIDTH.day,
+    dayWidth: DAY_WIDTH_PRESETS.day,
     activeView: 'gantt',
     visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],
     columnWidths: {},

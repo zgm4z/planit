@@ -7,7 +7,13 @@ import { useTranslation } from 'react-i18next'
 import { findActiveBaseline } from '../../domain/model/baseline'
 import type { SchedulingDirection } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
-import { useViewStore, type ActiveView, type ZoomLevel } from '../../store/viewStore'
+import {
+  useViewStore,
+  DAY_WIDTH_PRESETS,
+  presetOfDayWidth,
+  type ActiveView,
+  type ZoomPreset,
+} from '../../store/viewStore'
 import { canIndent, canOutdent } from '../shared/outlineActions'
 import { createResourceAndGetId } from '../shared/resourceActions'
 import styles from '../styles/Chrome.module.scss'
@@ -299,8 +305,8 @@ function ViewItems() {
   const project = useProjectStore((state) => state.project)
   const activeView = useViewStore((state) => state.activeView)
   const setActiveView = useViewStore((state) => state.setActiveView)
-  const zoom = useViewStore((state) => state.zoom)
-  const setZoom = useViewStore((state) => state.setZoom)
+  const dayWidth = useViewStore((state) => state.dayWidth)
+  const setDayWidth = useViewStore((state) => state.setDayWidth)
   const collapsedIds = useViewStore((state) => state.collapsedIds)
   const collapseAll = useViewStore((state) => state.collapseAll)
   const expandAll = useViewStore((state) => state.expandAll)
@@ -321,7 +327,7 @@ function ViewItems() {
     { view: 'calendar', label: t('toolbar.view.calendar') },
     { view: 'resources', label: t('toolbar.view.resources') },
   ]
-  const zooms: ZoomLevel[] = ['day', 'week', 'month']
+  const presets: ZoomPreset[] = ['day', 'week', 'month']
 
   return (
     <>
@@ -338,12 +344,12 @@ function ViewItems() {
 
       <Menu.Divider />
 
-      {zooms.map((level) => (
+      {presets.map((level) => (
         <Menu.Item
           key={level}
           data-testid={`menu-zoom-option-${level}`}
-          leftSection={<Check on={zoom === level} />}
-          onClick={() => setZoom(level)}
+          leftSection={<Check on={presetOfDayWidth(dayWidth) === level} />}
+          onClick={() => setDayWidth(DAY_WIDTH_PRESETS[level])}
         >
           {t(`toolbar.zoom.${level}`)}
         </Menu.Item>
