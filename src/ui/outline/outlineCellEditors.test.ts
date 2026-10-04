@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { ComputedSchedule } from '../../domain/model/types'
+import type { ComputedSchedule, Task } from '../../domain/model/types'
 import { createTask, __resetIdCounterForTests } from '../../domain/model/factories'
 import { initCommands, getHandler, __resetRegistryForTests } from '../../commands/registry'
 import { OUTLINE_COLUMN_KEYS, type OutlineColumnKey } from '../../store/columnKeys'
@@ -152,5 +152,32 @@ describe('outlineCellEditors · getOutlineCellEditor / getCellDisabledReason', (
     expect(getCellDisabledReason('start', createTask({ name: 'g', kind: 'group' }), sched)).toBe('outline.edit.disabled.group')
     expect(getCellDisabledReason('start', createTask({ name: 'A' }), undefined)).toBe('outline.edit.disabled.noSchedule')
     expect(getCellDisabledReason('effort', createTask({ name: 'A' }), sched)).toBe('outline.edit.disabled.fixedDuration')
+  })
+})
+
+describe('outlineCellEditors · 守卫与原因同源（canEdit ⟺ 无原因）', () => {
+  const sched = schedule('2026-03-04', '2026-03-06')
+  const autoLeaf = createTask({ name: 'leaf', duration: 3 })
+  const tasks: Task[] = [
+    autoLeaf,
+    { ...autoLeaf, scheduling: { mode: 'manual' as const, start: '2026-03-02T09:00', finish: '2026-03-04T18:00' } },
+    createTask({ name: 'g', kind: 'group' }),
+    createTask({ name: 'm', kind: 'milestone' }),
+    createTask({ name: 'e', effortMode: 'fixedEffort', effort: 3 }),
+    { ...createTask({ name: 'em', effortMode: 'fixedEffort', effort: 3 }), kind: 'milestone' as const },
+  ]
+
+  it('全列 × 多类型 × 有/无排期：canEdit=false ⟺ getCellDisabledReason 有值', () => {
+    for (const key of Object.keys(OUTLINE_CELL_EDITORS) as OutlineColumnKey[]) {
+      const spec = OUTLINE_CELL_EDITORS[key]!
+      for (const task of tasks) {
+        for (const schedule of [sched, undefined]) {
+          const canEdit = spec.canEdit(task, schedule)
+          const reason = getCellDisabledReason(key, task, schedule)
+          // 两处守卫必须同源：能编 ⟺ 无原因；不能编 ⟺ 有原因（将来任一处漂移立刻红）
+          expect(reason !== undefined, `${key} / ${task.kind} / ${schedule ? '排期' : '无排期'}`).toBe(!canEdit)
+        }
+      }
+    }
   })
 })

@@ -512,4 +512,26 @@ describe('OutlineTree', () => {
     fireEvent.click(screen.getByTestId(`outline-row-${parentId}`).querySelector('button')!)
     expect(onToggleCollapse).toHaveBeenCalledWith(parentId)
   })
+
+  it('日期列：双击 finish 改结束端 → 起点不变、duration 按新区间重算', async () => {
+    const user = userEvent.setup()
+    renderTree(
+      OUTLINE_COLUMNS.filter((c) => ['title', 'start', 'finish'].includes(c.key)),
+      { [childId]: schedule('2026-03-04', '2026-03-06') },
+    )
+
+    await user.dblClick(screen.getByTestId(`outline-edit-finish-${childId}`))
+    const input = screen.getByTestId(`outline-edit-input-finish-${childId}`)
+    await user.clear(input)
+    await user.type(input, '2026-03-05')
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    const task = useProjectStore.getState().project!.tasks[childId]
+    expect(task.scheduling.mode).toBe('manual')
+    // 起点不动，只有结束端变了
+    expect(task.scheduling.mode === 'manual' && task.scheduling.start).toBe('2026-03-04')
+    expect(task.scheduling.mode === 'manual' && task.scheduling.finish).toBe('2026-03-05')
+    // duration 恒等于结果区间宽度：03-04..03-05 = 2 个工作日
+    expect(task.duration).toBe(2)
+  })
 })

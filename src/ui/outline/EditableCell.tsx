@@ -108,6 +108,9 @@ export function EditableCell({
         value={draft}
         min={spec.min}
         max={spec.max}
+        // 量纲位数（0 = 整数、1 = 人日）：让规格表的 `digits` 真正驱动输入控件的
+        // 小数位呈现（否则它只是死字段——声明了却无人读）。
+        decimalScale={spec.digits}
         autoFocus
         data-testid={inputTestId}
         aria-label={ariaLabel}

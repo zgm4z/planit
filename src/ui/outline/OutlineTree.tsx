@@ -19,7 +19,7 @@ import {
   type OutlineColumn,
 } from './outlineColumns'
 import { EditableCell } from './EditableCell'
-import { getOutlineCellEditor, getCellDisabledReason } from './outlineCellEditors'
+import { OUTLINE_CELL_EDITORS, getOutlineCellEditor, getCellDisabledReason } from './outlineCellEditors'
 import { useProjectStore } from '../../store/projectStore'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { formatCost, formatDate, formatDays, formatEffort, formatPercent } from '../shared/format'
@@ -153,10 +153,18 @@ export function OutlineTree({
   )
 }
 
+/**
+ * title 的编辑器规格。`task.rename` 的**唯一构造处**就是规格表的 `OUTLINE_CELL_EDITORS.title`
+ * （`seed` / `toCommand`）—— TitleCell 只消费它、绝不在渲染层另写一份命令。两份实现
+ * 漂移不会被任何测试发现，正是本仓最忌的「两份真相」。
+ */
+const TITLE_SPEC = OUTLINE_CELL_EDITORS.title!
+
 /** 标题单元格：缩进 + 折叠箭头 + 名称。**摘要任务名加粗**。
  *
  * title 是内联编辑的**唯一例外**：双击目标必须只是**名称 span**（折叠三角仍要可点），
- * 故不复用 EditableCell，在本组件内实现「双击名称 → 受控输入 → task.rename」。
+ * 故不复用 EditableCell 的渲染结构（它把整个单元格当双击目标），但**复用其规格表**的
+ * `seed` / `toCommand` —— 命令构造仍只有一处。
  */
 function TitleCell({
   row,
@@ -171,17 +179,12 @@ function TitleCell({
   const dispatch = useProjectStore((state) => state.dispatch)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(task.name)
+  const [draft, setDraft] = useState(() => TITLE_SPEC.seed(task, undefined))
 
   const commit = () => {
     setEditing(false)
-    if (draft === task.name) return
-    dispatch({
-      type: 'task.rename',
-      label: 'commands.task.rename',
-      payload: { taskId: task.id, name: draft },
-      coalesceKey: `task.rename:${task.id}`,
-    })
+    const command = TITLE_SPEC.toCommand(task, undefined, draft)
+    if (command) dispatch(command)
   }
 
   return (
@@ -227,7 +230,7 @@ function TitleCell({
           onDoubleClick={(event) => {
             event.stopPropagation()
             breakCoalescing()
-            setDraft(task.name)
+            setDraft(TITLE_SPEC.seed(task, undefined))
             setEditing(true)
           }}
         >
