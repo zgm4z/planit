@@ -100,6 +100,15 @@ describe('ResourceAssignmentMenu 禁用规则', () => {
   })
 })
 
+describe('ResourceAssignmentMenu 下拉标题', () => {
+  it('打开后渲染 assignmentMenu.title（该键不是死键）', async () => {
+    useViewStore.getState().setTaskSelection([taskIds[0]])
+    renderMenu()
+    fireEvent.click(screen.getByTestId('assignment-menu-trigger'))
+    expect(await screen.findByText('分配资源')).toBeInTheDocument()
+  })
+})
+
 describe('ResourceAssignmentMenu 批量分配', () => {
   it('勾选 → 每个选中任务各一条 units=1.0 的 create，共用一个 coalesceKey（一条撤销记录）', async () => {
     useViewStore.getState().setTaskSelection(taskIds)

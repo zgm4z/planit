@@ -128,6 +128,8 @@ export function ResourceAssignmentMenu() {
           </Menu.Target>
 
           <Menu.Dropdown>
+            {/* 下拉标题（spec §7 的新键）—— 明说这个下拉是干什么的 */}
+            <Menu.Label>{t('assignmentMenu.title')}</Menu.Label>
             <ResourceAssignmentList
               groups={tree.groups}
               ungrouped={tree.ungrouped}
