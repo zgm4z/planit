@@ -51,6 +51,7 @@
   },
   "outline": {
     "columnTitle": "Task",
+    "newTaskName": "New Task",
     "resizeHandle": "Drag to resize the {{column}} column; double-click to reset",
     "expand": "Expand subtasks",
     "collapse": "Collapse subtasks",

@@ -49,3 +49,13 @@ describe('gantt 块的三语叶子键集合', () => {
     expect(zh).toContain('gantt.assignedResources')
   })
 })
+
+describe('outline.newTaskName', () => {
+  it('三语齐全且非空（回车新建同级任务时的默认名）', () => {
+    for (const dict of [zhCN, enUS, jaJP]) {
+      const value = (dict.outline as Dict).newTaskName
+      expect(typeof value).toBe('string')
+      expect((value as string).length).toBeGreaterThan(0)
+    }
+  })
+})

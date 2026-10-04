@@ -54,6 +54,7 @@
   },
   "outline": {
     "columnTitle": "任务",
+    "newTaskName": "新任务",
     "resizeHandle": "拖拽调整「{{column}}」列宽，双击复位",
     "expand": "展开子任务",
     "collapse": "折叠子任务",
