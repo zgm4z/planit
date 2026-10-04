@@ -121,5 +121,10 @@ describe('资源平衡性能回归（500 叶子 × 15 资源 高争用）', () =
     // 粗筛：没有卡死
     expect(elapsed).toBeLessThan(SMOKE_BOUND_MS)
     expect(Object.keys(result.schedules).length).toBeGreaterThanOrEqual(500)
-  })
+    // **显式超时**：本用例是整个套件里最重的一个（500 叶子 × 15 资源）。
+    // vitest 默认的 5s 超时是一道**墙钟闸门**，与上面声明的 `SMOKE_BOUND_MS = 60s`
+    // 直接矛盾 —— 并行跑套件时 CPU 争用会把单次 solve 拖到 5s 以上，于是测试以
+    // 「Test timed out in 5000ms」偶发变红（1/3 量级），而断言本身全是确定性的。
+    // 放宽到比粗筛界更宽，让真正的判据是断言而非默认超时。
+  }, SMOKE_BOUND_MS + 30_000)
 })
