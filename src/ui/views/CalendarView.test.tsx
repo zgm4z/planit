@@ -205,7 +205,7 @@ describe('日历编辑驱动排期（承接已删的 CalendarSettings 用例）'
   const finishOf = (taskId: string) =>
     useScheduleStore.getState().result.schedules[taskId].earlyFinish
 
-  it('取消勾选「周五」→ 命令入栈一条，且 B 的完成日推到下周一', () => {
+  it('取消勾选「周五」→ 命令入栈一条，且 B 的完成日推到下周一', async () => {
     const { bId } = fixtureWithDependency()
     renderView()
 
@@ -216,7 +216,8 @@ describe('日历编辑驱动排期（承接已删的 CalendarSettings 用例）'
 
     expect(calendar().workingDays[4]).toBe(false)
     expect(useProjectStore.getState().undoStack).toHaveLength(1) // 一条真实可撤销的命令
-    expect(finishOf(bId)).toBe('2026-03-09') // 排期**真的**重算了
+    // 求解已移到 worker（单测走同步兜底）→ 重算是**异步**的，等它落地再断言
+    await waitFor(() => expect(finishOf(bId)).toBe('2026-03-09')) // 排期**真的**重算了
   })
 
   it('把 03-03 设为假日 → 排期跳过该日，A 顺延到 03-05', async () => {
@@ -229,7 +230,7 @@ describe('日历编辑驱动排期（承接已删的 CalendarSettings 用例）'
     fireEvent.click(screen.getByTestId('calendar-range-submit'))
 
     expect(exceptions()['2026-03-03']).toEqual({ kind: 'holiday' })
-    expect(finishOf(aId)).toBe('2026-03-05')
+    await waitFor(() => expect(finishOf(aId)).toBe('2026-03-05'))
   })
 })
 

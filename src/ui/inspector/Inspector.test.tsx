@@ -319,7 +319,7 @@ describe('基线分组（v1.0 解禁）', () => {
     expect(project.activeBaselineId).toBeNull()
   })
 
-  it('显示引擎派生的基线与差异（工作日口径），不在 UI 重算', () => {
+  it('显示引擎派生的基线与差异（工作日口径），不在 UI 重算', async () => {
     // 保存一份「此刻」的基线，之后把工期改长，再看差异 —— 差异由引擎派生，不由 UI 重算
     act(() =>
       useProjectStore.getState().dispatch({
@@ -337,6 +337,8 @@ describe('基线分组（v1.0 解禁）', () => {
       }),
     )
 
+    // 求解异步（单测走同步兜底）：先等重算落地再渲染，否则读到的是上一次的派生量
+    await waitFor(() => expect(useScheduleStore.getState().computing).toBe(false))
     renderInspector()
 
     const diff = useScheduleStore.getState().result.baselineDiffs[taskId]
@@ -431,7 +433,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
     expect(screen.getByText(/日期由子任务汇总/)).toBeInTheDocument()
   })
 
-  it('冲突在任务 Tab 顶部显示中性不可行说明', () => {
+  it('冲突在任务 Tab 顶部显示中性不可行说明', async () => {
     const project = useProjectStore.getState().project!
     const dep = createDependency(siblingId, taskId, 'FS', 0)
     useProjectStore.setState({
@@ -453,6 +455,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
       },
     })
 
+    await waitFor(() => expect(useScheduleStore.getState().computing).toBe(false))
     renderInspector()
 
     const alert = screen.getByRole('alert')
@@ -460,7 +463,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
     expect(alert).not.toHaveTextContent('finishNoLaterThan')
   })
 
-  it('manual 后继顶住前置 → 显示依赖冲突文案（含边界日期，且不泄露内部字段）', () => {
+  it('manual 后继顶住前置 → 显示依赖冲突文案（含边界日期，且不泄露内部字段）', async () => {
     const project = useProjectStore.getState().project!
     // 选中任务「写文档」(child, 3d) 是前置；「写代码」(sibling) 改为 manual 钉在 03-03
     // （早于 child 的自然完成日 03-04）→ child 被顶出可行窗口，冲突归因到它的 manual 后继。
@@ -479,6 +482,7 @@ describe('Inspector（搬迁后的既有行为仍成立）', () => {
       },
     })
 
+    await waitFor(() => expect(useScheduleStore.getState().computing).toBe(false))
     renderInspector()
 
     const alert = screen.getByRole('alert')
@@ -536,7 +540,7 @@ describe('任务信息组', () => {
     expect(screen.getByText(/分组的类型由子任务决定/)).toBeInTheDocument()
   })
 
-  it('投入 / 剩余显示引擎派生的真实值，且是只读文本而非禁用输入框', () => {
+  it('投入 / 剩余显示引擎派生的真实值，且是只读文本而非禁用输入框', async () => {
     const project = useProjectStore.getState().project!
     const resource = createResource({ name: '张三' })
     const assignment = createAssignment({ taskId, resourceId: resource.id, units: 1 })
@@ -548,6 +552,7 @@ describe('任务信息组', () => {
         assignments: { [assignment.id]: assignment },
       },
     })
+    await waitFor(() => expect(useScheduleStore.getState().computing).toBe(false))
     renderInspector()
 
     // duration 3 天 × Σunits(1) = 3 人日（fixedDuration 正算）；progress=0 → 剩余 = 投入
@@ -564,7 +569,7 @@ describe('任务信息组', () => {
     expect(screen.queryByText(/成本将在 v0\.5 提供/)).not.toBeInTheDocument()
   })
 
-  it('投入按 §1.3 格式化：0.8889 显示为 0.9（绝不放原始浮点）', () => {
+  it('投入按 §1.3 格式化：0.8889 显示为 0.9（绝不放原始浮点）', async () => {
     const project = useProjectStore.getState().project!
     const resource = createResource({ name: '张三' })
     // units = 1/9、工期 8 → 投入 = 8/9 = 0.8888…
@@ -580,6 +585,7 @@ describe('任务信息组', () => {
         assignments: { [assignment.id]: assignment },
       },
     })
+    await waitFor(() => expect(useScheduleStore.getState().computing).toBe(false))
     renderInspector()
 
     // 引擎给的是 0.888888…，渲染必须是「0.9」—— 写错（用原始值 / toFixed(4)）就会红
@@ -587,7 +593,7 @@ describe('任务信息组', () => {
     expect(screen.getByTestId('stat-effort')).not.toHaveTextContent('0.8889')
   })
 
-  it('启用成本概念后，三种成本合并成一行只读文本（不是三个灰框）', () => {
+  it('启用成本概念后，三种成本合并成一行只读文本（不是三个灰框）', async () => {
     const project = useProjectStore.getState().project!
     // 一次性使用成本 1000 → 任务成本 = 1000；无小时费率 → 资源成本 0
     // （工厂不接受 cost 覆盖，故先建后补 —— 与命令层写回的形状一致）
@@ -600,6 +606,7 @@ describe('任务信息组', () => {
         assignments: { [assignment.id]: assignment },
       },
     })
+    await waitFor(() => expect(useScheduleStore.getState().computing).toBe(false))
     renderInspector()
 
     // 一行只读文本，含千分位（§1.3：成本 0 位 + 千分位）
