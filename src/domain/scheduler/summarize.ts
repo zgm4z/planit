@@ -38,23 +38,48 @@ export function summarizeParents(
       return leafSchedules[id] ?? null
     }
 
-    const children = task.childIds
-      .map(visit)
-      .filter((s): s is ComputedSchedule => s !== null)
+    // 单趟累加 min/max，不逐字段 `.map()` 出中间数组 —— 每个分组 6 个临时数组的分配
+    // 是纯 CPM 里 summarize 的主要成本（列在 profile 的 `visit` 名下）。语义与
+    // 原来的 `minOf(children.map(...))` / `Math.min(...)` 逐字等价。
+    let earlyStart: string | undefined
+    let earlyFinish: string | undefined
+    let lateStart: string | undefined
+    let lateFinish: string | undefined
+    let scheduledStart: string | undefined
+    let scheduledFinish: string | undefined
+    let totalSlack = Number.POSITIVE_INFINITY
+    let freeSlack = Number.POSITIVE_INFINITY
+    let isCritical = false
+    let count = 0
+
+    for (const childId of task.childIds) {
+      const child = visit(childId)
+      if (child === null) continue
+      count += 1
+      if (earlyStart === undefined || child.earlyStart < earlyStart) earlyStart = child.earlyStart
+      if (earlyFinish === undefined || child.earlyFinish > earlyFinish) earlyFinish = child.earlyFinish
+      if (lateStart === undefined || child.lateStart < lateStart) lateStart = child.lateStart
+      if (lateFinish === undefined || child.lateFinish > lateFinish) lateFinish = child.lateFinish
+      if (scheduledStart === undefined || child.scheduledStart < scheduledStart) scheduledStart = child.scheduledStart
+      if (scheduledFinish === undefined || child.scheduledFinish > scheduledFinish) scheduledFinish = child.scheduledFinish
+      if (child.totalSlack < totalSlack) totalSlack = child.totalSlack
+      if (child.freeSlack < freeSlack) freeSlack = child.freeSlack
+      if (child.isCritical) isCritical = true
+    }
 
     // 有 childIds 但子任务全部缺失（数据损坏）时，退化为不做汇总
-    if (children.length === 0) return null
+    if (count === 0) return null
 
     const summary: ComputedSchedule = {
-      earlyStart: minOf(children.map((c) => c.earlyStart)),
-      earlyFinish: maxOf(children.map((c) => c.earlyFinish)),
-      lateStart: minOf(children.map((c) => c.lateStart)),
-      lateFinish: maxOf(children.map((c) => c.lateFinish)),
-      scheduledStart: minOf(children.map((c) => c.scheduledStart)),
-      scheduledFinish: maxOf(children.map((c) => c.scheduledFinish)),
-      totalSlack: Math.min(...children.map((c) => c.totalSlack)),
-      freeSlack: Math.min(...children.map((c) => c.freeSlack)),
-      isCritical: children.some((c) => c.isCritical),
+      earlyStart: earlyStart!,
+      earlyFinish: earlyFinish!,
+      lateStart: lateStart!,
+      lateFinish: lateFinish!,
+      scheduledStart: scheduledStart!,
+      scheduledFinish: scheduledFinish!,
+      totalSlack,
+      freeSlack,
+      isCritical,
     }
     result[id] = summary
     return summary
@@ -116,12 +141,4 @@ export function detectConflicts(
 
   for (const rootId of rootIds) visit(rootId)
   return conflicts
-}
-
-function minOf(dates: string[]): string {
-  return dates.reduce((a, b) => (a < b ? a : b))
-}
-
-function maxOf(dates: string[]): string {
-  return dates.reduce((a, b) => (a > b ? a : b))
 }
