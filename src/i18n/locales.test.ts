@@ -39,3 +39,13 @@ describe('i18n 语料', () => {
     }
   })
 })
+
+describe('gantt 块的三语叶子键集合', () => {
+  it('zh / en / ja 完全相等，且含新增的资源名两键', () => {
+    const zh = flattenKeys(zhCN.gantt as Dict, 'gantt').sort()
+    expect(flattenKeys(enUS.gantt as Dict, 'gantt').sort()).toEqual(zh)
+    expect(flattenKeys(jaJP.gantt as Dict, 'gantt').sort()).toEqual(zh)
+    expect(zh).toContain('gantt.resourceSeparator')
+    expect(zh).toContain('gantt.assignedResources')
+  })
+})

@@ -108,7 +108,9 @@
   },
   "gantt": {
     "dragHint": "{{start}} → {{finish}} · {{days}} workdays",
-    "startLink": "Start link"
+    "startLink": "Start link",
+    "resourceSeparator": ", ",
+    "assignedResources": "Assigned: {{names}}"
   },
   "inspector": {
     "title": "Task details",
