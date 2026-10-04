@@ -65,6 +65,17 @@
     "disabledReason": {
       "actualCost": "Requires actual-cost entry (not scheduled yet)"
     },
+    "edit": {
+      "aria": "Edit {{column}}",
+      "invalidNumber": "Enter a number",
+      "disabled": {
+        "group": "A summary's field is rolled up from its subtasks",
+        "manualDuration": "Manual duration is fixed by the interval; edit start/finish instead",
+        "milestone": "A milestone has no duration",
+        "fixedDuration": "Switch to fixed effort to edit effort",
+        "noSchedule": "Not scheduled yet"
+      }
+    },
     "columns": {
       "kind": "Type",
       "title": "Title",
