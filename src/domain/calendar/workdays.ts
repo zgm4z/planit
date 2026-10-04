@@ -251,6 +251,11 @@ function workdaysBetweenDay(a: number, b: number, cal: Calendar, index?: Workday
 /**
  * 公开签名保持 `(a, b, cal)`。第四参 `index` 可选 —— 热路径（`solve()` 经
  * `buildScheduleContext`）传入预建索引；其余调用点省略即走逐日实现（结果相同）。
+ *
+ * ⚠️ **`index` 必须是由同一个 `cal` 构建出来的**（`buildWorkdayIndex(cal)`）。
+ * 传错日历不会报错，只会静默算出与该 `cal` 不符的结果 —— 因为快路径完全信任
+ * 索引里的周模式与例外表。仓库内所有调用点都满足这个前提（索引与日历同源于
+ * 同一个 context / 同一个 `input`），新加调用点时请照做。
  */
 export function workdaysBetween(
   a: DateStr,
