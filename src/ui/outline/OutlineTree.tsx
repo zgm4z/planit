@@ -40,6 +40,9 @@ interface OutlineTreeProps {
   baselineDiffs: Record<TaskId, BaselineComparison>
   /** 要渲染的列，**调用方保证已按注册表顺序排好** */
   columns: OutlineColumn[]
+  /** 多选全集（高亮判据）。传 Set 以便逐行 O(1) 判定 */
+  selectedTaskIds: ReadonlySet<TaskId>
+  /** 锚点 —— 集合里被聚焦的那一个（右栏 / 拖拽读它），另给一档样式 */
   selectedTaskId: TaskId | null
   onSelect: (taskId: TaskId, mods: SelectionMods) => void
   onToggleCollapse: (taskId: TaskId) => void
@@ -59,6 +62,7 @@ export function OutlineTree({
   earnedValues,
   baselineDiffs,
   columns,
+  selectedTaskIds,
   selectedTaskId,
   onSelect,
   onToggleCollapse,
@@ -72,7 +76,9 @@ export function OutlineTree({
         const task = project.tasks[row.taskId]
         if (!task) return null
 
-        const selected = row.taskId === selectedTaskId
+        // 高亮判据是**全集**（多选），锚点在其上另加一档（焦点）。
+        const selected = selectedTaskIds.has(row.taskId)
+        const anchor = row.taskId === selectedTaskId
         const schedule = schedules[row.taskId]
         // 摘要行（有子任务）= 结构层（§2.2 §3.1）：底带横贯整行 + 名字 600 字重。
         const isSummary = row.hasChildren
@@ -82,7 +88,7 @@ export function OutlineTree({
             key={item.key}
             className={`${styles.outlineRow} ${isSummary ? styles.outlineRowSummary : ''} ${
               selected ? styles.outlineRowSelected : ''
-            }`}
+            } ${anchor ? styles.outlineRowAnchor : ''}`}
             style={{ transform: `translateY(${item.start}px)`, height: item.size }}
             onClick={(event) =>
               onSelect(row.taskId, {
@@ -91,6 +97,8 @@ export function OutlineTree({
                 shiftKey: event.shiftKey,
               })
             }
+            data-selected={selected || undefined}
+            data-anchor={anchor || undefined}
             data-testid={`outline-row-${row.taskId}`}
           >
             {columns.map((column) => {

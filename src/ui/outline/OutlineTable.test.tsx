@@ -44,6 +44,7 @@ function renderTable(keys = DEFAULT_VISIBLE_COLUMNS) {
         earnedValues={{}}
         baselineDiffs={{}}
         columns={columnsFrom(keys)}
+        selectedTaskIds={new Set()}
         selectedTaskId={null}
         onSelect={() => {}}
         onToggleCollapse={() => {}}

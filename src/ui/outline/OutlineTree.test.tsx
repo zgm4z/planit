@@ -59,6 +59,7 @@ function renderTree(columns = GANTT_OUTLINE_COLUMNS, schedules: Record<string, C
         earnedValues={{}}
         baselineDiffs={{}}
         columns={columns}
+        selectedTaskIds={new Set()}
         selectedTaskId={null}
         onSelect={() => {}}
         onToggleCollapse={() => {}}
@@ -148,6 +149,7 @@ describe('OutlineTree', () => {
           earnedValues={{}}
           baselineDiffs={{}}
           columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskIds={new Set()}
           selectedTaskId={null}
           onSelect={() => {}}
           onToggleCollapse={onToggleCollapse}
@@ -195,6 +197,7 @@ describe('OutlineTree', () => {
           columns={OUTLINE_COLUMNS.filter((c) =>
             ['title', 'start', 'duration', 'taskCost'].includes(c.key),
           )}
+          selectedTaskIds={new Set()}
           selectedTaskId={null}
           onSelect={() => {}}
           onToggleCollapse={() => {}}
@@ -227,6 +230,7 @@ describe('OutlineTree', () => {
           columns={OUTLINE_COLUMNS.filter((c) =>
             ['title', 'bcwp', 'bcws', 'duration'].includes(c.key),
           )}
+          selectedTaskIds={new Set()}
           selectedTaskId={null}
           onSelect={() => {}}
           onToggleCollapse={() => {}}
@@ -326,6 +330,7 @@ describe('OutlineTree', () => {
             earnedValues={{}}
             baselineDiffs={{}}
             columns={columns}
+            selectedTaskIds={new Set()}
             selectedTaskId={null}
             onSelect={() => {}}
             onToggleCollapse={() => {}}
@@ -494,6 +499,7 @@ describe('OutlineTree', () => {
           earnedValues={{}}
           baselineDiffs={{}}
           columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskIds={new Set()}
           selectedTaskId={null}
           onSelect={() => {}}
           onToggleCollapse={onToggleCollapse}
@@ -552,6 +558,7 @@ describe('OutlineTree 的多选修饰键', () => {
           earnedValues={{}}
           baselineDiffs={{}}
           columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskIds={new Set()}
           selectedTaskId={null}
           onSelect={(id, mods) => calls.push({ id, mods })}
           onToggleCollapse={() => {}}
@@ -564,5 +571,49 @@ describe('OutlineTree 的多选修饰键', () => {
 
     expect(calls[0]).toEqual({ id: parentId, mods: { ctrlKey: true, metaKey: false, shiftKey: false } })
     expect(calls[1]).toEqual({ id: childId, mods: { ctrlKey: false, metaKey: false, shiftKey: true } })
+  })
+})
+
+describe('OutlineTree 的多选高亮', () => {
+  const renderWithSelection = (selected: string[], anchor: string | null) => {
+    const rows = flattenVisibleRows(project, new Set())
+    return render(
+      <MantineProvider>
+        <OutlineTree
+          project={project}
+          rows={rows}
+          virtualItems={virtualItems(rows.length)}
+          schedules={{}}
+          efforts={{}}
+          costs={{}}
+          earnedValues={{}}
+          baselineDiffs={{}}
+          columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskIds={new Set(selected)}
+          selectedTaskId={anchor}
+          onSelect={() => {}}
+          onToggleCollapse={() => {}}
+        />
+      </MantineProvider>,
+    )
+  }
+
+  it('集合里每一行都高亮；锚点另带 data-anchor（焦点）', () => {
+    renderWithSelection([parentId, childId], parentId)
+
+    const parentRow = screen.getByTestId(`outline-row-${parentId}`)
+    const childRow = screen.getByTestId(`outline-row-${childId}`)
+    expect(parentRow).toHaveAttribute('data-selected', 'true')
+    expect(childRow).toHaveAttribute('data-selected', 'true')
+    // 焦点（锚点）只有父行
+    expect(parentRow).toHaveAttribute('data-anchor', 'true')
+    expect(childRow).not.toHaveAttribute('data-anchor')
+  })
+
+  it('不在集合里的行不高亮（高亮判据是全集，不只是锚点）', () => {
+    renderWithSelection([childId], childId)
+
+    expect(screen.getByTestId(`outline-row-${parentId}`)).not.toHaveAttribute('data-selected')
+    expect(screen.getByTestId(`outline-row-${childId}`)).toHaveAttribute('data-selected', 'true')
   })
 })

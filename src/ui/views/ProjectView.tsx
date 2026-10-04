@@ -101,6 +101,9 @@ export function ProjectView() {
   const visibleTaskIds = useMemo(() => rows.map((row) => row.taskId), [rows])
   const visibleResourceIds = useMemo(() => resourceRows.map((row) => row.resourceId), [resourceRows])
 
+  // 高亮判据 = 多选全集（Set 以便逐行 O(1)）。锚点另给一档样式（见 OutlineTree）。
+  const taskSelectionSet = useMemo(() => new Set(selectedTaskIds), [selectedTaskIds])
+
   const handleSelectTask = useCallback(
     (taskId: string, mods: SelectionMods) => {
       const next = resolveClickSelection(visibleTaskIds, selectedTaskIds, selectedTaskId, taskId, mods)
@@ -388,6 +391,7 @@ export function ProjectView() {
                   earnedValues={schedulesResult.earnedValues}
                   baselineDiffs={schedulesResult.baselineDiffs}
                   columns={GANTT_OUTLINE_COLUMNS}
+                  selectedTaskIds={taskSelectionSet}
                   selectedTaskId={selectedTaskId}
                   onSelect={handleSelectTask}
                   onToggleCollapse={toggleCollapsed}
@@ -483,6 +487,7 @@ export function ProjectView() {
               earnedValues={schedulesResult.earnedValues}
               baselineDiffs={schedulesResult.baselineDiffs}
               columns={outlineColumns}
+              selectedTaskIds={taskSelectionSet}
               selectedTaskId={selectedTaskId}
               onSelect={handleSelectTask}
               onToggleCollapse={toggleCollapsed}

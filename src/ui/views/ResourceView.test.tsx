@@ -223,6 +223,12 @@ describe('资源视图（视图 B）', () => {
 
     expect(useViewStore.getState().selectedResourceIds).toEqual([alice.id, bob.id])
     expect(useViewStore.getState().selectedResourceId).toBe(bob.id)
+
+    // 高亮是**全集**：两行都 data-selected；锚点（bob）另带 data-anchor
+    expect(screen.getByTestId(`resource-row-${alice.id}`)).toHaveAttribute('data-selected', 'true')
+    expect(screen.getByTestId(`resource-row-${bob.id}`)).toHaveAttribute('data-selected', 'true')
+    expect(screen.getByTestId(`resource-row-${bob.id}`)).toHaveAttribute('data-anchor', 'true')
+    expect(screen.getByTestId(`resource-row-${alice.id}`)).not.toHaveAttribute('data-anchor')
   })
 })
 

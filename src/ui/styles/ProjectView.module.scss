@@ -119,14 +119,22 @@
   }
 }
 
-// 选中行（§4.2）：--work-soft 底 + 左 2px --work 竖条（不是整行深蓝）。
-// 竖条用 inset box-shadow 而非 border —— 不改变盒模型，行高与列宽都不受影响。
+// 选中行（§4.2）：--work-soft 底。**多选下集合里每一行都算选中** —— 底带是判据 `set.has(id)`。
 .outlineRowSelected {
   background: var(--planit-work-soft);
-  box-shadow: inset 2px 0 0 var(--planit-work);
 
   &:hover {
     background: var(--planit-work-soft);
+  }
+}
+
+// 锚点（焦点）在「已选中」之上再加左 2px --work 竖条 —— 多选时借它一眼看出「右栏/拖拽认的是哪一个」。
+// 竖条用 inset box-shadow 而非 border —— 不改变盒模型，行高与列宽都不受影响。
+// 单选时集合 = {锚点}，故外观与旧的「选中态」完全一致（背景 + 竖条）。
+.outlineRowAnchor {
+  box-shadow: inset 2px 0 0 var(--planit-work);
+
+  &:hover {
     box-shadow: inset 2px 0 0 var(--planit-work);
   }
 }

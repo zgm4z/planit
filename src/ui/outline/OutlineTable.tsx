@@ -31,6 +31,9 @@ interface OutlineTableProps {
   baselineDiffs: Record<TaskId, BaselineComparison>
   /** 已按注册表顺序排好的可见列 */
   columns: OutlineColumn[]
+  /** 多选全集（高亮判据） */
+  selectedTaskIds: ReadonlySet<TaskId>
+  /** 锚点（焦点） */
   selectedTaskId: TaskId | null
   onSelect: (taskId: TaskId, mods: SelectionMods) => void
   onToggleCollapse: (taskId: TaskId) => void
@@ -53,6 +56,7 @@ export function OutlineTable({
   earnedValues,
   baselineDiffs,
   columns,
+  selectedTaskIds,
   selectedTaskId,
   onSelect,
   onToggleCollapse,
@@ -180,6 +184,7 @@ export function OutlineTable({
         earnedValues={earnedValues}
         baselineDiffs={baselineDiffs}
         columns={columns}
+        selectedTaskIds={selectedTaskIds}
         selectedTaskId={selectedTaskId}
         onSelect={onSelect}
         onToggleCollapse={onToggleCollapse}

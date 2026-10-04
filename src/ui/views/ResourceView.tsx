@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@mantine/core'
 import type { VirtualItem } from '@tanstack/react-virtual'
@@ -47,6 +48,7 @@ export function ResourceView({
 }: ResourceViewProps) {
   const { t } = useTranslation()
   const selectedResourceId = useViewStore((state) => state.selectedResourceId)
+  const selectedResourceIds = useViewStore((state) => state.selectedResourceIds)
   const setActiveInspectorTab = useViewStore((state) => state.setActiveInspectorTab)
   // 折叠态由 ProjectView 消费（它据此算出 `rows` 传进来）—— 本组件只负责「切换」
   const toggleResourceCollapsed = useViewStore((state) => state.toggleResourceCollapsed)
@@ -72,12 +74,15 @@ export function ResourceView({
     (selectedResourceId ? project.resources[selectedResourceId] : undefined) ??
     Object.values(project.resources)[0]
 
+  const resourceSelectionSet = useMemo(() => new Set(selectedResourceIds), [selectedResourceIds])
+
   return (
     <div className={styles.resourceView} data-testid="resource-view">
       <ResourceTree
         project={project}
         rows={rows}
         virtualItems={virtualItems}
+        selectedResourceIds={resourceSelectionSet}
         selectedResourceId={selected.id}
         onSelect={(resourceId, mods) => {
           onSelectResource(resourceId, mods)
