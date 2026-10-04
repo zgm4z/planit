@@ -7,12 +7,8 @@ import type { ResourceId, TaskId } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useViewStore } from '../../store/viewStore'
 import { buildAssignmentTree } from '../shared/assignmentGroups'
+import { selectionFingerprint } from '../shared/selectionRange'
 import { ResourceAssignmentList } from './ResourceAssignmentList'
-
-/** 批量命令的确定性指纹 = 本次涉及的选中任务集合（排序后） */
-function fingerprintOf(taskIds: readonly TaskId[]): string {
-  return [...taskIds].sort().join(',')
-}
 
 /**
  * 工具栏「快速分配」下拉（spec §3）：对**全部选中任务**批量增删 `units = 1.0` 的分配。
@@ -61,7 +57,7 @@ export function ResourceAssignmentMenu() {
   }
 
   const handleToggle = (resourceId: ResourceId): void => {
-    const fingerprint = fingerprintOf(leafTaskIds)
+    const fingerprint = selectionFingerprint(leafTaskIds)
     const fullyAssigned = leafTaskIds.every((taskId) => assignmentIdFor(taskId, resourceId) !== undefined)
 
     breakCoalescing()
@@ -90,7 +86,7 @@ export function ResourceAssignmentMenu() {
   }
 
   const handleClear = (): void => {
-    const fingerprint = fingerprintOf(leafTaskIds)
+    const fingerprint = selectionFingerprint(leafTaskIds)
     breakCoalescing()
     for (const assignment of Object.values(project.assignments)) {
       if (!leafSet.has(assignment.taskId)) continue

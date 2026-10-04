@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extendRange, resolveClickSelection, selectionRange, toggleId } from './selectionRange'
+import { extendRange, resolveClickSelection, selectionFingerprint, selectionRange, toggleId } from './selectionRange'
 
 const order = ['a', 'b', 'c', 'd', 'e']
 const none = { ctrlKey: false, metaKey: false, shiftKey: false }
@@ -88,5 +88,13 @@ describe('extendRange', () => {
   it('到边界后不再越界', () => {
     expect(extendRange(order, 'a', ['a'], -1)).toEqual(['a'])
     expect(extendRange(order, 'e', ['e'], 1)).toEqual(['e'])
+  })
+})
+
+describe('selectionFingerprint', () => {
+  it('与输入顺序无关（排序后连接）—— 批量动作才能塌成同一条撤销记录', () => {
+    expect(selectionFingerprint(['b', 'a', 'c'])).toBe('a,b,c')
+    expect(selectionFingerprint(['c', 'b', 'a'])).toBe('a,b,c')
+    expect(selectionFingerprint([])).toBe('')
   })
 })

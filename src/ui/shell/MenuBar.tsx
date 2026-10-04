@@ -16,6 +16,7 @@ import {
 } from '../../store/viewStore'
 import { canIndent, canOutdent } from '../shared/outlineActions'
 import { createResourceAndGetId } from '../shared/resourceActions'
+import { selectionFingerprint } from '../shared/selectionRange'
 import styles from '../styles/Chrome.module.scss'
 
 /**
@@ -288,7 +289,7 @@ function EditItems() {
         onClick={() => {
           if (deleteDisabled) return
           // 批量删除共用一个合并键 → 一条撤销记录，一次 Ctrl+Z 全部恢复（判据 9）
-          const fingerprint = [...selectedTaskIds].sort().join(',')
+          const fingerprint = selectionFingerprint(selectedTaskIds)
           breakCoalescing()
           for (const taskId of selectedTaskIds) {
             dispatch({
@@ -449,7 +450,7 @@ function TaskItems() {
         })}
         onClick={() => {
           if (!indentEnabled) return
-          const fingerprint = [...selectedTaskIds].sort().join(',')
+          const fingerprint = selectionFingerprint(selectedTaskIds)
           breakCoalescing()
           for (const taskId of selectedTaskIds) {
             dispatch({
@@ -473,7 +474,7 @@ function TaskItems() {
         })}
         onClick={() => {
           if (!outdentEnabled) return
-          const fingerprint = [...selectedTaskIds].sort().join(',')
+          const fingerprint = selectionFingerprint(selectedTaskIds)
           breakCoalescing()
           for (const taskId of selectedTaskIds) {
             dispatch({
@@ -496,7 +497,7 @@ function TaskItems() {
         rightSection={itemHint({ disabled: !milestoneEnabled, reason: milestoneReason })}
         onClick={() => {
           if (!milestoneEnabled) return
-          const fingerprint = [...selectedTaskIds].sort().join(',')
+          const fingerprint = selectionFingerprint(selectedTaskIds)
           breakCoalescing()
           for (const taskId of selectedTaskIds) {
             dispatch({

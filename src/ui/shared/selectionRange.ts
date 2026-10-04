@@ -72,6 +72,17 @@ export function effectiveAnchor<T extends string>(
 }
 
 /**
+ * 批量命令的**确定性指纹**：选中集合排序后连接成一个字符串。
+ *
+ * 批量动作（批量删除 / 缩进 / 反缩进 / 设里程碑 / 分配 / 清除）都把它拼进 `coalesceKey`，
+ * 使「同一次批量操作」的多条命令塌成一条撤销记录。**键的构造只有这一处** —— 各动作不会
+ * 各写一份 `.sort().join(',')` 而漂移出不一致的键。
+ */
+export function selectionFingerprint(ids: readonly string[]): string {
+  return [...ids].sort().join(',')
+}
+
+/**
  * `resolveClickSelection` 的锚点归一版：先把外部传入的锚点过 `effectiveAnchor`，
  * 再交给唯一的点击语义实现。**任务侧与资源侧共用这一处** —— 两棵树的锚点取法因此只有一份。
  */
