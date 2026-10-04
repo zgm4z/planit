@@ -20,7 +20,8 @@
     "zoomLabel": "ズーム",
     "view": { "gantt": "ガント", "outline": "タスクリスト", "calendar": "カレンダー", "resources": "リソース" },
     "language": "言語",
-    "more": "その他"
+    "more": "その他",
+    "assignResources": "リソースを割り当て"
   },
   "menu": {
     "file": "ファイル",
@@ -44,7 +45,8 @@
       "noneCollapsed": "折りたたまれたタスクはありません",
       "noBaseline": "基準が未設定です",
       "noUndo": "元に戻す操作がありません",
-      "noRedo": "やり直す操作がありません"
+      "noRedo": "やり直す操作がありません",
+      "allSummary": "選択項目はすべてサマリタスクです"
     }
   },
   "outline": {

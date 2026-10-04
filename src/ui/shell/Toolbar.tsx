@@ -13,6 +13,7 @@ import {
   type ZoomPreset,
 } from '../../store/viewStore'
 import { MenuBar } from './MenuBar'
+import { ResourceAssignmentMenu } from './ResourceAssignmentMenu'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES } from '../../i18n'
 import { useLayoutMode } from '../shared/useBreakpoints'
@@ -93,6 +94,11 @@ function ToolbarComponent() {
 
       {/* 操作菜单栏（§10）：文件 编辑 视图 任务 项目 资源 */}
       <MenuBar />
+
+      {/* 快速分配（spec §3）：与菜单栏同属「做一件事」的操作用户区 */}
+      <div className={styles.group}>
+        <ResourceAssignmentMenu />
+      </div>
 
       <div className={styles.spacer} />
 

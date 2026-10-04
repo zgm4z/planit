@@ -23,7 +23,8 @@
     "zoomLabel": "缩放",
     "view": { "gantt": "甘特图", "outline": "任务列表", "calendar": "日历", "resources": "资源" },
     "language": "语言",
-    "more": "更多"
+    "more": "更多",
+    "assignResources": "快速分配资源"
   },
   "menu": {
     "file": "文件",
@@ -47,7 +48,8 @@
       "noneCollapsed": "没有折叠的任务",
       "noBaseline": "未设置基线",
       "noUndo": "没有可撤销的操作",
-      "noRedo": "没有可重做的操作"
+      "noRedo": "没有可重做的操作",
+      "allSummary": "选中项均为摘要任务"
     }
   },
   "outline": {
