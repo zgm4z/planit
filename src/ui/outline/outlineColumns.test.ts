@@ -388,6 +388,19 @@ describe('getOutlineCellValue', () => {
     expect(getOutlineCellValue('assignees', ctx)).toEqual({ type: 'empty' })
   })
 
+  it('assignees 列多名时按资源声明序（不是 assignment 插入序）', () => {
+    const r1 = { ...createResource({ name: '张三' }), id: 'r1' }
+    const r3 = { ...createResource({ name: '王五' }), id: 'r3' }
+    // 资源声明序：r1 → r3；assignment 插入序刻意相反：先 r3 再 r1
+    const a1 = { ...createAssignment({ taskId: task.id, resourceId: 'r3' }), id: 'a1' }
+    const a2 = { ...createAssignment({ taskId: task.id, resourceId: 'r1' }), id: 'a2' }
+    const withMany = {
+      ...ctx,
+      project: { ...createProject('x'), resources: { r1, r3 }, assignments: { a1, a2 } },
+    }
+    expect(getOutlineCellValue('assignees', withMany)).toEqual({ type: 'text', text: '张三, 王五' })
+  })
+
   it('effort 列读引擎的 efforts；无之则为 empty', () => {
     expect(getOutlineCellValue('effort', { ...ctx, efforts: { [task.id]: 5 } })).toEqual({
       type: 'effort', count: 5,
