@@ -81,7 +81,24 @@ describe('solveClient：worker 路径', () => {
     expect(worker.terminated).toBe(true)
   })
 
-  it('worker 出错后：在途请求被拒绝，后续请求退回同步兜底（不永久卡住）', async () => {
+  it('dispose() 拒绝在途请求（否则 computing 永不落回 false）并终止 worker', async () => {
+    const worker = new FakeWorker()
+    const client = createSolveClient({ worker })
+
+    const { project } = singleTaskProject()
+    const inFlight = client.solve(project)
+    expect(worker.sent).toHaveLength(1)
+
+    client.dispose()
+
+    await expect(inFlight).rejects.toThrow(/销毁/)
+    expect(worker.terminated).toBe(true)
+    // 销毁后退回同步兜底 —— 不会挂在原地
+    expect(client.mode).toBe('inline')
+    await expect(client.solve(project)).resolves.toEqual(solve(project))
+  })
+
+  it('worker 出错后：在途请求被拒绝，死掉的 worker 被终止，后续请求退回同步兜底', async () => {
     const worker = new FakeWorker()
     const client = createSolveClient({ worker })
     expect(client.mode).toBe('worker')
@@ -95,9 +112,27 @@ describe('solveClient：worker 路径', () => {
 
     await expect(inFlight).rejects.toThrow(/worker 不可用/)
     expect(client.mode).toBe('inline')
+    // 死掉的 worker 必须被 terminate，否则监听器一直连着（泄漏）
+    expect(worker.terminated).toBe(true)
     // 之后不再依赖（已废弃的）worker —— 直接同步兜底，且不再发消息
     await expect(client.solve(project)).resolves.toEqual(solve(project))
     expect(worker.sent).toHaveLength(1)
+  })
+
+  it('onModeChange：退回 inline 时通知一次；模式未再变化则不重复通知', () => {
+    const worker = new FakeWorker()
+    const client = createSolveClient({ worker })
+    const seen: string[] = []
+    const unsubscribe = client.onModeChange((mode) => seen.push(mode))
+
+    worker.onerror?.(new Error('boom'))
+    expect(seen).toEqual(['inline'])
+
+    // 再次触发：模式没变 → 不重复通知
+    worker.onerror?.(new Error('boom again'))
+    expect(seen).toEqual(['inline'])
+
+    unsubscribe()
   })
 })
 

@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { ScheduleResult } from '../domain/model/types'
-import { solveClient, SupersededError, type SolveMode } from '../domain/scheduler/solveClient'
+import {
+  solveClient,
+  SupersededError,
+  type SolveClient,
+  type SolveMode,
+} from '../domain/scheduler/solveClient'
 import { useProjectStore } from './projectStore'
 
 interface ScheduleState {
@@ -14,7 +19,7 @@ interface ScheduleState {
   error: string | null
   /** 是否有一次求解在途 —— UI 据此显示「计算中」 */
   computing: boolean
-  /** 实际生效的求解路径（`'worker'` / 无 Worker 环境的 `'inline'`）。供 e2e 观测 */
+  /** **当前**生效的求解路径（`'worker'` / 退回来的 `'inline'`）。供 e2e 观测 */
   solveMode: SolveMode
 }
 
@@ -35,6 +40,20 @@ export const useScheduleStore = create<ScheduleState>(() => ({
   computing: false,
   solveMode: solveClient.mode,
 }))
+
+/**
+ * 把 store 的 `solveMode` 绑到 client 的**当前**模式上，并订阅后续变化。
+ *
+ * 刻意不做「启动时读一次」的快照：worker 中途失效会退回 inline，此时快照会说谎
+ * —— e2e 的 worker 判据也会因此从「现在真在用 worker」退化成「开机时用过 worker」。
+ * 返回退订函数（生产不用，测试用来避免重复订阅叠加）。
+ */
+export function bindSolveMode(client: SolveClient): () => void {
+  useScheduleStore.setState({ solveMode: client.mode })
+  return client.onModeChange((mode) => useScheduleStore.setState({ solveMode: mode }))
+}
+
+bindSolveMode(solveClient)
 
 /**
  * 每次重算自增。异步结果回来时若不是**最新**的一次，直接作废 ——
@@ -61,11 +80,13 @@ async function recompute(): Promise<void> {
     if (error instanceof SupersededError) return // 被取代 —— 既非成功也非失败
     if (seq !== recomputeSeq) return
     const message = error instanceof Error ? error.message : String(error)
-    // **保留上一次的好结果**（不塌成空态），错误走上层既有的错误通道：
-    //   · scheduleStore.error → 工具栏内联提示（既有）
-    //   · projectStore.lastError / clearError → App 顶部的 Alert（既有）
+    // **保留上一次的好结果**（不塌成空态）；错误只走**一条**既有通道：
+    // scheduleStore.error → 工具栏内联提示（本 change 之前就是这条路）。
+    //
+    // 刻意**不**写 projectStore.lastError：那条通道原本只服务命令层，且 undo/redo
+    // 都不重置它 —— 求解错误写进去会留下一条清不掉的陈旧横条（撤销掉出错的那次编辑
+    // 后重算已成功，横条却还在，直到下一次 dispatch 或手动关闭）。
     useScheduleStore.setState({ error: message, computing: false })
-    useProjectStore.setState({ lastError: message })
   }
 }
 

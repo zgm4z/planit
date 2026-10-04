@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDependency, createProject, createTask } from '../domain/model/factories'
 import type { Project } from '../domain/model/types'
+import { createSolveClient, type SolveWorkerLike } from '../domain/scheduler/solveClient'
 import { useProjectStore } from './projectStore'
-import { useScheduleStore } from './scheduleStore'
+import { bindSolveMode, useScheduleStore } from './scheduleStore'
 
 /**
  * 重算是**异步**的（求解在 worker / 单测里走同步兜底，但 store 的落地都是异步）。
@@ -72,7 +73,7 @@ describe('scheduleStore：异步重算 / 保留上一次结果 / computing', () 
     expect(Object.keys(useScheduleStore.getState().result.schedules)).toHaveLength(1)
   })
 
-  it('求解失败（成环）：保留上一次结果，错误写入 store.error 与 projectStore.lastError', async () => {
+  it('求解失败（成环）：保留上一次结果，错误只写 store.error（单一通道，不碰 lastError）', async () => {
     const good = projectWithTask()
     useProjectStore.setState({ project: good.project })
     await settle()
@@ -84,9 +85,11 @@ describe('scheduleStore：异步重算 / 保留上一次结果 / computing', () 
     // **不清空**上一次的好结果 —— 界面不会因一次失败就塌成空态
     expect(useScheduleStore.getState().result).toBe(prev)
     expect(useScheduleStore.getState().computing).toBe(false)
-    // 错误走既有的两条通道（工具栏内联 + App 顶部 Alert）
+    // 错误只走既有的一条通道：工具栏内联（scheduleStore.error）
     expect(useScheduleStore.getState().error).toMatch(/循环依赖/)
-    expect(useProjectStore.getState().lastError).toMatch(/循环依赖/)
+    // **不**写 projectStore.lastError —— 那条通道 undo/redo 不重置，求解错误写进去
+    // 会留下一条撤掉出错编辑后仍清不掉的陈旧横条
+    expect(useProjectStore.getState().lastError).toBeNull()
   })
 
   it('项目关闭后回到空态', async () => {
@@ -103,5 +106,31 @@ describe('scheduleStore：异步重算 / 保留上一次结果 / computing', () 
 
   it('jsdom 无 Worker：solveMode 为 inline（单测走同步兜底）', () => {
     expect(useScheduleStore.getState().solveMode).toBe('inline')
+  })
+
+  it('solveMode 是**当前**模式而非启动快照：worker 中途失效 → 立刻反映 inline', () => {
+    // 一个可被「弄挂」的假 worker
+    const worker: SolveWorkerLike = {
+      postMessage: () => {},
+      terminate: () => {},
+      onmessage: null,
+      onerror: null,
+    }
+    const client = createSolveClient({ worker })
+    expect(client.mode).toBe('worker')
+
+    const unbind = bindSolveMode(client)
+    try {
+      expect(useScheduleStore.getState().solveMode).toBe('worker')
+
+      // 模拟运行期 worker 失效（脚本崩溃 / 被回收）
+      worker.onerror?.(new Error('boom'))
+
+      expect(client.mode).toBe('inline')
+      // store 立刻跟随 —— 不是「开机时是 worker」的陈旧快照
+      expect(useScheduleStore.getState().solveMode).toBe('inline')
+    } finally {
+      unbind()
+    }
   })
 })

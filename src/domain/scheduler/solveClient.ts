@@ -37,9 +37,14 @@ export interface SolveWorkerLike {
 export type SolveMode = 'worker' | 'inline'
 
 export interface SolveClient {
-  /** 实际生效的路径。`'inline'` = 无 `Worker` 的同步兜底。 */
+  /**
+   * **当前**生效的路径。`'inline'` = 无 `Worker` 的同步兜底 ——
+   * 既包括环境本来就没有 `Worker`，也包括 worker 中途失效后退回来的情况。
+   */
   readonly mode: SolveMode
   solve(project: Project, budget?: LevelingBudget): Promise<ScheduleResult>
+  /** 订阅模式变化（worker 中途失效 → `'inline'`）。返回退订函数。 */
+  onModeChange(listener: (mode: SolveMode) => void): () => void
   dispose(): void
 }
 
@@ -82,6 +87,11 @@ export function createSolveClient(options: SolveClientOptions = {}): SolveClient
   let nextId = 1
   let latestId = 0
   const pending = new Map<number, PendingEntry>()
+  const modeListeners = new Set<(mode: SolveMode) => void>()
+
+  function notifyMode(mode: SolveMode): void {
+    for (const listener of modeListeners) listener(mode)
+  }
 
   /** 新请求一到，把其它在途请求全部作废（拒绝，不再投递结果）。 */
   function supersedeAllBut(keepId: number): void {
@@ -106,25 +116,43 @@ export function createSolveClient(options: SolveClientOptions = {}): SolveClient
   }
 
   /**
-   * worker 挂了（脚本 404 / 运行期崩溃）：把在途请求全部拒绝，并让后续请求退回
-   * 同步兜底。**否则 `postMessage` 石沉大海，界面会永远停在「计算中」** ——
-   * 宁可主线程多做点，也不能让 UI 卡在一个永不结束的状态。
+   * 让当前 worker 退役：终止它、拒绝所有在途请求、退回同步兜底。
+   *
+   * 两个触发点 —— worker 自身出错（脚本 404 / 运行期崩溃）与 `dispose()`。
+   * 三件事都必须做：
+   *   · **拒绝在途请求**：否则 `postMessage` 石沉大海，`computing` 永远停不住；
+   *   · **terminate 死掉的 worker**：否则它连着监听器一起泄漏；
+   *   · **通知模式变化**：否则 store 的 `solveMode` 还停在启动时的快照上。
    */
-  function handleWorkerFailure(): void {
-    activeWorker = null
-    const failure = new Error('求解 worker 不可用，已退回主线程')
-    for (const entry of pending.values()) entry.reject(failure)
+  function retireWorker(reason: Error): void {
+    if (activeWorker) {
+      try {
+        activeWorker.terminate()
+      } catch {
+        // worker 可能已自行崩溃 —— terminate 失败无所谓
+      }
+      activeWorker = null
+      notifyMode('inline')
+    }
+    for (const entry of pending.values()) entry.reject(reason)
     pending.clear()
   }
 
   if (worker) {
     worker.onmessage = (event) => handleResponse(event.data)
-    worker.onerror = () => handleWorkerFailure()
+    worker.onerror = () => retireWorker(new Error('求解 worker 不可用，已退回主线程'))
   }
 
   return {
     get mode() {
       return activeWorker ? 'worker' : 'inline'
+    },
+
+    onModeChange(listener) {
+      modeListeners.add(listener)
+      return () => {
+        modeListeners.delete(listener)
+      }
     },
 
     solve(project, budget) {
@@ -152,7 +180,7 @@ export function createSolveClient(options: SolveClientOptions = {}): SolveClient
     },
 
     dispose() {
-      worker?.terminate()
+      retireWorker(new Error('求解客户端已销毁，在途请求已取消'))
     },
   }
 }
