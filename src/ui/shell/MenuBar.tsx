@@ -238,11 +238,12 @@ function EditItems() {
   const nextRedo = useProjectStore(
     (state) => state.redoStack[state.redoStack.length - 1]?.command.label,
   )
-  const selectedTaskId = useViewStore((state) => state.selectedTaskId)
+  const selectedTaskIds = useViewStore((state) => state.selectedTaskIds)
+  const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
   const undoDisabled = undoDepth === 0
   const redoDisabled = redoDepth === 0
-  const deleteDisabled = selectedTaskId === null
+  const deleteDisabled = selectedTaskIds.length === 0
 
   return (
     <>
@@ -284,14 +285,20 @@ function EditItems() {
           disabled: deleteDisabled,
           reason: t('menu.reason.noSelection'),
         })}
-        onClick={() =>
-          selectedTaskId &&
-          dispatch({
-            type: 'task.delete',
-            label: 'commands.task.delete',
-            payload: { taskId: selectedTaskId },
-          })
-        }
+        onClick={() => {
+          if (deleteDisabled) return
+          // 批量删除共用一个合并键 → 一条撤销记录，一次 Ctrl+Z 全部恢复（判据 9）
+          const fingerprint = [...selectedTaskIds].sort().join(',')
+          breakCoalescing()
+          for (const taskId of selectedTaskIds) {
+            dispatch({
+              type: 'task.delete',
+              label: 'commands.task.delete',
+              payload: { taskId },
+              coalesceKey: `task.delete:${fingerprint}`,
+            })
+          }
+        }}
       >
         {t('commands.task.delete')}
       </Menu.Item>
@@ -390,19 +397,29 @@ function TaskItems() {
   const project = useProjectStore((state) => state.project)
   const dispatch = useProjectStore((state) => state.dispatch)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
+  const selectedTaskIds = useViewStore((state) => state.selectedTaskIds)
+  const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
   // 可用性判断**复用** outlineActions 的 canIndent / canOutdent —— 它们是命令层
   // taskStructureCommands 守卫的只读镜像。这里若重写一遍（哪怕只是「有没有选中」
   // 这类看似显然的判断），规则就会有一份第二实现，将来命令层放宽/收紧时菜单会静默漂移。
   // 那正是本项目最忌讳的「同一规则两份实现」。
-  const indentEnabled = project ? canIndent(project, selectedTaskId) : false
-  const outdentEnabled = project ? canOutdent(project, selectedTaskId) : false
+  // 多选下把它套在整批上：**全部选中项都通过**才可用（单任务守卫仍是唯一权威）。
+  const indentEnabled =
+    project !== null && selectedTaskIds.length > 0 && selectedTaskIds.every((id) => canIndent(project, id))
+  const outdentEnabled =
+    project !== null && selectedTaskIds.length > 0 && selectedTaskIds.every((id) => canOutdent(project, id))
 
+  // 里程碑标签仍随**锚点**（右栏 / 拖拽读的那个）变 —— 与既有行为一致。
   const selectedTask = project && selectedTaskId ? project.tasks[selectedTaskId] : undefined
   const isMilestone = selectedTask?.kind === 'milestone'
   // 摘要任务不能是里程碑 —— 与 task.toggleMilestone 的守卫（kind === 'group' 直接 return）一致。
-  const milestoneEnabled = selectedTask !== undefined && selectedTask.kind !== 'group'
-  const milestoneReason = selectedTask === undefined ? t('menu.reason.noSelection') : t('menu.reason.summary')
+  const milestoneEnabled =
+    project !== null &&
+    selectedTaskIds.length > 0 &&
+    selectedTaskIds.every((id) => project.tasks[id]?.kind !== undefined && project.tasks[id].kind !== 'group')
+  const milestoneReason =
+    selectedTaskIds.length === 0 ? t('menu.reason.noSelection') : t('menu.reason.summary')
 
   return (
     <>
@@ -428,16 +445,21 @@ function TaskItems() {
           disabled: !indentEnabled,
           // 前提不满足时给理由。判定来自 canIndent（复用），理由只是把那条规则
           // 用一句人话讲出来 —— 规则本身仍只有一处实现。
-          reason: t(selectedTaskId === null ? 'menu.reason.noSelection' : 'menu.reason.indent'),
+          reason: t(selectedTaskIds.length === 0 ? 'menu.reason.noSelection' : 'menu.reason.indent'),
         })}
-        onClick={() =>
-          selectedTaskId &&
-          dispatch({
-            type: 'task.indent',
-            label: 'commands.task.indent',
-            payload: { taskId: selectedTaskId },
-          })
-        }
+        onClick={() => {
+          if (!indentEnabled) return
+          const fingerprint = [...selectedTaskIds].sort().join(',')
+          breakCoalescing()
+          for (const taskId of selectedTaskIds) {
+            dispatch({
+              type: 'task.indent',
+              label: 'commands.task.indent',
+              payload: { taskId },
+              coalesceKey: `task.indent:${fingerprint}`,
+            })
+          }
+        }}
       >
         {t('toolbar.indent')}
       </Menu.Item>
@@ -447,16 +469,21 @@ function TaskItems() {
         disabled={!outdentEnabled}
         rightSection={itemHint({
           disabled: !outdentEnabled,
-          reason: t(selectedTaskId === null ? 'menu.reason.noSelection' : 'menu.reason.outdent'),
+          reason: t(selectedTaskIds.length === 0 ? 'menu.reason.noSelection' : 'menu.reason.outdent'),
         })}
-        onClick={() =>
-          selectedTaskId &&
-          dispatch({
-            type: 'task.outdent',
-            label: 'commands.task.outdent',
-            payload: { taskId: selectedTaskId },
-          })
-        }
+        onClick={() => {
+          if (!outdentEnabled) return
+          const fingerprint = [...selectedTaskIds].sort().join(',')
+          breakCoalescing()
+          for (const taskId of selectedTaskIds) {
+            dispatch({
+              type: 'task.outdent',
+              label: 'commands.task.outdent',
+              payload: { taskId },
+              coalesceKey: `task.outdent:${fingerprint}`,
+            })
+          }
+        }}
       >
         {t('toolbar.outdent')}
       </Menu.Item>
@@ -467,14 +494,19 @@ function TaskItems() {
         data-testid="toggle-milestone"
         disabled={!milestoneEnabled}
         rightSection={itemHint({ disabled: !milestoneEnabled, reason: milestoneReason })}
-        onClick={() =>
-          selectedTaskId &&
-          dispatch({
-            type: 'task.toggleMilestone',
-            label: 'commands.task.toggleMilestone',
-            payload: { taskId: selectedTaskId },
-          })
-        }
+        onClick={() => {
+          if (!milestoneEnabled) return
+          const fingerprint = [...selectedTaskIds].sort().join(',')
+          breakCoalescing()
+          for (const taskId of selectedTaskIds) {
+            dispatch({
+              type: 'task.toggleMilestone',
+              label: 'commands.task.toggleMilestone',
+              payload: { taskId },
+              coalesceKey: `task.toggleMilestone:${fingerprint}`,
+            })
+          }
+        }}
       >
         {/* 标签随当前状态变（设为/取消）—— 一个「切换」条目若固定写「设为里程碑」，
             在已经是里程碑的任务上就是错的。 */}
