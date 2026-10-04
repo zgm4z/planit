@@ -48,6 +48,21 @@ describe('resolveClickSelection', () => {
       .toEqual({ ids: [], anchor: null })
   })
 
+  it('Shift 选一段后再 Ctrl 移除中间的非锚点 → 锚点仍是原锚点（不被末元素顶替）', () => {
+    // 先 Shift a→d：范围 [a,b,c,d]，锚点 a
+    const shifted = resolveClickSelection(order, [], 'a', 'd', { ctrlKey: false, metaKey: false, shiftKey: true })
+    expect(shifted).toEqual({ ids: ['a', 'b', 'c', 'd'], anchor: 'a' })
+
+    // 再 Ctrl 点 c（中间的非锚点项）→ 只移除 c，锚点必须仍是 a（此前会错成末元素 d）
+    expect(
+      resolveClickSelection(order, shifted.ids, shifted.anchor, 'c', {
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: false,
+      }),
+    ).toEqual({ ids: ['a', 'b', 'd'], anchor: 'a' })
+  })
+
   it('Shift 点击 → 以锚点为起点选范围；锚点保留', () => {
     expect(resolveClickSelection(order, ['a', 'b'], 'a', 'd', { ctrlKey: false, metaKey: false, shiftKey: true }))
       .toEqual({ ids: ['a', 'b', 'c', 'd'], anchor: 'a' })

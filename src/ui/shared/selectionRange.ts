@@ -47,7 +47,12 @@ export function resolveClickSelection(
   }
   if (mods.ctrlKey || mods.metaKey) {
     const ids = toggleId(current, clicked)
-    const nextAnchor = ids.includes(clicked) ? clicked : ids.length > 0 ? ids[ids.length - 1] : null
+    // 加入该行 → 锚点跟随到被点项。
+    if (ids.includes(clicked)) return { ids, anchor: clicked }
+    // 移除该行 → 锚点若仍在集合里**必须保留**（被移除的可能只是中间的非锚点项）；
+    // 只有当被移除的正是锚点时才回落到剩余末元素，集合清空则置空。
+    const nextAnchor =
+      anchor !== null && ids.includes(anchor) ? anchor : ids.length > 0 ? ids[ids.length - 1] : null
     return { ids, anchor: nextAnchor }
   }
   return { ids: [clicked], anchor: clicked }
