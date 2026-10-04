@@ -1,43 +1,74 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+# 构建 Vite 应用并部署到 GitHub Pages。
+#
+# 为什么不是 GitHub 的「Static HTML」模板：那个模板 `upload-pages-artifact` 的
+# `path` 是仓库根目录 `.`，会把这套 Vite 应用的**源码**当静态站点传上去 —— 浏览器
+# 拿到的 index.html 引用的是 `/src/main.tsx`，直接白屏。正确做法是「装依赖 → 构建 →
+# 上传 `dist/`」。
+#
+# 子路径：项目站点 URL 是 https://<user>.github.io/<repo>/ ，所以构建必须带
+# `--base=/planit/`（见 package.json 的 `build:pages`）。**不改 vite.config.ts**，
+# 因为全局改 `base` 会连带影响 dev server 与 e2e（它们跑在 `localhost:5174/`）。
+name: Deploy to GitHub Pages
 
 on:
-  # Runs on pushes targeting the default branch
+  # 推送到默认分支（本项目默认分支是 master）时部署
   push:
     branches: ["master"]
 
-  # Allows you to run this workflow manually from the Actions tab
+  # 允许在 Actions 页手动触发
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# 部署到 Pages 所需的最小权限
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# 同一时刻只允许一个部署；但**不取消**进行中的部署，让生产发布跑完
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # 含 `tsc -b`（类型检查失败即中止），构建产物在 dist/
+        run: pnpm run build:pages
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
   deploy:
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # Upload entire repository
-          path: '.'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --base=/planit/",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
