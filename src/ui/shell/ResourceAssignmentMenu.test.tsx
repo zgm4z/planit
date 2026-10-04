@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MantineProvider } from '@mantine/core'
 
 import { initCommands, __resetRegistryForTests } from '../../commands/registry'
@@ -82,6 +82,21 @@ describe('ResourceAssignmentMenu 禁用规则', () => {
     useViewStore.getState().setTaskSelection([taskIds[0]])
     renderMenu()
     expect(screen.getByTestId('assignment-menu-trigger')).toBeEnabled()
+  })
+
+  it('选中任务被删除后 → 悬空 id 被剔除，控件回到「未选中」禁用（原因不误报为「均为摘要」）', () => {
+    useViewStore.getState().setTaskSelection([taskIds[0]])
+    renderMenu()
+    expect(screen.getByTestId('assignment-menu-trigger')).toBeEnabled()
+
+    const project = useProjectStore.getState().project!
+    const rest = { ...project.tasks }
+    delete rest[taskIds[0]]
+    act(() => useProjectStore.setState({ project: { ...project, tasks: rest } }))
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([])
+    expect(screen.getByTestId('assignment-menu-trigger')).toBeDisabled()
+    expect(screen.getByTestId('assignment-menu-wrap')).toHaveAttribute('data-disabled-reason', '未选中任务')
   })
 })
 

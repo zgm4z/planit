@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ResourceId, TaskId } from '../domain/model/types'
+import type { Project, ResourceId, TaskId } from '../domain/model/types'
 import {
   DEFAULT_VISIBLE_COLUMNS,
   OUTLINE_COLUMN_KEYS,
@@ -184,6 +184,12 @@ interface ViewState {
   setTaskSelection: (ids: readonly TaskId[], anchor?: TaskId | null) => void
   /** Esc：收敛到只含锚点（锚点不变 ⇒ 不打断合并） */
   clearTaskMultiSelect: () => void
+  /**
+   * 归一化选中态：剔除**已不存在**于 `project` 的任务/资源 id（删任务/删资源后的悬空引用）。
+   * 集合剔除后，锚点仍指向存活对象则保留，否则按剩余集合归一（末元素或 null）。
+   * **单一实现** —— 由 store 顶层的 project 订阅调用（组件挂载与否都生效）。
+   */
+  pruneSelection: (project: Project) => void
   toggleCollapsed: (taskId: TaskId) => void
   /** 折叠全部（只折叠有子任务的行）。纯 UI 状态，不入撤销栈 —— 与 toggleCollapsed 同族 */
   collapseAll: () => void
@@ -303,6 +309,40 @@ export const useViewStore = create<ViewState>((set, get) => ({
     set({ selectedResourceIds: selectedResourceId ? [selectedResourceId] : [] })
   },
 
+  pruneSelection: (project) => {
+    const { selectedTaskId, selectedTaskIds, selectedResourceId, selectedResourceIds } = get()
+
+    const taskIds = selectedTaskIds.filter((id) => project.tasks[id] !== undefined)
+    const resourceIds = selectedResourceIds.filter((id) => project.resources[id] !== undefined)
+
+    // 锚点仍指向存活对象 → 保留；已悬空 → 按剩余集合归一（复用唯一一处 normalizeSelection）
+    const taskAnchor =
+      selectedTaskId !== null && project.tasks[selectedTaskId] !== undefined
+        ? selectedTaskId
+        : normalizeSelection(taskIds, selectedTaskId).anchor
+    const resourceAnchor =
+      selectedResourceId !== null && project.resources[selectedResourceId] !== undefined
+        ? selectedResourceId
+        : normalizeSelection(resourceIds, selectedResourceId).anchor
+
+    // 无悬空 → 不动（避免每次 project 变更都产出一次新 state 把订阅者全唤醒）
+    if (
+      taskIds.length === selectedTaskIds.length &&
+      resourceIds.length === selectedResourceIds.length &&
+      taskAnchor === selectedTaskId &&
+      resourceAnchor === selectedResourceId
+    ) {
+      return
+    }
+
+    set({
+      selectedTaskIds: taskIds,
+      selectedTaskId: taskAnchor,
+      selectedResourceIds: resourceIds,
+      selectedResourceId: resourceAnchor,
+    })
+  },
+
   // 与 toggleCollapsed（任务树）同一手法：换一个 Set 引用，让订阅者看到变化
   toggleResourceCollapsed: (resourceId) => {
     const next = new Set(get().collapsedResourceIds)
@@ -400,6 +440,16 @@ export const useViewStore = create<ViewState>((set, get) => ({
     set({ dayWidth: Math.min(DAY_WIDTH_MAX, Math.max(DAY_WIDTH_MIN, dayWidth)) })
   },
 }))
+
+/**
+ * 项目一变（增删任务/资源、载入存档）就把选中态归一化 —— 剔除悬空 id。
+ * 订阅放在 store 模块里（而非某个组件）：删任务这条路径可能来自菜单、命令、载入，
+ * 组件挂载与否都该生效，也保证「同一归一化只有一处实现」。
+ */
+useProjectStore.subscribe((state, prev) => {
+  if (state.project === prev.project || state.project === null) return
+  useViewStore.getState().pruneSelection(state.project)
+})
 
 /** 仅供测试使用：把视图状态复位到初始值 */
 export function __resetViewStoreForTests(): void {

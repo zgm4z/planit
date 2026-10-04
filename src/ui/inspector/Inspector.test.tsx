@@ -1203,3 +1203,20 @@ describe('Inspector 多选提示', () => {
     expect(screen.getByDisplayValue('写文档')).toBeInTheDocument()
   })
 })
+
+describe('Inspector：删任务后多选归一（悬空 id 被剔除）', () => {
+  it('删掉多选中的任务 → 提示消失（集合回落到单选）', () => {
+    act(() => useViewStore.getState().setTaskSelection([taskId, siblingId], taskId))
+    renderInspector()
+    expect(screen.getByTestId('inspector-multi-select')).toBeInTheDocument()
+
+    // 删掉锚点 taskId —— project 一变，store 的订阅即剔除悬空 id
+    const project = useProjectStore.getState().project!
+    const rest = { ...project.tasks }
+    delete rest[taskId]
+    act(() => useProjectStore.setState({ project: { ...project, tasks: rest } }))
+
+    expect(useViewStore.getState().selectedTaskIds).toEqual([siblingId])
+    expect(screen.queryByTestId('inspector-multi-select')).not.toBeInTheDocument()
+  })
+})
