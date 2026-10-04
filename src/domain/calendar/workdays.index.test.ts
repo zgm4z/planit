@@ -15,10 +15,11 @@
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createProject, createTask } from '../model/factories'
 import type { Calendar, CalendarException, DateStr } from '../model/types'
-import { dayToIso, epochDay, weekdayMon0 } from '../dateUtils'
+import { dayToIso, epochDay } from '../dateUtils'
 import {
   addWorkdays,
   buildWorkdayIndex,
+  isWorkday,
   nextWorkday,
   prevWorkday,
   snapToWorkday,
@@ -30,6 +31,10 @@ import {
   workdaysInRange,
 } from './workdays'
 import { solve } from '../scheduler'
+
+/** == workdays.ts 的 `MAX_SCAN_DAYS` == calendarCommands.ts 的 `MAX_RANGE_DAYS`（两者同值，
+ *  这正是「一条最大长度 addExceptionRange 即触发扫描窗溢出」的原因）。 */
+const SCAN_LIMIT = 3660
 
 /** 确定性 PRNG（mulberry32）—— 固定种子 → 可复现，CI 与本地同结果 */
 function mulberry32(seed: number): () => number {
@@ -351,24 +356,49 @@ describe('advance/search 家族 —— 差分模糊测试（带索引 vs 逐日�
     }
   })
 
-  it('相邻工作日间隔超过 MAX_SCAN_DAYS 的极端日历被标记为已知边界（不静默错值）', () => {
-    // ≳500 条相邻 holiday 才能造出 >3660 天的空档 —— 逐日版会在中途抛错，索引版直达
-    // 终点。这是**已知且有意**的唯一不逐字节等价角落（见 workdays.ts 的 addWorkdaysDay
-    // 注释）；此处只钉住「单步函数（next/snap）仍与逐日一致抛错」，不试图复刻 addWorkdays
-    // 的逐步抛错（该场景任何真实日历都不会出现）。
+  it('相邻工作日间隔 > SCAN_LIMIT：单步函数抛错一致；addWorkdays/task* 的已知分歧被钉死', () => {
+    // 该日历**可由一条用户命令直接造出**：`calendarCommands.ts` 的 `MAX_RANGE_DAYS` 与
+    // `workdays.ts` 的 `MAX_SCAN_DAYS` 同值（3660），故一条最大长度的
+    // `calendar.addExceptionRange`（3660 个连续日历日全放假）即制造出 >3660 天的空档。
+    // 这里复刻该命令的展开：holiday 落在 isoAt(1)..isoAt(3660)，使 isoAt(0)（周三）保持
+    // 为工作日 —— 恰是「末日工作日 + 3660 天假期 + 之后才又有工作日」的形状。
     const cal = createCalendar() // 周一至周五工作
+    for (let i = 1; i <= SCAN_LIMIT; i += 1) cal.exceptions[isoAt(i)] = { kind: 'holiday' }
     const index = buildWorkdayIndex(cal)
-    for (let i = 0; i < 5000; i += 1) {
-      // 连续 5000 个**日历日**里的周内工作日全部放假 → 造出 >3660 天的空档。
-      const iso = isoAt(i)
-      if (cal.workingDays[weekdayMon0(epochDay(iso))]) cal.exceptions[iso] = { kind: 'holiday' }
+
+    const lastBeforeGap = isoAt(0)
+    expect(isWorkday(lastBeforeGap, cal), '空档前最后一个工作日').toBe(true)
+    // 索引版给出的真实「下一个工作日」：跨过 3660 天空档后的第一个工作日。
+    const firstAfterGap = addWorkdays(lastBeforeGap, 1, cal, index)
+    expect(epochDay(firstAfterGap) - epochDay(lastBeforeGap)).toBeGreaterThan(SCAN_LIMIT)
+
+    // ① 单步函数：带索引与逐日**逐例一致**（值相同、抛错也相同）—— 扫描窗由距离判断显式
+    //    保留，rank/select 不能改变它。空档内外的多个取样点都覆盖。
+    for (const iso of [lastBeforeGap, isoAt(1000), isoAt(2000), firstAfterGap, isoAt(4000)]) {
+      for (const [name, fn] of [
+        ['nextWorkday', (i: boolean) => nextWorkday(iso, cal, i ? index : undefined)],
+        ['prevWorkday', (i: boolean) => prevWorkday(iso, cal, i ? index : undefined)],
+        ['snapToWorkday', (i: boolean) => snapToWorkday(iso, cal, i ? index : undefined)],
+        ['snapOrPrevious', (i: boolean) => snapToWorkdayOrPrevious(iso, cal, i ? index : undefined)],
+      ] as const) {
+        const truth = catchOutcome(() => fn(false))
+        const fast = catchOutcome(() => fn(true))
+        expect(outcomesEqual(truth, fast), `${name}@${iso}: truth=${describeOutcome(truth)} fast=${describeOutcome(fast)}`).toBe(true)
+      }
     }
-    const idx2 = buildWorkdayIndex(cal)
-    // 单步函数：都抛错，且消息一致。
-    const truth = catchOutcome(() => nextWorkday(isoAt(0), cal))
-    const fast = catchOutcome(() => nextWorkday(isoAt(0), cal, idx2))
-    expect(truth.ok).toBe(false)
-    expect(outcomesEqual(truth, fast)).toBe(true)
-    void index
+    // 空档两端「下一个/上一个工作日」相距 > SCAN_LIMIT → 单步函数在两端都抛错（两条路径一致）。
+    expect(catchOutcome(() => nextWorkday(lastBeforeGap, cal)).ok).toBe(false)
+    expect(catchOutcome(() => nextWorkday(lastBeforeGap, cal, index)).ok).toBe(false)
+    expect(catchOutcome(() => prevWorkday(firstAfterGap, cal)).ok).toBe(false)
+    expect(catchOutcome(() => prevWorkday(firstAfterGap, cal, index)).ok).toBe(false)
+
+    // ② 已知且**唯一**的分歧：addWorkdays / taskFinish / taskStart 逐日版中途抛错、索引版
+    //    返回真正的下一个工作日（跨过空档）。此处把**分歧本身**钉死，作为有意行为而非意外。
+    expect(catchOutcome(() => addWorkdays(lastBeforeGap, 1, cal)).ok, '逐日版应抛错').toBe(false)
+    expect(addWorkdays(lastBeforeGap, 1, cal, index)).toBe(firstAfterGap)
+    expect(catchOutcome(() => taskFinish(lastBeforeGap, 2, cal)).ok).toBe(false)
+    expect(taskFinish(lastBeforeGap, 2, cal, index)).toBe(firstAfterGap)
+    expect(catchOutcome(() => taskStart(firstAfterGap, 2, cal)).ok).toBe(false)
+    expect(taskStart(firstAfterGap, 2, cal, index)).toBe(lastBeforeGap)
   })
 })

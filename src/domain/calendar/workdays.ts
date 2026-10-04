@@ -139,8 +139,18 @@ export function snapToWorkdayOrPrevious(
  * 用同一个 `ceil(|n|)` 一次 select 到位，逐字节一致（elapsed lag 的小数路径）。
  *
  * 索引版对一般日历（`perWeek > 0`）用一次 `selectByRank` —— O(log k)，取代原来的
- * `|n|` 次扫描。唯一不逐字节等价的角落是「相邻工作日间隔 > MAX_SCAN_DAYS」的病态日历
- * （需 ≳500 条相邻 holiday 例外才能造出）—— 逐日版会在中途抛错，索引版直达终点。
+ * `|n|` 次扫描。
+ *
+ * ⚠️ **已知且唯一的**不逐字节等价角落：`perWeek > 0` 且**相邻工作日间隔 > MAX_SCAN_DAYS**
+ * 时，逐日版在中途抛错、索引版直达终点。该情形**一条用户命令即可造出**：
+ * `calendarCommands.ts` 的 `MAX_RANGE_DAYS`（3660）与本文件的 `MAX_SCAN_DAYS`（3660）
+ * 同值 → **一条最大长度的 `calendar.addExceptionRange`**（3660 个连续日历日全放假）
+ * 就制造出 3664 天的空档（区间内周内日全为 holiday、周末本就不上班，整段只剩非工作日）。
+ * 于是：旧的 `addWorkdays` / `taskFinish` / `taskStart` **抛错**（经 `forwardBound` /
+ * `backwardBound` / `schedulingLowerBound` 令 `solve()` 一并崩掉）；索引版返回**真正的
+ * 下一个工作日**（跨过空档）—— 语义上更正确，但失败模式由「响亮崩溃」变为「静默跨过」。
+ * **单步函数（`nextWorkday` / `prevWorkday` / `snapToWorkday*`）不受影响**：它们仍显式
+ * 校验扫描窗并抛同样的错（见 `nextWorkdayDay` 等的距离判断）。
  * `perWeek === 0`（全休周，工作日有限）退回逐日实现：逐步的 MAX_SCAN_DAYS 抛错语义
  * 原样保留（见 `addWorkdays` 的模糊测试）。
  */
