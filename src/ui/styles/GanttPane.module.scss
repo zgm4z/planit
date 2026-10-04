@@ -200,6 +200,43 @@
   pointer-events: none;
 }
 
+// 条内资源名：只裁**自己**的内容，绝不裁 .bar —— 连接柄在条外，不受影响。
+// 用 overflow:hidden（不是 clip）是因为要给 .barLabelText 上 text-overflow:ellipsis；
+// 本盒内没有任何 sticky 子节点，成为滚动容器是安全的（与 .bar 的情形不同）。
+// 与 .link-handle 是**兄弟**（同为 .bar 的子节点），一个兄弟的 overflow 不影响另一个。
+.barLabel {
+  position: absolute;
+  inset: 0; // 与条等宽等高
+  z-index: 1; // 压在 .barProgress 之上、把手(2)/锁(3) 之下
+  display: flex;
+  align-items: center; // 18 / 20 两种条高都垂直居中
+  padding: 0 var(--planit-sp-2);
+  overflow: hidden;
+  border-radius: inherit; // 跟随 .bar 的 3px，裁出的角与条圆角对齐
+  pointer-events: none; // 指针事件穿透到 .bar，拖拽 / 把手 / 连线全不受影响
+}
+
+// manual 条：左移 16px 让开锁 —— 锁在 left:3px、IconLock size=10，占 3..13px，
+// 16px 留出 3px 间隙（.barManualMarker 见本文件 :206-215）。
+.barLabelManual {
+  left: 16px;
+}
+
+// 名字药丸：内容多宽就多宽（max-width 顶到条宽），过宽则省略号。
+.barLabelText {
+  min-width: 0; // 允许 flex 收缩到条宽以内，否则 nowrap 撑破、省略号不生效
+  max-width: 100%;
+  padding: 0 var(--planit-sp-4);
+  border-radius: 2px;
+  background: rgba(15, 23, 42, 0.28); // 对比度底衬，见 spec §5；基色与 .barProgress 同族
+  color: var(--planit-bg-surface);
+  font-size: var(--planit-fs-xs);
+  line-height: 14px; // 14px 药丸在 18px 条内上下各留 2px
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 // manual 任务条的锁定标识（spec §4.2）：手动排期的区间被钉死，用一颗小锁区别于 auto。
 // **纯观感** —— 绝对定位在条内左侧、不改条本身的几何，且 pointer-events: none
 // 让指针事件穿透到条 / 左把手（连接柄与把手的命中区不受影响）。
