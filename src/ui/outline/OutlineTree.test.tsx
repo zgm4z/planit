@@ -477,4 +477,39 @@ describe('OutlineTree', () => {
     expect(useProjectStore.getState().project!.tasks[childId].priority).toBe(0)
     expect(useProjectStore.getState().project!.tasks[parentId].priority).toBe(3)
   })
+
+  it('title：双击名称进改名、回车提交 task.rename；折叠三角仍可点（回归）', async () => {
+    const user = userEvent.setup()
+    const onToggleCollapse = vi.fn()
+    const rows = flattenVisibleRows(project, new Set())
+    render(
+      <MantineProvider>
+        <OutlineTree
+          project={project}
+          rows={rows}
+          virtualItems={virtualItems(rows.length)}
+          schedules={{}}
+          efforts={{}}
+          costs={{}}
+          earnedValues={{}}
+          baselineDiffs={{}}
+          columns={GANTT_OUTLINE_COLUMNS}
+          selectedTaskId={null}
+          onSelect={() => {}}
+          onToggleCollapse={onToggleCollapse}
+        />
+      </MantineProvider>,
+    )
+
+    // 双击名称 → 改名
+    await user.dblClick(screen.getByTestId(`outline-title-${childId}`))
+    const input = screen.getByTestId(`outline-title-input-${childId}`)
+    await user.clear(input)
+    await user.type(input, '新名字{Enter}')
+    expect(useProjectStore.getState().project!.tasks[childId].name).toBe('新名字')
+
+    // 折叠三角仍然是可点的折叠按钮（双击名称不会吞掉三角的 click）
+    fireEvent.click(screen.getByTestId(`outline-row-${parentId}`).querySelector('button')!)
+    expect(onToggleCollapse).toHaveBeenCalledWith(parentId)
+  })
 })

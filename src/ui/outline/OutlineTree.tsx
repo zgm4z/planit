@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { VirtualItem } from '@tanstack/react-virtual'
@@ -19,6 +20,7 @@ import {
 } from './outlineColumns'
 import { EditableCell } from './EditableCell'
 import { getOutlineCellEditor, getCellDisabledReason } from './outlineCellEditors'
+import { useProjectStore } from '../../store/projectStore'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { formatCost, formatDate, formatDays, formatEffort, formatPercent } from '../shared/format'
 import styles from '../styles/ProjectView.module.scss'
@@ -151,7 +153,11 @@ export function OutlineTree({
   )
 }
 
-/** 标题单元格：缩进 + 折叠箭头 + 名称。**摘要任务名加粗** */
+/** 标题单元格：缩进 + 折叠箭头 + 名称。**摘要任务名加粗**。
+ *
+ * title 是内联编辑的**唯一例外**：双击目标必须只是**名称 span**（折叠三角仍要可点），
+ * 故不复用 EditableCell，在本组件内实现「双击名称 → 受控输入 → task.rename」。
+ */
 function TitleCell({
   row,
   task,
@@ -162,6 +168,21 @@ function TitleCell({
   onToggleCollapse: (taskId: TaskId) => void
 }) {
   const { t } = useTranslation()
+  const dispatch = useProjectStore((state) => state.dispatch)
+  const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(task.name)
+
+  const commit = () => {
+    setEditing(false)
+    if (draft === task.name) return
+    dispatch({
+      type: 'task.rename',
+      label: 'commands.task.rename',
+      payload: { taskId: task.id, name: draft },
+      coalesceKey: `task.rename:${task.id}`,
+    })
+  }
 
   return (
     <span className={styles.outlineRowInner} style={{ paddingLeft: row.depth * 16 }}>
@@ -182,9 +203,37 @@ function TitleCell({
         <span className={styles.outlineToggle} aria-hidden />
       )}
 
-      <span className={`${styles.outlineName} ${row.hasChildren ? styles.outlineNameSummary : ''}`}>
-        {task.name}
-      </span>
+      {editing ? (
+        <input
+          className={styles.outlineEditInput}
+          value={draft}
+          autoFocus
+          data-testid={`outline-title-input-${task.id}`}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              commit()
+            }
+            if (event.key === 'Escape') setEditing(false)
+          }}
+        />
+      ) : (
+        <span
+          className={`${styles.outlineName} ${row.hasChildren ? styles.outlineNameSummary : ''}`}
+          data-testid={`outline-title-${task.id}`}
+          onDoubleClick={(event) => {
+            event.stopPropagation()
+            breakCoalescing()
+            setDraft(task.name)
+            setEditing(true)
+          }}
+        >
+          {task.name}
+        </span>
+      )}
     </span>
   )
 }
