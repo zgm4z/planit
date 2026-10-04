@@ -161,11 +161,21 @@ describe('MenuBar「视图」菜单的状态表达', () => {
     renderBar()
     await openMenu('view', 'menu-view-gantt')
 
-    // activeView 默认 gantt、zoom 默认 day
+    // activeView 默认 gantt、dayWidth 默认 32（presetOfDayWidth(32) === 'day'）
     expect(screen.getByTestId('menu-view-gantt').querySelector('svg')).not.toBeNull()
     expect(screen.getByTestId('menu-view-outline').querySelector('svg')).toBeNull()
     expect(screen.getByTestId('menu-zoom-option-day').querySelector('svg')).not.toBeNull()
     expect(screen.getByTestId('menu-zoom-option-week').querySelector('svg')).toBeNull()
+  })
+
+  it('连续值（非预设 dayWidth）下，三个缩放条目都没有勾选标记', async () => {
+    useViewStore.getState().setDayWidth(31.9)
+    renderBar()
+    await openMenu('view', 'menu-view-gantt')
+
+    for (const level of ['day', 'week', 'month'] as const) {
+      expect(screen.getByTestId(`menu-zoom-option-${level}`).querySelector('svg')).toBeNull()
+    }
   })
 
   it('点击「任务列表」切换视图', async () => {

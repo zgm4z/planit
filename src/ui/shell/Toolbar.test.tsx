@@ -6,7 +6,7 @@ import { MantineProvider } from '@mantine/core'
 import { createProject, __resetIdCounterForTests } from '../../domain/model/factories'
 import { initCommands, __resetRegistryForTests } from '../../commands/registry'
 import { useProjectStore } from '../../store/projectStore'
-import { useViewStore, __resetViewStoreForTests } from '../../store/viewStore'
+import { useViewStore, presetOfDayWidth, __resetViewStoreForTests } from '../../store/viewStore'
 import zhCN from '../../i18n/locales/zh-CN.json'
 import enUS from '../../i18n/locales/en-US.json'
 import jaJP from '../../i18n/locales/ja-JP.json'
@@ -119,5 +119,33 @@ describe('toolbar 块的三语叶子键集合', () => {
     expect(leafKeys(jaJP.toolbar, 'toolbar').sort()).toEqual(zh)
     expect(zh).toContain('toolbar.view.calendar')
     expect(zh).toContain('toolbar.view.resources')
+  })
+})
+
+// v1.1：日/周/月退化为「把 dayWidth 设成预设整数」的快捷方式。
+describe('缩放的三个预设（连续 dayWidth）', () => {
+  it('点「周」把 dayWidth 精确设为 12；点「月」设为 4；点「日」设为 32', () => {
+    renderToolbar()
+
+    fireEvent.click(screen.getByTestId('zoom-preset-week'))
+    expect(useViewStore.getState().dayWidth).toBe(12)
+
+    fireEvent.click(screen.getByTestId('zoom-preset-month'))
+    expect(useViewStore.getState().dayWidth).toBe(4)
+
+    fireEvent.click(screen.getByTestId('zoom-preset-day'))
+    expect(useViewStore.getState().dayWidth).toBe(32)
+  })
+
+  it('连续值（非预设）下没有任何预设段处于选中态', () => {
+    // 31.9 不是任何预设 —— presetOfDayWidth 返回 null，分段控件 value='' ⇒ 无选中段
+    useViewStore.getState().setDayWidth(31.9)
+    const { container } = renderToolbar()
+
+    expect(presetOfDayWidth(31.9)).toBeNull()
+    expect(
+      container.querySelectorAll('[data-testid="zoom-switcher"] input[type="radio"]:checked')
+        .length,
+    ).toBe(0)
   })
 })
