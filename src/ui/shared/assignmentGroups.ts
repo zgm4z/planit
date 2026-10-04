@@ -1,4 +1,5 @@
 import type { Project, Resource, ResourceId, ResourceKind, TaskId } from '../../domain/model/types'
+import { isLeafTask } from './outlineActions'
 
 /** 下拉里的一行资源（叶子）。`assignedCount` = 被多少个选中叶子任务分配。 */
 export interface AssignmentLeaf {
@@ -33,12 +34,7 @@ export function buildAssignmentTree(
   project: Project,
   selectedTaskIds: readonly TaskId[],
 ): AssignmentTree {
-  const selected = new Set(
-    selectedTaskIds.filter((id) => {
-      const task = project.tasks[id]
-      return task !== undefined && task.kind !== 'group'
-    }),
-  )
+  const selected = new Set(selectedTaskIds.filter((id) => isLeafTask(project, id)))
 
   const countByResource = new Map<ResourceId, number>()
   for (const assignment of Object.values(project.assignments)) {

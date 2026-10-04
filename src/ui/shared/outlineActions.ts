@@ -1,6 +1,18 @@
 import type { Project, TaskId } from '../../domain/model/types'
 
 /**
+ * 该任务是**叶子**吗（存在且 `kind !== 'group'`）。
+ *
+ * 摘要任务不是叶子：不能直接派资源（`assignment.create` 对 group 早退）、不能设为里程碑、
+ * 不能缩进为别处的前驱。这个「叶子」判定散落在多处消费方（分配树、工具栏快速分配、菜单栏），
+ * 统一收敛到这一处，免得哪天命令层放宽时各点静默漂移。
+ */
+export function isLeafTask(project: Project, taskId: TaskId): boolean {
+  const task = project.tasks[taskId]
+  return task !== undefined && task.kind !== 'group'
+}
+
+/**
  * 取任务所处的兄弟列表（顶层任务取 rootIds，子任务取父的 childIds）。
  *
  * **这是命令层 `taskStructureCommands.ts` 里 `siblingList` 的只读镜像。**

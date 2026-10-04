@@ -7,6 +7,7 @@ import type { ResourceId, TaskId } from '../../domain/model/types'
 import { useProjectStore } from '../../store/projectStore'
 import { useViewStore } from '../../store/viewStore'
 import { buildAssignmentTree } from '../shared/assignmentGroups'
+import { isLeafTask } from '../shared/outlineActions'
 import { selectionFingerprint } from '../shared/selectionRange'
 import { ResourceAssignmentList } from './ResourceAssignmentList'
 
@@ -29,11 +30,7 @@ export function ResourceAssignmentMenu() {
 
   // 只取叶子：摘要任务不能直接派资源（assignment.create 早退），UI 侧同规则
   const leafTaskIds = useMemo<TaskId[]>(
-    () =>
-      selectedTaskIds.filter((id) => {
-        const task = project?.tasks[id]
-        return task !== undefined && task.kind !== 'group'
-      }),
+    () => (project ? selectedTaskIds.filter((id) => isLeafTask(project, id)) : []),
     [selectedTaskIds, project],
   )
 

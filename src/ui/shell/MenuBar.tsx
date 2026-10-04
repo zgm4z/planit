@@ -14,7 +14,7 @@ import {
   type ActiveView,
   type ZoomPreset,
 } from '../../store/viewStore'
-import { canIndent, canOutdent } from '../shared/outlineActions'
+import { canIndent, canOutdent, isLeafTask } from '../shared/outlineActions'
 import { createResourceAndGetId } from '../shared/resourceActions'
 import { selectionFingerprint } from '../shared/selectionRange'
 import styles from '../styles/Chrome.module.scss'
@@ -418,7 +418,7 @@ function TaskItems() {
   const milestoneEnabled =
     project !== null &&
     selectedTaskIds.length > 0 &&
-    selectedTaskIds.every((id) => project.tasks[id]?.kind !== undefined && project.tasks[id].kind !== 'group')
+    selectedTaskIds.every((id) => isLeafTask(project, id))
   const milestoneReason =
     selectedTaskIds.length === 0 ? t('menu.reason.noSelection') : t('menu.reason.summary')
 
