@@ -71,6 +71,16 @@ export function countCriticalLeafTasks(
 // 缓存键 = (project, schedules) 的对象标识（嵌套 WeakMap）。1 条就够：
 // 同一次渲染周期里两个调用方用**同一对**引用，命中即省下一次全量扫描。
 // 引用相同 ⟺ 内容相同（见上），WeakMap 不阻止 GC，故无陈旧、无泄漏。
+//
+// ⚠️ 「引用变 ⟺ 内容变」这条等价**依赖一条仓库级不变式：`project` 与 `schedules`
+// 只换引用、绝不原地修改**。store 的每条写路径（`dispatch` / `undo` / `redo` /
+// `loadProject` / `closeProject`）都返回新对象，命令层改的是 immer draft，`solve()`
+// 每次产新 schedules —— 所以「内容变」必然伴随「引用变」。
+//
+// **若有调用方原地改了 `project` 却不换引用，这里会静默返回陈旧的摘要。**
+// 仓库里确实存在这种写法（测试用例，见 `CalendarView.test.tsx` 对
+// `project.calendars.default.exceptions` 的赋值）—— 它们随后都克隆了一次引用才没暴露。
+// 新增调用方请照做：要么换引用，要么别原地改。
 
 const summaryCache = new WeakMap<
   Project,
