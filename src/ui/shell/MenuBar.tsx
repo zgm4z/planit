@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Menu } from '@mantine/core'
 import { IconCheck } from '@tabler/icons-react'
@@ -14,10 +14,10 @@ import {
   type ActiveView,
   type ZoomPreset,
 } from '../../store/viewStore'
-import { canIndent, canOutdent, isLeafTask } from '../shared/outlineActions'
 import { createResourceAndGetId } from '../shared/resourceActions'
 import { selectionFingerprint } from '../shared/selectionRange'
 import styles from '../styles/Chrome.module.scss'
+import { buildTaskActions, type TaskActionContext } from './taskActions'
 
 /**
  * TopBar 菜单栏（设计规范 §10）。
@@ -393,126 +393,55 @@ function ViewItems() {
 }
 
 /* ── 任务 ─────────────────────────────────────────────── */
+
+// 菜单栏「任务」菜单只放这 4 项：新建子任务 / 重命名是**右键菜单独有的入口**。
+// ⚠️ delete-task **不在**「任务」菜单里 —— 它在「编辑」菜单（见上面的 EditItems），
+//    那条**保持原样不动**，否则会出现两个删除入口。
+const MENUBAR_ACTION_IDS = ['new-task', 'indent', 'outdent', 'toggle-milestone'] as const
+
 function TaskItems() {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const dispatch = useProjectStore((state) => state.dispatch)
   const selectedTaskId = useViewStore((state) => state.selectedTaskId)
   const selectedTaskIds = useViewStore((state) => state.selectedTaskIds)
+  const beginTitleEdit = useViewStore((state) => state.beginTitleEdit)
   const breakCoalescing = useProjectStore((state) => state.breakCoalescing)
 
-  // 可用性判断**复用** outlineActions 的 canIndent / canOutdent —— 它们是命令层
-  // taskStructureCommands 守卫的只读镜像。这里若重写一遍（哪怕只是「有没有选中」
-  // 这类看似显然的判断），规则就会有一份第二实现，将来命令层放宽/收紧时菜单会静默漂移。
-  // 那正是本项目最忌讳的「同一规则两份实现」。
-  // 多选下把它套在整批上：**全部选中项都通过**才可用（单任务守卫仍是唯一权威）。
-  const indentEnabled =
-    project !== null && selectedTaskIds.length > 0 && selectedTaskIds.every((id) => canIndent(project, id))
-  const outdentEnabled =
-    project !== null && selectedTaskIds.length > 0 && selectedTaskIds.every((id) => canOutdent(project, id))
-
-  // 里程碑标签仍随**锚点**（右栏 / 拖拽读的那个）变 —— 与既有行为一致。
-  const selectedTask = project && selectedTaskId ? project.tasks[selectedTaskId] : undefined
-  const isMilestone = selectedTask?.kind === 'milestone'
-  // 摘要任务不能是里程碑 —— 与 task.toggleMilestone 的守卫（kind === 'group' 直接 return）一致。
-  const milestoneEnabled =
-    project !== null &&
-    selectedTaskIds.length > 0 &&
-    selectedTaskIds.every((id) => isLeafTask(project, id))
-  const milestoneReason =
-    selectedTaskIds.length === 0 ? t('menu.reason.noSelection') : t('menu.reason.summary')
+  // 任务动作**唯一实现**：菜单栏与右键菜单都渲染这张表。启用判据（能否缩进、
+  // 能否设为里程碑……）复用 outlineActions 里与命令层守卫同源的只读镜像 ——
+  // 在这里另写一遍就是「同一规则两份实现」，将来命令层放宽/收紧时菜单会静默漂移。
+  const taskActions = useMemo(() => buildTaskActions(t), [t])
 
   return (
     <>
-      <Menu.Item
-        data-testid="new-task"
-        onClick={() =>
-          dispatch({
-            type: 'task.create',
-            label: 'commands.task.create',
-            payload: { name: t('toolbar.newTask') },
-          })
+      {MENUBAR_ACTION_IDS.map((id) => {
+        const action = taskActions.find((a) => a.id === id)!
+        const ctx: TaskActionContext = {
+          taskIds: selectedTaskIds,
+          anchorId: selectedTaskId,
+          project: project!,
+          dispatch,
+          breakCoalescing,
+          beginTitleEdit,
         }
-      >
-        {t('toolbar.newTask')}
-      </Menu.Item>
-
-      <Menu.Divider />
-
-      <Menu.Item
-        data-testid="indent"
-        disabled={!indentEnabled}
-        rightSection={itemHint({
-          disabled: !indentEnabled,
-          // 前提不满足时给理由。判定来自 canIndent（复用），理由只是把那条规则
-          // 用一句人话讲出来 —— 规则本身仍只有一处实现。
-          reason: t(selectedTaskIds.length === 0 ? 'menu.reason.noSelection' : 'menu.reason.indent'),
-        })}
-        onClick={() => {
-          if (!indentEnabled) return
-          const fingerprint = selectionFingerprint(selectedTaskIds)
-          breakCoalescing()
-          for (const taskId of selectedTaskIds) {
-            dispatch({
-              type: 'task.indent',
-              label: 'commands.task.indent',
-              payload: { taskId },
-              coalesceKey: `task.indent:${fingerprint}`,
-            })
-          }
-        }}
-      >
-        {t('toolbar.indent')}
-      </Menu.Item>
-
-      <Menu.Item
-        data-testid="outdent"
-        disabled={!outdentEnabled}
-        rightSection={itemHint({
-          disabled: !outdentEnabled,
-          reason: t(selectedTaskIds.length === 0 ? 'menu.reason.noSelection' : 'menu.reason.outdent'),
-        })}
-        onClick={() => {
-          if (!outdentEnabled) return
-          const fingerprint = selectionFingerprint(selectedTaskIds)
-          breakCoalescing()
-          for (const taskId of selectedTaskIds) {
-            dispatch({
-              type: 'task.outdent',
-              label: 'commands.task.outdent',
-              payload: { taskId },
-              coalesceKey: `task.outdent:${fingerprint}`,
-            })
-          }
-        }}
-      >
-        {t('toolbar.outdent')}
-      </Menu.Item>
-
-      <Menu.Divider />
-
-      <Menu.Item
-        data-testid="toggle-milestone"
-        disabled={!milestoneEnabled}
-        rightSection={itemHint({ disabled: !milestoneEnabled, reason: milestoneReason })}
-        onClick={() => {
-          if (!milestoneEnabled) return
-          const fingerprint = selectionFingerprint(selectedTaskIds)
-          breakCoalescing()
-          for (const taskId of selectedTaskIds) {
-            dispatch({
-              type: 'task.toggleMilestone',
-              label: 'commands.task.toggleMilestone',
-              payload: { taskId },
-              coalesceKey: `task.toggleMilestone:${fingerprint}`,
-            })
-          }
-        }}
-      >
-        {/* 标签随当前状态变（设为/取消）—— 一个「切换」条目若固定写「设为里程碑」，
-            在已经是里程碑的任务上就是错的。 */}
-        {isMilestone ? t('menu.unsetMilestone') : t('menu.setMilestone')}
-      </Menu.Item>
+        const reason = action.disabledReason(ctx)
+        return (
+          <Fragment key={id}>
+            {action.dividerBefore && <Menu.Divider />}
+            <Menu.Item
+              data-testid={id} // 既有 testid 恰好等于 action id，逐条保留
+              disabled={reason !== null}
+              rightSection={itemHint({ disabled: reason !== null, reason: reason ?? undefined })}
+              onClick={() => {
+                if (reason === null) action.run(ctx)
+              }}
+            >
+              {action.label(ctx)}
+            </Menu.Item>
+          </Fragment>
+        )
+      })}
     </>
   )
 }
