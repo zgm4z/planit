@@ -56,8 +56,8 @@ export function buildTaskActions(t: TFunction): TaskAction[] {
       disabledReason: () => null,
       run: (ctx) => {
         const payload = ctx.anchorId
-          ? { name: t('outline.newTaskName'), afterId: ctx.anchorId }
-          : { name: t('outline.newTaskName') }
+          ? { name: t('toolbar.newTask'), afterId: ctx.anchorId }
+          : { name: t('toolbar.newTask') }
         ctx.dispatch({ type: 'task.create', label: 'commands.task.create', payload })
       },
     },
@@ -105,10 +105,13 @@ export function buildTaskActions(t: TFunction): TaskAction[] {
       id: 'toggle-milestone',
       testId: 'ctx-toggle-milestone',
       dividerBefore: true,
-      label: ({ taskIds, project }) => {
-        const allMilestone =
-          taskIds.length > 0 && taskIds.every((id) => project.tasks[id]?.kind === 'milestone')
-        return t(allMilestone ? 'menu.unsetMilestone' : 'menu.setMilestone')
+      // 文案跟**锚点**（无锚点则取批内第一条）走 —— 与菜单栏一致。
+      // 不能用「整批皆里程碑」：多选混合批里 toggleMilestone 是逐条切换，
+      // 用一个整批判据会对其中一部分显示错误的文案。
+      label: ({ taskIds, anchorId, project }) => {
+        const probe = anchorId ?? taskIds[0] ?? null
+        const isMilestone = probe !== null && project.tasks[probe]?.kind === 'milestone'
+        return t(isMilestone ? 'menu.unsetMilestone' : 'menu.setMilestone')
       },
       disabledReason: ({ taskIds, project }) => {
         if (taskIds.length === 0) return t(NO_SELECTION)

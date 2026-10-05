@@ -71,7 +71,8 @@ describe('buildTaskActions', () => {
     const seen: Command[] = []
     const nc = buildTaskActions(t).find((a) => a.id === 'new-task')!
     nc.run({ ...ctx([root2], root2), dispatch: (c) => seen.push(c) })
-    expect(seen[0]).toMatchObject({ type: 'task.create', payload: { afterId: root2 } })
+    // 默认任务名沿用菜单栏的 toolbar.newTask（e2e 按「新建任务」过滤断言，不能是 outline.newTaskName）
+    expect(seen[0]).toMatchObject({ type: 'task.create', payload: { name: 'toolbar.newTask', afterId: root2 } })
     seen.length = 0
     nc.run({ ...ctx([], null), dispatch: (c) => seen.push(c) })
     expect(seen[0]).toMatchObject({ type: 'task.create', payload: {} })
@@ -85,5 +86,37 @@ describe('buildTaskActions', () => {
     expect(seen.map((c) => c.type)).toEqual(['task.delete', 'task.delete'])
     expect(seen[0].coalesceKey).toBe(seen[1].coalesceKey)
     expect(seen[0].coalesceKey).toBe(`task.delete:${[root1, root2].sort().join(',')}`)
+  })
+
+  it('批量派发：先 breakCoalescing，再逐条 dispatch', () => {
+    const order: string[] = []
+    buildTaskActions(t).find((a) => a.id === 'indent')!
+      .run({
+        ...ctx([root2], root2),
+        breakCoalescing: () => order.push('break'),
+        dispatch: () => order.push('dispatch'),
+      })
+    expect(order).toEqual(['break', 'dispatch'])
+  })
+
+  it('重命名：run 用锚点进入标题编辑态', () => {
+    const edited: string[] = []
+    buildTaskActions(t).find((a) => a.id === 'rename')!
+      .run({ ...ctx([root2], root2), beginTitleEdit: (taskId) => edited.push(taskId) })
+    expect(edited).toEqual([root2])
+  })
+
+  it('新建子任务：run 派发 task.create 带 parentId=锚点', () => {
+    const seen: Command[] = []
+    buildTaskActions(t).find((a) => a.id === 'new-child')!
+      .run({ ...ctx([root1], root1), dispatch: (c) => seen.push(c) })
+    expect(seen[0]).toMatchObject({ type: 'task.create', payload: { parentId: root1 } })
+  })
+
+  it('设为里程碑：文案按锚点判（已里程碑→取消；否则→设为）', () => {
+    const ms = { ...project, tasks: { ...project.tasks, [root2]: { ...project.tasks[root2], kind: 'milestone' as const } } }
+    const labelOf = buildTaskActions(t).find((a) => a.id === 'toggle-milestone')!.label
+    expect(labelOf({ ...ctx([root2], root2), project: ms })).toBe('menu.unsetMilestone')
+    expect(labelOf(ctx([root2], root2))).toBe('menu.setMilestone')
   })
 })
