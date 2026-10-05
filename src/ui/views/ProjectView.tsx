@@ -431,7 +431,7 @@ export function ProjectView() {
                   <div className={ganttStyles.todayLine} style={{ left: todayX }} aria-hidden />
                 )}
 
-                <TaskContextMenu>
+                <TaskContextMenu className={styles.ctxMenuHost}>
                   <GanttRows
                     project={project}
                     calendar={calendar}

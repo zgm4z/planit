@@ -12,6 +12,7 @@ import { flattenVisibleRows } from '../shared/flattenRows'
 import { GANTT_OUTLINE_COLUMNS, OUTLINE_COLUMNS } from './outlineColumns'
 import { OutlineTree } from './OutlineTree'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
+import styles from '../styles/ProjectView.module.scss'
 import { useProjectStore } from '../../store/projectStore'
 import { __resetViewStoreForTests, useViewStore } from '../../store/viewStore'
 import i18n from '../../i18n'
@@ -698,5 +699,23 @@ describe('标题回车新建同级任务', () => {
     await user.keyboard('{Enter}')
 
     expect(useProjectStore.getState().project!.rootIds).toHaveLength(before)
+  })
+})
+
+describe('OutlineTree 右键菜单容器（user-select 回归）', () => {
+  it('容器带 ctxMenuHost，computed user-select 恢复为 text（不被 Mantine 的 none 吃掉）', () => {
+    renderTree()
+
+    // 容器 = TaskContextMenu 渲染的那层，是每行的**直接父节点**
+    const host = screen.getByTestId(`outline-row-${childId}`).parentElement as HTMLElement
+    expect(host).not.toBeNull()
+
+    // ① 结构断言（任何环境都成立）：调用方把 ctxMenuHost 传进了容器
+    expect(host.className).toContain(styles.ctxMenuHost)
+
+    // ② 行为断言：Mantine 的 Menu.ContextMenu 会从**内联 style** 注入
+    //    user-select:none（`use-context-menu-handlers`），.ctxMenuHost 的 `!important`
+    //    规则把它盖回 text —— 保住「鼠标选中大纲行文字」的既有行为。
+    expect(getComputedStyle(host).userSelect).toBe('text')
   })
 })

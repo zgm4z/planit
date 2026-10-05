@@ -88,6 +88,15 @@
   width: 100%;
 }
 
+// 任务右键菜单容器（`TaskContextMenu` 渲染的那层）。
+// Mantine 的 `Menu.ContextMenu` 会给它 `cloneElement` 注入 `user-select: none`
+// （见 `use-context-menu-handlers`），从而禁掉大纲行 / 甘特区**选中文字**的既有能力。
+// 它在**内联 style** 上，故只能靠带 `!important` 的 CSS 规则盖回去（内联 `text`
+// 会被 `cloneElement` 后写覆盖）。两类名相同，两个调用点共用这一条规则。
+.ctxMenuHost {
+  user-select: text !important;
+}
+
 // ── 任务树 ──────────────────────────────────────────────
 
 .outlineRow {

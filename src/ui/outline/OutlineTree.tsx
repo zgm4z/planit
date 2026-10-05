@@ -74,7 +74,10 @@ export function OutlineTree({
     // 承载虚拟行的容器由 TaskContextMenu 渲染（它把 className/style/右键捕获挂在这一层，
     // 自己就是 Menu.ContextMenu 的子节点）—— 任务列表视图与甘特视图左列**共用**此组件，
     // 故一处接入即两处生效。height 透传保住大纲视图表体的滚动高度。
-    <TaskContextMenu className={styles.virtualLayer} style={{ height: rows.length * ROW_HEIGHT }}>
+    <TaskContextMenu
+      className={`${styles.virtualLayer} ${styles.ctxMenuHost}`}
+      style={{ height: rows.length * ROW_HEIGHT }}
+    >
       {virtualItems.map((item) => {
         const row = rows[item.index]
         if (!row) return null
