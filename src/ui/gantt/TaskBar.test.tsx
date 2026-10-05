@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { createCalendar, createTask } from '../../domain/model/factories'
 import type { ComputedSchedule, Task } from '../../domain/model/types'
 import { TaskBar } from './TaskBar'
@@ -81,5 +81,18 @@ describe('TaskBar 条内资源名', () => {
     const el = screen.getByTestId(`task-milestone-${milestone.id}`)
     expect(el).toBeEmptyDOMElement()
     expect(el.getAttribute('title')).toContain('已分配：张三、李四')
+  })
+})
+
+describe('TaskBar 右键守卫', () => {
+  it('右键（button=2）不触发任务条拖拽', () => {
+    const task = createTask({ name: 'T1' })
+    const onBarPointerDown = vi.fn()
+    renderBar(task, { onBarPointerDown })
+    const bar = screen.getByTestId(`task-bar-${task.id}`)
+    fireEvent.pointerDown(bar, { button: 2 })
+    expect(onBarPointerDown).not.toHaveBeenCalled()
+    fireEvent.pointerDown(bar, { button: 0 })
+    expect(onBarPointerDown).toHaveBeenCalled()
   })
 })

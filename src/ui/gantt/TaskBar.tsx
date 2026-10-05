@@ -92,7 +92,11 @@ export function TaskBar({
         }
         data-task-id={task.id}
         data-testid={`task-milestone-${task.id}`}
-        onPointerDown={(event) => onBarPointerDown?.(event, 'move')}
+        onPointerDown={(event) => {
+          // 右键留给 ContextMenu —— 不开始拖拽
+          if (event.button !== 0) return
+          onBarPointerDown?.(event, 'move')
+        }}
       />
     )
   }
@@ -124,7 +128,11 @@ export function TaskBar({
       title={`${task.name}\n${assignedLine}${displayStart} → ${displayFinish}`}
       data-task-id={task.id}
       data-testid={`task-bar-${task.id}`}
-      onPointerDown={(event) => onBarPointerDown?.(event, 'move')}
+      onPointerDown={(event) => {
+        // 右键留给 ContextMenu —— 不开始拖拽
+        if (event.button !== 0) return
+        onBarPointerDown?.(event, 'move')
+      }}
     >
       {isManual && (
         <span
@@ -164,12 +172,20 @@ export function TaskBar({
       <div
         className={`${styles.barHandle} ${styles.barHandleLeft}`}
         data-testid={`bar-handle-left-${task.id}`}
-        onPointerDown={(event) => onBarPointerDown?.(event, 'resizeStart')}
+        onPointerDown={(event) => {
+          // 右键留给 ContextMenu —— 不开始拖拽
+          if (event.button !== 0) return
+          onBarPointerDown?.(event, 'resizeStart')
+        }}
       />
       <div
         className={`${styles.barHandle} ${styles.barHandleRight}`}
         data-testid={`bar-handle-right-${task.id}`}
-        onPointerDown={(event) => onBarPointerDown?.(event, 'resizeEnd')}
+        onPointerDown={(event) => {
+          // 右键留给 ContextMenu —— 不开始拖拽
+          if (event.button !== 0) return
+          onBarPointerDown?.(event, 'resizeEnd')
+        }}
       />
 
       {/* 连接柄：从它拖出依赖连线（Task 17 接线）。
@@ -199,6 +215,8 @@ export function TaskBar({
           zIndex: 3,
         }}
         onPointerDown={(event) => {
+          // 右键留给 ContextMenu —— 不从连接柄起连线
+          if (event.button !== 0) return
           // 幽灵线起点锚在**任务条右缘** —— 与 barRect 的右缘（静态 FS 连线的
           // 起点）重合。柄已挪到条外，不能再拿柄的中心当起点（会偏出 5px）。
           const bar = event.currentTarget.parentElement
