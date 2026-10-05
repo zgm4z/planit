@@ -59,3 +59,15 @@ describe('outline.newTaskName', () => {
     }
   })
 })
+
+describe('右键菜单的新键', () => {
+  it('menu.newChildTask / menu.renameTask 三语齐全且非空', () => {
+    for (const dict of [zhCN, enUS, jaJP]) {
+      for (const key of ['newChildTask', 'renameTask'] as const) {
+        const v = (dict.menu as Dict)[key]
+        expect(typeof v, key).toBe('string')
+        expect((v as string).length).toBeGreaterThan(0)
+      }
+    }
+  })
+})

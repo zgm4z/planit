@@ -34,6 +34,8 @@
     "expandAll": "すべて展開",
     "setMilestone": "マイルストーンにする",
     "unsetMilestone": "マイルストーンを解除",
+    "newChildTask": "サブタスクを新規作成",
+    "renameTask": "名前を変更",
     "deleteBaseline": "現在の基準を削除",
     "reason": {
       "noSelection": "タスクが未選択です",

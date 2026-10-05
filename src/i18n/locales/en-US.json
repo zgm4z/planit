@@ -34,6 +34,8 @@
     "expandAll": "Expand all",
     "setMilestone": "Set as milestone",
     "unsetMilestone": "Remove milestone",
+    "newChildTask": "New subtask",
+    "renameTask": "Rename",
     "deleteBaseline": "Delete current baseline",
     "reason": {
       "noSelection": "No task selected",

@@ -37,6 +37,8 @@
     "expandAll": "展开全部",
     "setMilestone": "设为里程碑",
     "unsetMilestone": "取消里程碑",
+    "newChildTask": "新建子任务",
+    "renameTask": "重命名",
     "deleteBaseline": "删除当前基线",
     "reason": {
       "noSelection": "未选中任务",
