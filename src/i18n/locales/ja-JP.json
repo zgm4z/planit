@@ -37,6 +37,7 @@
     "newChildTask": "サブタスクを新規作成",
     "renameTask": "名前を変更",
     "deleteBaseline": "現在の基準を削除",
+    "monteCarloSimulation": "モンテカルロシミュレーション",
     "reason": {
       "noSelection": "タスクが未選択です",
       "indent": "マイルストーンではない前の兄弟タスクが必要です",
@@ -387,5 +388,46 @@
     "dependencyNotRegistered": "未登録のコマンド種別：{{type}}",
     "summaryCannotHaveDependency": "サマリータスクには依存関係を作成できません。具体的な子タスクに接続してください",
     "storageUnavailable": "変更を保存できません：{{message}}"
+  },
+  "simulation": {
+    "title": "モンテカルロシミュレーション",
+    "config": {
+      "title": "シミュレーション設定",
+      "iterations": "反復回数",
+      "iterationsHelp": "シミュレーションの実行回数 — 多いほど正確ですが時間がかかります",
+      "confidenceLevel": "信頼水準",
+      "confidenceLevelHelp": "信頼区間の信頼水準（例：95%は結果がこの範囲に収まる確率が95%であることを意味します）"
+    },
+    "actions": {
+      "run": "シミュレーションを実行",
+      "close": "閉じる",
+      "running": "シミュレーション実行中..."
+    },
+    "results": {
+      "title": "シミュレーション結果",
+      "noResults": "シミュレーション結果がありません",
+      "projectDuration": "プロジェクト期間",
+      "mean": "平均",
+      "median": "中央値",
+      "confidenceInterval": "{{level}}% 信頼区間",
+      "probability": "確率分布",
+      "days": "{{count}} 日"
+    },
+    "resultsTitle": "シミュレーション結果",
+    "iterations": "回の反復",
+    "meanDuration": "平均期間",
+    "medianDuration": "中央値期間",
+    "stdDev": "標準偏差",
+    "p10": "P10（楽観的）",
+    "p50": "P50（中央値）",
+    "p90": "P90（保守的）",
+    "chanceEarlier": "早期完了の確率",
+    "distributionChart": "期間分布ヒストグラム",
+    "durationDays": "期間（日）",
+    "frequency": "頻度",
+    "rangeExplanation": "期間範囲の説明",
+    "minMax": "最小-最大",
+    "minMaxDesc": "全シミュレーション実行における最短および最長期間",
+    "p1090Desc": "80%のケースで、プロジェクト期間はこの範囲に収まります"
   }
 }

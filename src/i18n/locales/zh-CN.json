@@ -40,6 +40,7 @@
     "newChildTask": "新建子任务",
     "renameTask": "重命名",
     "deleteBaseline": "删除当前基线",
+    "monteCarloSimulation": "蒙特卡洛模拟",
     "reason": {
       "noSelection": "未选中任务",
       "indent": "需前一个同级任务，且它不是里程碑",
@@ -390,5 +391,46 @@
     "dependencyNotRegistered": "未注册的命令类型：{{type}}",
     "summaryCannotHaveDependency": "摘要任务不能建立依赖，请连接到具体的子任务上",
     "storageUnavailable": "本次修改无法保存：{{message}}"
+  },
+  "simulation": {
+    "title": "蒙特卡洛模拟",
+    "config": {
+      "title": "模拟配置",
+      "iterations": "模拟次数",
+      "iterationsHelp": "运行模拟的次数，越多越准确但耗时越长",
+      "confidenceLevel": "置信水平",
+      "confidenceLevelHelp": "置信区间的置信水平（例如 95% 表示有 95% 的概率落在该区间内）"
+    },
+    "actions": {
+      "run": "运行模拟",
+      "close": "关闭",
+      "running": "正在模拟..."
+    },
+    "results": {
+      "title": "模拟结果",
+      "noResults": "尚未运行模拟",
+      "projectDuration": "项目工期",
+      "mean": "平均值",
+      "median": "中位数",
+      "confidenceInterval": "{{level}}% 置信区间",
+      "probability": "概率分布",
+      "days": "{{count}} 天"
+    },
+    "resultsTitle": "模拟结果",
+    "iterations": "次迭代",
+    "meanDuration": "平均工期",
+    "medianDuration": "中位数工期",
+    "stdDev": "标准差",
+    "p10": "P10 (乐观)",
+    "p50": "P50 (中位数)",
+    "p90": "P90 (保守)",
+    "chanceEarlier": "概率更早完成",
+    "distributionChart": "工期分布直方图",
+    "durationDays": "工期（天）",
+    "frequency": "频次",
+    "rangeExplanation": "工期范围说明",
+    "minMax": "最小-最大",
+    "minMaxDesc": "所有模拟迭代中的最短和最长工期",
+    "p1090Desc": "80% 的情况下，项目工期会落在这个范围内"
   }
 }

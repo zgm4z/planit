@@ -18,6 +18,7 @@ import { createResourceAndGetId } from '../shared/resourceActions'
 import { selectionFingerprint } from '../shared/selectionRange'
 import styles from '../styles/Chrome.module.scss'
 import { buildTaskActions, type TaskActionContext } from '../shared/taskActions'
+import { MonteCarloSimulationDrawer } from './MonteCarloSimulationDrawer'
 
 /**
  * TopBar 菜单栏（设计规范 §10）。
@@ -59,6 +60,7 @@ export function MenuBar() {
    * 自己管一个 openMenu 是本项目不引新依赖就能做到这件事的最小形态。
    */
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null)
+  const [simulationDrawerOpened, setSimulationDrawerOpened] = useState(false)
 
   // 悬停切换**仅在已有菜单展开时**生效：一个都没开时，鼠标扫过菜单栏不该连续
   // 弹出六个菜单。这是菜单栏（menubar）的标准行为。
@@ -67,7 +69,8 @@ export function MenuBar() {
   }
 
   return (
-    <div className={styles.menubar} data-testid="menubar">
+    <>
+      <div className={styles.menubar} data-testid="menubar">
       <TopMenu
         id="file"
         label={t('menu.file')}
@@ -115,7 +118,7 @@ export function MenuBar() {
         setOpenMenu={setOpenMenu}
         onHover={handleHover}
       >
-        <ProjectItems />
+        <ProjectItems onOpenSimulation={() => setSimulationDrawerOpened(true)} />
       </TopMenu>
 
       <TopMenu
@@ -128,6 +131,12 @@ export function MenuBar() {
         <ResourceItems />
       </TopMenu>
     </div>
+
+    <MonteCarloSimulationDrawer
+      opened={simulationDrawerOpened}
+      onClose={() => setSimulationDrawerOpened(false)}
+    />
+  </>
   )
 }
 
@@ -447,7 +456,7 @@ function TaskItems() {
 }
 
 /* ── 项目 ─────────────────────────────────────────────── */
-function ProjectItems() {
+function ProjectItems({ onOpenSimulation }: { onOpenSimulation: () => void }) {
   const { t } = useTranslation()
   const project = useProjectStore((state) => state.project)
   const dispatch = useProjectStore((state) => state.dispatch)
@@ -535,6 +544,15 @@ function ProjectItems() {
         }
       >
         {t('menu.deleteBaseline')}
+      </Menu.Item>
+
+      <Menu.Divider />
+
+      <Menu.Item
+        data-testid="menu-monte-carlo-simulation"
+        onClick={onOpenSimulation}
+      >
+        {t('menu.monteCarloSimulation')}
       </Menu.Item>
     </>
   )
