@@ -3,7 +3,7 @@ import type {
   SimulationConfig,
   SimulationResult,
   TaskUncertainty,
-} from '../domain/simulation/types'
+} from '../domain/simulation/simulationTypes'
 
 interface SimulationState {
   /** 当前模拟配置 */

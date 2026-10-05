@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useSimulationStore } from './simulationStore'
-import type { SimulationConfig, TaskUncertainty } from '../domain/simulation/types'
+import type { SimulationConfig, TaskUncertainty } from '../domain/simulation/simulationTypes'
 
 describe('useSimulationStore', () => {
   beforeEach(() => {
@@ -154,7 +154,7 @@ describe('useSimulationStore', () => {
     it('设置模拟结果', () => {
       const result = {
         iterations: 1000,
-        projectDuration: {
+        projectStats: {
           mean: 100,
           median: 95,
           std: 15,
@@ -164,8 +164,8 @@ describe('useSimulationStore', () => {
           p50: 95,
           p90: 120,
         },
-        taskDurations: {},
-        histogram: { binEdges: [70, 80, 90, 100], counts: [10, 30, 40] },
+        taskStats: {},
+        histogram: { bins: [70, 80, 90, 100], frequencies: [10, 30, 40] },
         executedAt: '2024-01-01T00:00:00Z',
       }
 

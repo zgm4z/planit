@@ -107,6 +107,19 @@ browser: no server, no account.
 - **Earned value** — BAC, EV, PV, and SV are derived from cost and progress.
 - Set a status date together with an active baseline to unlock PV and SV.
 
+### Monte Carlo Simulation
+
+- **Risk analysis** — run Monte Carlo simulations to model project duration uncertainty
+  based on optimistic, most-likely, and pessimistic task estimates.
+- **PERT Beta distribution** — each task's uncertainty is sampled from a Beta-PERT
+  distribution, reflecting real-world asymmetric risk.
+- **Visual analytics** — interactive dashboard with histogram, key statistics (mean,
+  median, P10/P50/P90), and confidence intervals.
+- **Non-blocking execution** — simulations run in a Web Worker, keeping the UI responsive
+  even during thousands of iterations.
+- **Configurable** — adjust iteration count and confidence level to balance accuracy and
+  computation time.
+
 ### Views
 
 - **Gantt** — task bars, dependency lines with correct endpoint semantics for all four

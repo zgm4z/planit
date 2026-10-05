@@ -37,6 +37,7 @@
     "newChildTask": "New subtask",
     "renameTask": "Rename",
     "deleteBaseline": "Delete current baseline",
+    "monteCarloSimulation": "Monte Carlo Simulation",
     "reason": {
       "noSelection": "No task selected",
       "indent": "Needs a preceding sibling that is not a milestone",
@@ -387,5 +388,46 @@
     "dependencyNotRegistered": "Unregistered command type: {{type}}",
     "summaryCannotHaveDependency": "Summary tasks cannot have dependencies — connect to a concrete child task instead",
     "storageUnavailable": "Changes cannot be saved: {{message}}"
+  },
+  "simulation": {
+    "title": "Monte Carlo Simulation",
+    "config": {
+      "title": "Simulation Configuration",
+      "iterations": "Number of Iterations",
+      "iterationsHelp": "Number of simulation runs — higher is more accurate but takes longer",
+      "confidenceLevel": "Confidence Level",
+      "confidenceLevelHelp": "Confidence level for the interval (e.g., 95% means there's a 95% probability the result falls within this range)"
+    },
+    "actions": {
+      "run": "Run Simulation",
+      "close": "Close",
+      "running": "Running simulation..."
+    },
+    "results": {
+      "title": "Simulation Results",
+      "noResults": "No simulation results yet",
+      "projectDuration": "Project Duration",
+      "mean": "Mean",
+      "median": "Median",
+      "confidenceInterval": "{{level}}% Confidence Interval",
+      "probability": "Probability Distribution",
+      "days": "{{count}} days"
+    },
+    "resultsTitle": "Simulation Results",
+    "iterations": "iterations",
+    "meanDuration": "Mean Duration",
+    "medianDuration": "Median Duration",
+    "stdDev": "Standard Deviation",
+    "p10": "P10 (Optimistic)",
+    "p50": "P50 (Median)",
+    "p90": "P90 (Conservative)",
+    "chanceEarlier": "chance of earlier completion",
+    "distributionChart": "Duration Distribution Histogram",
+    "durationDays": "Duration (days)",
+    "frequency": "Frequency",
+    "rangeExplanation": "Duration Range Explanation",
+    "minMax": "Min-Max",
+    "minMaxDesc": "Shortest and longest durations across all simulation runs",
+    "p1090Desc": "In 80% of cases, the project duration will fall within this range"
   }
 }
