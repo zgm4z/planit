@@ -381,3 +381,100 @@ export interface ScheduleResult {
   /** v1.0：每任务相对活动基线的排期差异（工作日口径）。**UI 只读这里** */
   baselineDiffs: Record<TaskId, BaselineComparison>
 }
+
+// ── 蒙特卡洛模拟（Monte Carlo Simulation）───────────────
+
+/**
+ * 任务的不确定性参数（PERT 三点估算）。
+ *
+ * 使用 Beta 分布建模：最乐观（O）、最可能（M）、最悲观（P）。
+ * 期望值 = (O + 4M + P) / 6，用于生成符合现实的工期分布。
+ */
+export interface TaskUncertainty {
+  /** 任务 ID */
+  taskId: TaskId
+  /** 最乐观工期（工作日） */
+  optimistic: number
+  /** 最可能工期（工作日，通常是当前 duration） */
+  mostLikely: number
+  /** 最悲观工期（工作日） */
+  pessimistic: number
+}
+
+/**
+ * 蒙特卡洛模拟配置。
+ *
+ * 控制模拟的迭代次数和随机种子（可复现性）。
+ */
+export interface SimulationConfig {
+  /** 模拟迭代次数。典型值：1000-10000 */
+  iterations: number
+  /** 随机种子（可选）。设置后模拟结果可复现 */
+  seed?: number
+  /** 每个任务的不确定性参数。未指定的任务使用确定性工期 */
+  uncertainties: TaskUncertainty[]
+}
+
+/**
+ * 单次模拟迭代的结果。
+ *
+ * 记录一次随机采样后的项目完成日期和关键路径。
+ */
+export interface IterationResult {
+  /** 迭代序号（从 0 开始） */
+  iteration: number
+  /** 项目完成日期（DateStr） */
+  finishDate: DateStr
+  /** 项目工期（工作日） */
+  duration: number
+  /** 本次迭代的关键路径任务 ID 列表 */
+  criticalPath: TaskId[]
+}
+
+/**
+ * 直方图的单个区间（bin）。
+ */
+export interface HistogramBin {
+  /** 区间下界（工作日） */
+  min: number
+  /** 区间上界（工作日） */
+  max: number
+  /** 落在该区间的迭代次数 */
+  count: number
+  /** 落在该区间的百分比（0-100） */
+  percentage: number
+}
+
+/**
+ * 完整的蒙特卡洛模拟结果。
+ *
+ * 包含统计摘要、直方图、百分位数和所有迭代详情。
+ * **派生数据，不落盘，不入撤销栈**（与 ScheduleResult 同类）。
+ */
+export interface SimulationResult {
+  /** 使用的模拟配置 */
+  config: SimulationConfig
+  /** 统计摘要 */
+  statistics: {
+    /** 平均工期（工作日） */
+    mean: number
+    /** 中位数工期（工作日） */
+    median: number
+    /** 标准差（工作日） */
+    stdDev: number
+    /** 最小工期（工作日） */
+    min: number
+    /** 最大工期（工作日） */
+    max: number
+  }
+  /** 关键百分位数：P10, P50, P90, P95 等 */
+  percentiles: Record<number, number>
+  /** 工期分布直方图（通常 20-50 个区间） */
+  histogram: HistogramBin[]
+  /** 每个任务在关键路径上出现的频率（0-1） */
+  criticalityIndex: Record<TaskId, number>
+  /** 所有迭代的详细结果（可选，用于调试或详细分析） */
+  iterations?: IterationResult[]
+  /** 模拟执行时间（毫秒） */
+  executionTime: number
+}
