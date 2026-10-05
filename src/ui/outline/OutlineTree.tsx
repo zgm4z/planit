@@ -24,6 +24,7 @@ import { OUTLINE_CELL_EDITORS, getOutlineCellEditor, getCellDisabledReason } fro
 import { useProjectStore } from '../../store/projectStore'
 import { useViewStore } from '../../store/viewStore'
 import { createdSiblingId } from '../shared/outlineActions'
+import { TaskContextMenu } from '../shared/TaskContextMenu'
 import { ROW_HEIGHT } from '../shared/useSharedVirtualizer'
 import { formatCost, formatDate, formatDays, formatEffort, formatPercent } from '../shared/format'
 import styles from '../styles/ProjectView.module.scss'
@@ -70,7 +71,10 @@ export function OutlineTree({
   onToggleCollapse,
 }: OutlineTreeProps) {
   return (
-    <div className={styles.virtualLayer} style={{ height: rows.length * ROW_HEIGHT }}>
+    // 承载虚拟行的容器由 TaskContextMenu 渲染（它把 className/style/右键捕获挂在这一层，
+    // 自己就是 Menu.ContextMenu 的子节点）—— 任务列表视图与甘特视图左列**共用**此组件，
+    // 故一处接入即两处生效。height 透传保住大纲视图表体的滚动高度。
+    <TaskContextMenu className={styles.virtualLayer} style={{ height: rows.length * ROW_HEIGHT }}>
       {virtualItems.map((item) => {
         const row = rows[item.index]
         if (!row) return null
@@ -166,7 +170,7 @@ export function OutlineTree({
           </div>
         )
       })}
-    </div>
+    </TaskContextMenu>
   )
 }
 

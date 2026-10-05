@@ -1,8 +1,8 @@
 import type { TFunction } from 'i18next'
 import type { Command } from '../../commands/types'
 import type { Project, TaskId } from '../../domain/model/types'
-import { canIndent, canOutdent, isLeafTask } from '../shared/outlineActions'
-import { selectionFingerprint } from '../shared/selectionRange'
+import { canIndent, canOutdent, isLeafTask } from './outlineActions'
+import { selectionFingerprint } from './selectionRange'
 
 export type TaskActionId =
   | 'new-task' | 'new-child' | 'indent' | 'outdent'

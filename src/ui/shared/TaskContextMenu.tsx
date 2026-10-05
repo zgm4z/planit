@@ -1,9 +1,9 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Menu } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { useProjectStore } from '../../store/projectStore'
 import { useViewStore } from '../../store/viewStore'
-import { isEditableTarget } from '../shared/isEditableTarget'
+import { isEditableTarget } from './isEditableTarget'
 import { buildTaskActions, type TaskActionContext } from './taskActions'
 
 /** 从事件目标往上找任务 id：大纲行（`outline-row-<id>`）或甘特条（`task-bar-<id>`）。 */
@@ -27,8 +27,19 @@ function taskIdFromTarget(target: EventTarget | null): string | null {
  * 多个甘特条作为兄弟节点塞进 `children`。因此这里**不额外包一层 div**，而是让
  * 承载 `className` / 捕获处理器的这层容器直接充当 `Menu.ContextMenu` 的子节点 ——
  * DOM 仍是「一层容器 + children」，不会给调用方多出影响布局的元素。
+ *
+ * `style` 透传：调用方需用它保留**原本落在容器上的内联布局**（大纲行的虚拟层
+ * 靠 `height: rows * ROW_HEIGHT` 撑出滚动高度；少了它，大纲视图的表体会塌成 0 高）。
  */
-export function TaskContextMenu({ className, children }: { className?: string; children: ReactNode }) {
+export function TaskContextMenu({
+  className,
+  style,
+  children,
+}: {
+  className?: string
+  style?: CSSProperties
+  children: ReactNode
+}) {
   const { t } = useTranslation()
   const [ctx, setCtx] = useState<TaskActionContext | null>(null)
   const openedRef = useRef(false)
@@ -70,7 +81,7 @@ export function TaskContextMenu({ className, children }: { className?: string; c
       withinPortal
     >
       <Menu.ContextMenu>
-        <div className={className} onContextMenuCapture={capture}>
+        <div className={className} style={style} onContextMenuCapture={capture}>
           {children}
         </div>
       </Menu.ContextMenu>

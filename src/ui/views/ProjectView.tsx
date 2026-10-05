@@ -12,6 +12,7 @@ import { DependencyLayer } from '../gantt/DependencyLayer'
 import { GanttRows } from '../gantt/GanttRows'
 import { Inspector } from '../inspector/Inspector'
 import { OutlineTree } from '../outline/OutlineTree'
+import { TaskContextMenu } from '../shared/TaskContextMenu'
 import {
   GANTT_OUTLINE_COLUMNS,
   OUTLINE_COLUMNS,
@@ -430,39 +431,41 @@ export function ProjectView() {
                   <div className={ganttStyles.todayLine} style={{ left: todayX }} aria-hidden />
                 )}
 
-                <GanttRows
-                  project={project}
-                  calendar={calendar}
-                  rows={rows}
-                  virtualItems={virtualItems}
-                  schedules={schedulesResult.schedules}
-                  conflictIds={conflictIds}
-                  scale={scale}
-                  resourceNamesByTask={resourceNamesByTask}
-                  dragShadow={drag.shadow}
-                  onBarPointerDown={(event, taskId, mode) => {
-                    // 按下的同时按修饰键改写选区 —— 单击（未越过 3px 阈值）只应选中，
-                    // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
-                    const mods: SelectionMods = {
-                      ctrlKey: event.ctrlKey,
-                      metaKey: event.metaKey,
-                      shiftKey: event.shiftKey,
-                    }
-                    handleSelectTask(taskId, mods)
-                    // 按住选区修饰键时只改选区，不开始拖拽 —— 否则 Ctrl+点击会顺手挪动任务条
-                    if (mods.ctrlKey || mods.metaKey || mods.shiftKey) return
+                <TaskContextMenu>
+                  <GanttRows
+                    project={project}
+                    calendar={calendar}
+                    rows={rows}
+                    virtualItems={virtualItems}
+                    schedules={schedulesResult.schedules}
+                    conflictIds={conflictIds}
+                    scale={scale}
+                    resourceNamesByTask={resourceNamesByTask}
+                    dragShadow={drag.shadow}
+                    onBarPointerDown={(event, taskId, mode) => {
+                      // 按下的同时按修饰键改写选区 —— 单击（未越过 3px 阈值）只应选中，
+                      // 不产生任何命令；拖拽也从「选中它」开始，符合直觉。
+                      const mods: SelectionMods = {
+                        ctrlKey: event.ctrlKey,
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey,
+                      }
+                      handleSelectTask(taskId, mods)
+                      // 按住选区修饰键时只改选区，不开始拖拽 —— 否则 Ctrl+点击会顺手挪动任务条
+                      if (mods.ctrlKey || mods.metaKey || mods.shiftKey) return
 
-                    const schedule = schedulesResult.schedules[taskId]
-                    const task = project.tasks[taskId]
-                    if (!schedule || !task) return
-                    // 拖拽起点 = 条当前画在哪：`scheduledStart` + **视觉宽度**（排期跨度）。
-                    // 不能用 `task.duration` —— fixedEffort 任务的 duration 会被引擎按
-                    // ceil(effort/Σunits) 覆盖，与条宽不同，拖拽会把宽度掰回旧值。
-                    const dragStart = dragOrigin(task, schedule, calendar)
-                    drag.begin(event, taskId, mode, dragStart.startDate, dragStart.duration)
-                  }}
-                  onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
-                />
+                      const schedule = schedulesResult.schedules[taskId]
+                      const task = project.tasks[taskId]
+                      if (!schedule || !task) return
+                      // 拖拽起点 = 条当前画在哪：`scheduledStart` + **视觉宽度**（排期跨度）。
+                      // 不能用 `task.duration` —— fixedEffort 任务的 duration 会被引擎按
+                      // ceil(effort/Σunits) 覆盖，与条宽不同，拖拽会把宽度掰回旧值。
+                      const dragStart = dragOrigin(task, schedule, calendar)
+                      drag.begin(event, taskId, mode, dragStart.startDate, dragStart.duration)
+                    }}
+                    onStartLink={(event, taskId, x, y) => link.begin(event, taskId, x, y)}
+                  />
+                </TaskContextMenu>
 
                 <div
                   data-testid="dependency-scale"

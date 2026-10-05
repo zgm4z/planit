@@ -17,7 +17,7 @@ import {
 import { createResourceAndGetId } from '../shared/resourceActions'
 import { selectionFingerprint } from '../shared/selectionRange'
 import styles from '../styles/Chrome.module.scss'
-import { buildTaskActions, type TaskActionContext } from './taskActions'
+import { buildTaskActions, type TaskActionContext } from '../shared/taskActions'
 
 /**
  * TopBar 菜单栏（设计规范 §10）。
