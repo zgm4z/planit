@@ -158,11 +158,19 @@ pnpm typecheck  # type check
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE).
+[GNU Affero General Public License v3.0](LICENSE), version 3 only (`AGPL-3.0-only`).
 
-- **Noncommercial use is free** — use, modify, and distribute the software for personal
-  study and research, hobby projects, and educational, charitable, public-research, and
-  governmental use.
-- **Forks and derivative works must retain** the original copyright and license notices
-  and pass these terms along with any distribution.
-- **Commercial use** is not covered by the license and requires the author's separate permission.
+Planit is free software: you may use, modify, and redistribute it, **including for
+commercial purposes**, as long as you comply with the following.
+
+- **Derivative works must stay open source.** Anything you convey must be licensed under
+  the AGPL-3.0 as well, with the original copyright and license notices retained.
+- **Network use counts as distribution.** If you run a modified version as a network
+  service, users who interact with it over a network must be offered the corresponding
+  source code (AGPL section 13).
+- **No trademark rights are granted.** The name "Planit" and its logo remain the
+  trademarks of zhuoguangming and may not be used without permission.
+- **No warranty.** The software comes as is, without any warranty.
+
+To use Planit under terms other than the AGPL-3.0 — for example inside a proprietary
+product — contact the author for a separate commercial license.
