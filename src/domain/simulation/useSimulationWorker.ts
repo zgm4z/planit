@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useRef, useCallback } from 'react'
 import type { Project } from '../model/types'
 import type { SimulationConfig, SimulationResult, TaskUncertainty } from './simulationTypes'

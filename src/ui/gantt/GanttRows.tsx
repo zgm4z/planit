@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Calendar, ComputedSchedule, Project, TaskId } from '../../domain/model/types'
 import { TaskBar, type BarDragMode } from './TaskBar'

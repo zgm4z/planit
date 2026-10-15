@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { CalendarException, CalendarId, DateStr } from '../domain/model/types'
 import { addDays } from '../domain/dateUtils'
 import { DEFAULT_FINISH_TIME, DEFAULT_START_TIME, ensureDateTime } from '../domain/calendar/dateTime'

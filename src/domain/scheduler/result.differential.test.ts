@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 全量差分测试：本次「字符串键 → 整数索引」表示改造必须**逐字节复现** HEAD 的真实
  * `solve()` 输出（整个 `ScheduleResult`，不只平衡那五项）。

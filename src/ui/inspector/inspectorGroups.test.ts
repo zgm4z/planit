@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { describe, it, expect } from 'vitest'
 import zhCN from '../../i18n/locales/zh-CN.json'
 import enUS from '../../i18n/locales/en-US.json'

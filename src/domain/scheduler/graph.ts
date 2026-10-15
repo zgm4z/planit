@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Dependency, TaskId } from '../model/types'
 
 /** 依赖成环时抛出。`cycle` 是构成环路的任务 id 序列，首尾相同。 */

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { ComputedSchedule, Project, ScheduleResult, TaskId } from '../model/types'
 import { runCpmWithGraph } from './cpm'
 import { levelLeaves } from './leveling'

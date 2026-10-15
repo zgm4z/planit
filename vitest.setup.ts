@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import '@testing-library/jest-dom/vitest'
 
 // jsdom 30 的 window 上存在 matchMedia 属性，但值是 undefined。

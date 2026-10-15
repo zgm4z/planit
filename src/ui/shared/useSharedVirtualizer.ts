@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import type { RefObject } from 'react'
 

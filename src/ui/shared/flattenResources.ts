@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Project, ResourceId } from '../../domain/model/types'
 
 export interface ResourceFlatRow {

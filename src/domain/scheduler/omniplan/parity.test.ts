@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 // 用 Node 的 URL 而非全局 URL：测试跑在 jsdom 环境里，jsdom 会替换全局 `URL`，

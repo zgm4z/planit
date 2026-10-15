@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 差分测试：改动后的实现必须**逐字节复现**改动前 HEAD 在夹具上的真实输出。
  *

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { Drawer } from '@mantine/core'

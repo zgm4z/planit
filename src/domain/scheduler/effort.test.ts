@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { describe, it, expect } from 'vitest'
 import { createProject, createTask, createResource, createAssignment } from '../model/factories'
 import type { Project } from '../model/types'

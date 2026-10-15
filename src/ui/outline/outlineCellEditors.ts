@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { ComputedSchedule, Task } from '../../domain/model/types'
 import type { Command } from '../../commands/types'
 import type { OutlineColumnKey } from '../../store/columnKeys'

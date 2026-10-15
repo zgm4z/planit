@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { memo, useEffect } from 'react'
 import { ActionIcon, Menu, SegmentedControl, Text, Tooltip } from '@mantine/core'
 import { IconArrowLeft, IconDotsVertical, IconCheck } from '@tabler/icons-react'

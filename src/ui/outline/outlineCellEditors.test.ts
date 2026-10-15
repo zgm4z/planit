@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { ComputedSchedule, Task } from '../../domain/model/types'
 import { createTask, __resetIdCounterForTests } from '../../domain/model/factories'

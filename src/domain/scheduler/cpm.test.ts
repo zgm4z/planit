@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { describe, it, expect } from 'vitest'
 import { createCalendar, createTask, createDependency } from '../model/factories'
 import type { Dependency, Lag, SchedulingDirection, Task } from '../model/types'

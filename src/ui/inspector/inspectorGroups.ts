@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * Inspector 任务面板的 7 个分组。**纯数据** —— 不依赖 React / i18n 实例，
  * 因此单测不需要初始化语言。

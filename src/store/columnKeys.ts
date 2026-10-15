@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 列的**标识词汇**：可序列化、与渲染无关的「有哪些列 / 哪些本版可用 / 默认看哪些」。
  *

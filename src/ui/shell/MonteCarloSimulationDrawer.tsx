@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useState, useEffect } from 'react'
 import { Button, Drawer, NumberInput, Stack, Text, Title, Paper, Progress } from '@mantine/core'
 import { useTranslation } from 'react-i18next'

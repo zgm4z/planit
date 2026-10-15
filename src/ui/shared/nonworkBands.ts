@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Calendar, DateStr } from '../../domain/model/types'
 import { addDays, isWorkday } from '../../domain/calendar/workdays'
 

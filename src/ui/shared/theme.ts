@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { createTheme, type MantineColorsTuple } from '@mantine/core'
 
 // 品牌色 = 设计规范 §4.1 的「工作色」靛蓝（--planit-work）。Mantine 需要一组

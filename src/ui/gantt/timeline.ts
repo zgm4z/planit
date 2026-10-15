@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { differenceInCalendarDays } from 'date-fns'
 import type { DateStr } from '../../domain/model/types'
 import { parseDate, addDays } from '../../domain/calendar/workdays'

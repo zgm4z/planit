@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /** 焦点落在这些原生标签里时视为「正在输入」 */
 export const EDITABLE_TAGS = ['INPUT', 'TEXTAREA', 'SELECT'] as const
 

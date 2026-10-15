@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { ComputedSchedule, DateStr, Project, TaskId } from '../../domain/model/types'
 import { workdaysBetween } from '../../domain/calendar/workdays'
 

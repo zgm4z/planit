@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { TaskId } from '../domain/model/types'
 import { siblingIdsOf } from '../domain/model/tree'
 import { reconcileKind } from './reconcileKind'

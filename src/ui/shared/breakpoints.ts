@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 布局断点（spec §7，与 Mantine 的 `$breakpoint-md: 900px` 对齐）。
  *

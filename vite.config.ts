@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// <reference types="vitest/config" />
 import {configDefaults, defineConfig} from 'vitest/config'
 import react from '@vitejs/plugin-react'

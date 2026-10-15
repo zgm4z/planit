@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { COLUMN_WIDTH_MAX, COLUMN_WIDTH_MIN, TITLE_COLUMN_WIDTH_MIN, DEFAULT_VISIBLE_COLUMNS } from './columnKeys'
 import { createProject, createResource, createTask } from '../domain/model/factories'

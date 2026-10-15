@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { DateStr } from './model/types'
 
 /** YYYY-MM-DD 与 Date 互转，全部按本地时区解释，避免 UTC 偏移导致差一天 */

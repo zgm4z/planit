@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useState } from 'react'
 import { ActionIcon, Box, Button, Checkbox, Divider, Group, Stack, Text, TextInput } from '@mantine/core'
 import { IconChevronDown, IconChevronRight } from '@tabler/icons-react'

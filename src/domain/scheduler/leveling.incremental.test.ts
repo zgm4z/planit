@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 不变量测试：增量维护的负载表必须与 `resourceDayLoad` 的全量重建一致
  * （键集严格相等、逐格数值在相对容差内）。

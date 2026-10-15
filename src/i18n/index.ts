@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 文案原则（v0.6 确立，源自 `docs/superpowers/plans/2026-10-01-v0.6-resource-leveling.md` 偏差 8）：
  *

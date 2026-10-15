@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Center, Stack, Text, UnstyledButton, Group } from '@mantine/core'
 import { IconPlus, IconAlertCircle } from '@tabler/icons-react'

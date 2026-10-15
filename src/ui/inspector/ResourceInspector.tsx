@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useId } from 'react'
 import { Alert, Button, Group, Select, Stack, Text, TextInput } from '@mantine/core'
 import { IconTrash } from '@tabler/icons-react'

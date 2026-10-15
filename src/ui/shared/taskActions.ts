@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { TFunction } from 'i18next'
 import type { Command } from '../../commands/types'
 import type { Project, TaskId } from '../../domain/model/types'

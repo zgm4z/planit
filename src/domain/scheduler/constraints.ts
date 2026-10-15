@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Calendar, DateStr, Dependency, Lag } from '../model/types'
 import type { WorkdayIndex } from '../calendar/workdays'
 import { addDays, addWorkdays, nextWorkday, snapToWorkday, snapToWorkdayOrPrevious, taskFinish, taskStart } from '../calendar/workdays'

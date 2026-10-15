@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { memo } from 'react'
 import type { CSSProperties } from 'react'
 import { addDays } from '../../domain/calendar/workdays'

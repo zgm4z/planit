@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { solve } from './index'
 import { serializeSolveError, type SolveRequest, type SolveResponse } from './solveProtocol'
 

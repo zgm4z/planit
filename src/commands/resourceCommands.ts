@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { DateStr, ResourceCost, ResourceId, ResourceKind } from '../domain/model/types'
 import { createResource } from '../domain/model/factories'
 import type { CommandHandler } from './types'

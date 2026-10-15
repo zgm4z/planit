@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Menu } from '@mantine/core'
 import { useTranslation } from 'react-i18next'

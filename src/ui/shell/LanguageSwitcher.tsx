@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { Menu, ActionIcon, Tooltip } from '@mantine/core'
 import { IconLanguage, IconCheck } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'

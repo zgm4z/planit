@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Project, Resource, ResourceId, ResourceKind, TaskId } from '../../domain/model/types'
 import { isLeafTask } from './outlineActions'
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'

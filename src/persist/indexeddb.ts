@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Project } from '../domain/model/types'
 import { seedIdCounterFromProject } from '../domain/model/factories'
 import { SCHEMA_VERSION, parsePersistedProject } from './schema'

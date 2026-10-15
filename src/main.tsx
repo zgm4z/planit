@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 // i18n 必须在 App 之前初始化，否则 useTranslation 会在 init 完成前调用

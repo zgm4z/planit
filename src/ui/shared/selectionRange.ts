@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * 复选的纯计算层。**不碰 DOM、不碰 store** —— 只吃「可见行序 order + 当前集合 + 修饰键」，
  * 吐出新的集合与锚点。大纲树与资源树共用这一份（两棵树是不同实体，但**选区语义相同**）。

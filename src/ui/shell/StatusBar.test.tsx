@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'

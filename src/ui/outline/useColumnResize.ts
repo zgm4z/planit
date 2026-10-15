@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { useCallback, useEffect, useRef } from 'react'
 import { clampColumnWidth, type OutlineColumnKey } from '../../store/columnKeys'
 

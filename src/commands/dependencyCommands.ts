@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import type { Dependency, DependencyType, Lag, TaskId } from '../domain/model/types'
 import { createDependency } from '../domain/model/factories'
 import { buildGraph } from '../domain/scheduler/graph'

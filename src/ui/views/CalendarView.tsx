@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { memo, useState } from 'react'
 import { Button, Checkbox, NumberInput, Select, Text } from '@mantine/core'
 import { Calendar, DatePickerInput } from '@mantine/dates'

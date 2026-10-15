@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { memo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 

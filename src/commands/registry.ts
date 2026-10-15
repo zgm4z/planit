@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 zhuoguangming
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { enablePatches, produceWithPatches, type Patch } from 'immer'
 import type { Project } from '../domain/model/types'
 import type { Command, CommandHandler, CommandType } from './types'
